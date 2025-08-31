@@ -1,0 +1,332 @@
+import React, { useState } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useLeague, useDisconnectLeague } from '@/hooks/useLeagues';
+import { useLeagueTeams } from '@/hooks/useTeams';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import {
+  TrophyIcon,
+  UsersIcon,
+  ChartBarIcon,
+  CogIcon,
+  ArrowLeftIcon,
+  ExclamationTriangleIcon,
+  CalendarIcon,
+  FireIcon,
+  ShieldCheckIcon,
+} from '@heroicons/react/24/outline';
+import { formatDate } from '@/utils';
+
+export const LeagueDetailPage: React.FC = () => {
+  const { leagueId } = useParams<{ leagueId: string }>();
+  const navigate = useNavigate();
+  const [showDisconnectModal, setShowDisconnectModal] = useState(false);
+
+  const {
+    data: league,
+    isLoading: leagueLoading,
+    error: leagueError,
+  } = useLeague(parseInt(leagueId || '0', 10));
+
+  const {
+    data: teams,
+    isLoading: teamsLoading,
+    error: teamsError,
+  } = useLeagueTeams(parseInt(leagueId || '0', 10));
+
+  const disconnectLeague = useDisconnectLeague();
+
+  const handleDisconnect = async () => {
+    if (!league) return;
+
+    try {
+      await disconnectLeague.mutateAsync(league.id);
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Failed to disconnect league:', error);
+    }
+  };
+
+  if (leagueLoading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <LoadingSpinner size="lg" className="mt-12" />
+      </div>
+    );
+  }
+
+  if (leagueError || !league) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Card>
+          <CardContent>
+            <div className="text-center py-12">
+              <ExclamationTriangleIcon className="h-12 w-12 text-red-500 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">League Not Found</h3>
+              <p className="text-gray-600 mb-4">
+                The league you're looking for doesn't exist or you don't have access to it.
+              </p>
+              <Link to="/dashboard">
+                <Button>Back to Dashboard</Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-6xl">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex items-center mb-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate('/dashboard')}
+            className="mr-4"
+          >
+            <ArrowLeftIcon className="h-4 w-4 mr-1" />
+            Back to Dashboard
+          </Button>
+        </div>
+        
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              {league.name}
+            </h1>
+            <div className="flex items-center space-x-4 text-sm text-gray-600">
+              <span className="flex items-center">
+                <UsersIcon className="h-4 w-4 mr-1" />
+                {league.size} teams
+              </span>
+              <span className="flex items-center">
+                <CalendarIcon className="h-4 w-4 mr-1" />
+                {league.season_year} Season
+              </span>
+              <span className="flex items-center">
+                <FireIcon className="h-4 w-4 mr-1" />
+                Week {league.current_week}
+              </span>
+              <span className="flex items-center capitalize">
+                <ChartBarIcon className="h-4 w-4 mr-1" />
+                {league.scoring_type} scoring
+              </span>
+            </div>
+          </div>
+          
+          <div className="mt-4 lg:mt-0 flex space-x-3">
+            <Button variant="secondary" size="sm">
+              <CogIcon className="h-4 w-4 mr-2" />
+              Sync Data
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => setShowDisconnectModal(true)}
+            >
+              Disconnect League
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* League Info */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* League Stats */}
+          <Card>
+            <CardHeader>
+              <CardTitle>League Overview</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center p-4 bg-blue-50 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600">{league.size}</div>
+                  <div className="text-sm text-blue-800">Teams</div>
+                </div>
+                <div className="text-center p-4 bg-green-50 rounded-lg">
+                  <div className="text-2xl font-bold text-green-600">{league.current_week}</div>
+                  <div className="text-sm text-green-800">Current Week</div>
+                </div>
+                <div className="text-center p-4 bg-purple-50 rounded-lg">
+                  <div className="text-2xl font-bold text-purple-600">{league.season_year}</div>
+                  <div className="text-sm text-purple-800">Season</div>
+                </div>
+                <div className="text-center p-4 bg-orange-50 rounded-lg">
+                  <div className="text-2xl font-bold text-orange-600">
+                    {league.is_public ? 'Public' : 'Private'}
+                  </div>
+                  <div className="text-sm text-orange-800">League Type</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Teams */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <UsersIcon className="h-5 w-5 mr-2" />
+                Teams
+                {teams && <span className="ml-2 text-sm font-normal text-gray-500">({teams.length})</span>}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {teamsLoading ? (
+                <div className="flex justify-center py-8">
+                  <LoadingSpinner size="sm" />
+                </div>
+              ) : teamsError ? (
+                <div className="text-center py-8 text-gray-600">
+                  Failed to load teams
+                </div>
+              ) : teams && teams.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {teams.map((team: any) => (
+                    <div
+                      key={team.id}
+                      className="p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-medium text-gray-900">{team.name}</h4>
+                          <div className="text-sm text-gray-600 mt-1">
+                            <span className="font-medium">
+                              {team.wins}-{team.losses}
+                              {team.ties > 0 && `-${team.ties}`}
+                            </span>
+                            <span className="mx-2">•</span>
+                            <span>{team.points_for.toFixed(1)} PF</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm text-gray-500">Points Against</div>
+                          <div className="font-medium">{team.points_against.toFixed(1)}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-600">
+                  No teams found. Try syncing your league data.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Sidebar */}
+        <div className="space-y-6">
+          {/* League Actions */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Actions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <Link to={`/leagues/${league.id}/trades`} className="block">
+                  <Button fullWidth variant="secondary" size="sm">
+                    <ChartBarIcon className="h-4 w-4 mr-2" />
+                    Trade Analyzer
+                  </Button>
+                </Link>
+                <Link to={`/leagues/${league.id}/players`} className="block">
+                  <Button fullWidth variant="secondary" size="sm">
+                    <UsersIcon className="h-4 w-4 mr-2" />
+                    Player Search
+                  </Button>
+                </Link>
+                <Link to={`/leagues/${league.id}/roster`} className="block">
+                  <Button fullWidth variant="secondary" size="sm">
+                    <TrophyIcon className="h-4 w-4 mr-2" />
+                    My Roster
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* League Info */}
+          <Card>
+            <CardHeader>
+              <CardTitle>League Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">ESPN League ID:</span>
+                  <span className="font-mono">{league.espn_league_id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Connected:</span>
+                  <span>{formatDate(league.created_at)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Last Synced:</span>
+                  <span>
+                    {league.last_synced ? formatDate(league.last_synced) : 'Never'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Status:</span>
+                  <span className="flex items-center">
+                    <ShieldCheckIcon className="h-4 w-4 text-green-500 mr-1" />
+                    {league.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Disconnect Modal */}
+      {showDisconnectModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <Card className="max-w-md w-full">
+            <CardHeader>
+              <CardTitle className="text-red-600 flex items-center">
+                <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
+                Disconnect League
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to disconnect "{league.name}"? This will remove all associated data and cannot be undone.
+              </p>
+              <div className="flex space-x-3">
+                <Button
+                  variant="danger"
+                  onClick={handleDisconnect}
+                  disabled={disconnectLeague.isLoading}
+                  className="flex-1"
+                >
+                  {disconnectLeague.isLoading ? (
+                    <>
+                      <LoadingSpinner size="sm" className="mr-2" />
+                      Disconnecting...
+                    </>
+                  ) : (
+                    'Disconnect'
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowDisconnectModal(false)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+};

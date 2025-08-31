@@ -1,4 +1,5 @@
 import asyncio
+import json
 import httpx
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
@@ -70,8 +71,40 @@ class ESPNService:
                     )
                     
                     if response.status_code == 200:
-                        logger.info("ESPN API request successful", url=url)
-                        return response.json()
+                        logger.info("ESPN API request successful", url=url, content_length=len(response.text))
+                        
+                        # Ensure we have content
+                        if not response.text:
+                            logger.error("ESPN API returned empty response")
+                            raise ESPNConnectionError("Empty response from ESPN API")
+                        
+                        # Parse JSON response
+                        try:
+                            json_data = response.json()
+                            logger.info("Successfully parsed JSON response", 
+                                      response_type=type(json_data).__name__, 
+                                      keys=list(json_data.keys())[:10] if isinstance(json_data, dict) else "Not a dict")
+                            
+                            # ESPN API should always return a dict
+                            if not isinstance(json_data, dict):
+                                logger.error("ESPN API returned unexpected data type", 
+                                           expected="dict", 
+                                           actual=type(json_data).__name__, 
+                                           content=str(json_data)[:500])
+                                raise ESPNConnectionError(f"ESPN API returned {type(json_data).__name__}, expected dict")
+                            
+                            return json_data
+                            
+                        except json.JSONDecodeError as e:
+                            logger.error("Failed to parse ESPN API response as JSON", 
+                                       error=str(e),
+                                       content_preview=response.text[:500])
+                            raise ESPNConnectionError(f"Invalid JSON from ESPN API: {e}")
+                        except Exception as e:
+                            logger.error("Unexpected error parsing ESPN API response", 
+                                       error=str(e),
+                                       error_type=type(e).__name__)
+                            raise ESPNConnectionError(f"Failed to process ESPN API response: {e}")
                     elif response.status_code == 401:
                         logger.warning("ESPN API authentication failed", url=url)
                         raise ESPNAuthenticationError("Invalid ESPN credentials")
@@ -122,6 +155,17 @@ class ESPNService:
     ) -> List[Dict[str, Any]]:
         try:
             data = await self._make_request(f"{league_id}", cookies, {"view": "mTeam"})
+            logger.info("ESPN API response type", data_type=type(data).__name__)
+            
+            # Ensure data is a dictionary
+            if not isinstance(data, dict):
+                logger.error("ESPN API returned non-dict data for teams", 
+                           league_id=league_id, 
+                           data_type=type(data), 
+                           data_preview=str(data)[:500])
+                raise ESPNConnectionError(f"Invalid response format from ESPN API: expected dict, got {type(data)}")
+            
+            logger.info("Data has keys", keys=list(data.keys()) if data else [])
             teams = []
             
             for team_data in data.get("teams", []):
