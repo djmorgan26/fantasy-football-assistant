@@ -8,6 +8,9 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
 import { DashboardPage } from '@/pages/DashboardPage';
+import { LeaguesPage } from '@/pages/LeaguesPage';
+import { LeagueConnectPage } from '@/pages/LeagueConnectPage';
+import { LeagueDetailPage } from '@/pages/LeagueDetailPage';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -54,15 +57,28 @@ function App() {
                 }
               />
               
-              {/* Placeholder routes for Phase 2 expansion */}
+              {/* League routes */}
               <Route
-                path="leagues/*"
+                path="leagues"
                 element={
                   <ProtectedRoute>
-                    <div className="container mx-auto px-4 py-8">
-                      <h1 className="text-2xl font-bold">League Management</h1>
-                      <p className="text-gray-600 mt-2">League features coming soon...</p>
-                    </div>
+                    <LeaguesPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="leagues/connect"
+                element={
+                  <ProtectedRoute>
+                    <LeagueConnectPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="leagues/:leagueId"
+                element={
+                  <ProtectedRoute>
+                    <LeagueDetailPage />
                   </ProtectedRoute>
                 }
               />
