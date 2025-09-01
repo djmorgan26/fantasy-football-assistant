@@ -1,4 +1,4 @@
-import { useQuery } from 'react-query';
+import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { Team, RosterResponse, ApiError } from '@/types';
 import { teamsService } from '@/services/teams';
 import toast from 'react-hot-toast';
@@ -40,6 +40,24 @@ export const useTeamRoster = (teamId: number, week?: number) => {
       staleTime: 1 * 60 * 1000, // 1 minute
       onError: (error: ApiError) => {
         toast.error(error.detail || 'Failed to fetch roster');
+      },
+    }
+  );
+};
+
+export const useClaimTeam = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation<Team, ApiError, number>(
+    (teamId: number) => teamsService.claimTeam(teamId),
+    {
+      onSuccess: (team: Team) => {
+        toast.success(`Successfully claimed ${team.name}!`);
+        // Invalidate teams queries to refresh the data
+        queryClient.invalidateQueries(['teams']);
+      },
+      onError: (error: ApiError) => {
+        toast.error(error.detail || 'Failed to claim team');
       },
     }
   );

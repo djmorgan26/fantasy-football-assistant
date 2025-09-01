@@ -12,6 +12,9 @@ import { LeaguesPage } from '@/pages/LeaguesPage';
 import { LeagueConnectPage } from '@/pages/LeagueConnectPage';
 import { LeagueDetailPage } from '@/pages/LeagueDetailPage';
 import { TeamRosterPage } from '@/pages/TeamRosterPage';
+import { TradeAnalyzerPage } from '@/pages/TradeAnalyzerPage';
+import { PlayerSearchPage } from '@/pages/PlayerSearchPage';
+import { MyRosterPage } from '@/pages/MyRosterPage';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -91,6 +94,30 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+              <Route
+                path="leagues/:leagueId/trades"
+                element={
+                  <ProtectedRoute>
+                    <TradeAnalyzerPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="leagues/:leagueId/players"
+                element={
+                  <ProtectedRoute>
+                    <PlayerSearchPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="leagues/:leagueId/roster"
+                element={
+                  <ProtectedRoute>
+                    <MyRosterPage />
+                  </ProtectedRoute>
+                }
+              />
               
               <Route
                 path="profile"
@@ -99,30 +126,6 @@ function App() {
                     <div className="container mx-auto px-4 py-8">
                       <h1 className="text-2xl font-bold">Profile Settings</h1>
                       <p className="text-gray-600 mt-2">Profile management coming soon...</p>
-                    </div>
-                  </ProtectedRoute>
-                }
-              />
-              
-              <Route
-                path="trades"
-                element={
-                  <ProtectedRoute>
-                    <div className="container mx-auto px-4 py-8">
-                      <h1 className="text-2xl font-bold">Trade Analyzer</h1>
-                      <p className="text-gray-600 mt-2">Trade analysis coming soon...</p>
-                    </div>
-                  </ProtectedRoute>
-                }
-              />
-              
-              <Route
-                path="players"
-                element={
-                  <ProtectedRoute>
-                    <div className="container mx-auto px-4 py-8">
-                      <h1 className="text-2xl font-bold">Player Search</h1>
-                      <p className="text-gray-600 mt-2">Player search coming soon...</p>
                     </div>
                   </ProtectedRoute>
                 }
