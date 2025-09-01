@@ -2,9 +2,14 @@ import React, { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useLeague, useDisconnectLeague, useSyncLeague } from '@/hooks/useLeagues';
 import { useLeagueTeams } from '@/hooks/useTeams';
+import { useMatchups } from '@/hooks/useMatchups';
+import { useWaiverBudgets } from '@/hooks/useWaiverBudgets';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { MatchupCard } from '@/components/matchups/MatchupCard';
+import { WaiverBudgetCard } from '@/components/budget/WaiverBudgetCard';
+import { StrategicSuggestions } from '@/components/suggestions/StrategicSuggestions';
 import {
   TrophyIcon,
   UsersIcon,
@@ -37,6 +42,12 @@ export const LeagueDetailPage: React.FC = () => {
 
   const disconnectLeague = useDisconnectLeague();
   const syncLeague = useSyncLeague();
+
+  const { data: matchups, isLoading: matchupsLoading } = useMatchups(parseInt(leagueId || '0', 10), league?.current_week);
+  const { data: waiverBudgets, isLoading: budgetsLoading } = useWaiverBudgets(parseInt(leagueId || '0', 10));
+
+  // For demo purposes, assume the first team is the user's team
+  const userTeam = teams?.[0];
 
   const handleSync = async () => {
     if (!league) return;
@@ -181,6 +192,74 @@ export const LeagueDetailPage: React.FC = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Current Week Matchups */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <TrophyIcon className="h-5 w-5 mr-2" />
+                Week {league.current_week} Matchups
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {matchupsLoading ? (
+                <div className="flex justify-center py-8">
+                  <LoadingSpinner size="sm" />
+                </div>
+              ) : matchups && matchups.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {matchups.map((matchup) => (
+                    <MatchupCard 
+                      key={matchup.id} 
+                      matchup={matchup} 
+                      userTeamId={userTeam?.id}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-600">
+                  No matchups available for this week
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Waiver Budgets */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <ChartBarIcon className="h-5 w-5 mr-2" />
+                Waiver Wire Budgets
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {budgetsLoading ? (
+                <div className="flex justify-center py-8">
+                  <LoadingSpinner size="sm" />
+                </div>
+              ) : waiverBudgets && waiverBudgets.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {waiverBudgets.map((budget) => (
+                    <WaiverBudgetCard 
+                      key={budget.team_id} 
+                      budget={budget}
+                      userTeamId={userTeam?.id}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-600">
+                  No budget information available
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Strategic Suggestions */}
+          <StrategicSuggestions 
+            league={league} 
+            userTeamId={userTeam?.id}
+          />
 
           {/* Teams */}
           <Card>

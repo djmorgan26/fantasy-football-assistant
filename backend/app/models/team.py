@@ -39,6 +39,8 @@ class Team(Base):
     owner = relationship("User", back_populates="teams", foreign_keys=[owner_user_id])
     trades_proposed = relationship("Trade", back_populates="proposing_team", foreign_keys="Trade.proposing_team_id")
     trades_received = relationship("Trade", back_populates="receiving_team", foreign_keys="Trade.receiving_team_id")
+    waiver_budget = relationship("WaiverBudget", back_populates="team", uselist=False)
+    waiver_transactions = relationship("WaiverTransaction", back_populates="team")
 
     # Unique constraint for ESPN team ID within a league
     __table_args__ = (

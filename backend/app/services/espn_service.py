@@ -367,6 +367,38 @@ class ESPNService:
                         league_id=league_id, week=week, error=str(e))
             raise
 
+    async def get_waiver_budgets(
+        self, 
+        league_id: str,
+        cookies: Optional[ESPNCookies] = None
+    ) -> List[Dict[str, Any]]:
+        try:
+            data = await self._make_request(f"{league_id}", cookies, {"view": "mTeam"})
+            
+            budgets = []
+            for team_data in data.get("teams", []):
+                # ESPN stores acquisition budget info in team settings
+                acquisitions = team_data.get("transactionCounter", {})
+                budget_used = acquisitions.get("acquisitionBudgetSpent", 0)
+                
+                # Default budget is usually 100, but check league settings
+                league_settings = data.get("settings", {})
+                total_budget = league_settings.get("acquisitionSettings", {}).get("budget", 100)
+                
+                budgets.append({
+                    "team_id": team_data.get("id"),
+                    "team_name": team_data.get("name", ""),
+                    "total_budget": float(total_budget),
+                    "spent_budget": float(budget_used),
+                    "current_budget": float(total_budget - budget_used)
+                })
+            
+            return budgets
+        except Exception as e:
+            logger.error("Failed to get waiver budgets", 
+                        league_id=league_id, error=str(e))
+            raise
+
     async def validate_trade(
         self, 
         league_id: str,
