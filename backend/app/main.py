@@ -1,8 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import structlog
+import os
+from pathlib import Path
 from app.core.config import settings
 from app.db.database import engine, Base
 from app.api import auth, leagues, teams, players, trades
@@ -87,39 +90,12 @@ async def health_check():
     }
 
 
-# Root endpoint
-@app.get("/")
-async def root():
-    return {
-        "message": "Welcome to the Fantasy Football Assistant API",
-        "version": settings.app_version,
-        "docs": "/docs" if settings.debug else "Documentation disabled in production",
-        "health": "/health"
-    }
-
-
 # Include API routers
 app.include_router(auth.router, prefix="/api")
 app.include_router(leagues.router, prefix="/api")
 app.include_router(teams.router, prefix="/api")
 app.include_router(players.router, prefix="/api")
 app.include_router(trades.router, prefix="/api")
-
-
-# Global exception handler
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    logger.error(
-        "Unhandled exception",
-        path=str(request.url.path),
-        method=request.method,
-        error=str(exc),
-        exc_info=True
-    )
-    return HTTPException(
-        status_code=500,
-        detail="An unexpected error occurred"
-    )
 
 
 # ESPN service health check
@@ -150,6 +126,28 @@ async def espn_health():
             "espn_service": "error",
             "error": str(e)
         }
+
+
+# Mount static files for frontend
+frontend_dist_path = Path(__file__).parent.parent.parent / "frontend" / "dist"
+if frontend_dist_path.exists():
+    app.mount("/", StaticFiles(directory=str(frontend_dist_path), html=True), name="frontend")
+
+
+# Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error(
+        "Unhandled exception",
+        path=str(request.url.path),
+        method=request.method,
+        error=str(exc),
+        exc_info=True
+    )
+    return HTTPException(
+        status_code=500,
+        detail="An unexpected error occurred"
+    )
 
 
 if __name__ == "__main__":

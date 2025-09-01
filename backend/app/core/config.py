@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     
     # ESPN API
     espn_api_base_url: str = "https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl"
-    espn_season_year: int = 2024
+    espn_season_year: int = 2025
     espn_rate_limit_requests: int = 100
     espn_rate_limit_window: int = 3600
     
