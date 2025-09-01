@@ -65,3 +65,27 @@ export const useDisconnectLeague = () => {
     }
   );
 };
+
+export const useSyncLeague = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation<LeagueConnectionResponse, ApiError, number>(
+    leaguesService.syncLeague,
+    {
+      onSuccess: (data) => {
+        if (data.success) {
+          toast.success(data.message);
+          // Invalidate both leagues and teams queries to refetch updated data
+          queryClient.invalidateQueries('leagues');
+          queryClient.invalidateQueries(['league']);
+          queryClient.invalidateQueries(['teams']);
+        } else {
+          toast.error(data.message);
+        }
+      },
+      onError: (error: ApiError) => {
+        toast.error(error.detail || 'Failed to sync league data');
+      },
+    }
+  );
+};

@@ -21,4 +21,9 @@ export const leaguesService = {
     const response = await api.delete(`/leagues/${leagueId}`);
     return response.data;
   },
+
+  async syncLeague(leagueId: number): Promise<LeagueConnectionResponse> {
+    const response = await api.post<LeagueConnectionResponse>(`/leagues/${leagueId}/sync`);
+    return response.data;
+  },
 };

@@ -11,6 +11,7 @@ import { DashboardPage } from '@/pages/DashboardPage';
 import { LeaguesPage } from '@/pages/LeaguesPage';
 import { LeagueConnectPage } from '@/pages/LeagueConnectPage';
 import { LeagueDetailPage } from '@/pages/LeagueDetailPage';
+import { TeamRosterPage } from '@/pages/TeamRosterPage';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -79,6 +80,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <LeagueDetailPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="leagues/:leagueId/teams/:teamId"
+                element={
+                  <ProtectedRoute>
+                    <TeamRosterPage />
                   </ProtectedRoute>
                 }
               />

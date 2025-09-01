@@ -74,7 +74,10 @@ export const LeagueConnectPage: React.FC = () => {
       
       if (result.success) {
         toast.success('League connected successfully!');
-        navigate('/dashboard');
+        // Small delay to allow React Query cache invalidation to complete
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 500);
       }
     } catch (error) {
       console.error('Failed to connect league:', error);

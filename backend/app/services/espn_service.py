@@ -181,12 +181,29 @@ class ESPNService:
                     logger.warning("Skipping non-dict team data", data=str(team_data))
                     continue
                     
+                # Create a friendly team name
+                location = team_data.get("location", "").strip()
+                nickname = team_data.get("nickname", "").strip()
+                abbrev = team_data.get("abbrev", "").strip()
+                
+                # Use location + nickname if available, otherwise use abbreviation as name
+                if location and nickname:
+                    display_name = f"{location} {nickname}"
+                elif location:
+                    display_name = location
+                elif nickname:
+                    display_name = nickname
+                elif abbrev:
+                    display_name = f"Team {abbrev}"
+                else:
+                    display_name = f"Team {team_data.get('id', 'Unknown')}"
+                
                 teams.append({
                     "id": team_data.get("id"),
-                    "name": f"{team_data.get('location', '')} {team_data.get('nickname', '')}".strip(),
-                    "location": team_data.get("location", ""),
-                    "nickname": team_data.get("nickname", ""),
-                    "abbreviation": team_data.get("abbrev", ""),
+                    "name": display_name,
+                    "location": location,
+                    "nickname": nickname,
+                    "abbreviation": abbrev,
                     "logo_url": team_data.get("logo", ""),
                     "wins": team_data.get("record", {}).get("overall", {}).get("wins", 0),
                     "losses": team_data.get("record", {}).get("overall", {}).get("losses", 0),
