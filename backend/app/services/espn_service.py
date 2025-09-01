@@ -136,7 +136,7 @@ class ESPNService:
             return {
                 "id": data.get("id"),
                 "name": data.get("settings", {}).get("name", "Unknown League"),
-                "size": data.get("settings", {}).get("size", 0),
+                "size": len(data.get("teams", [])),
                 "current_week": data.get("scoringPeriodId", 1),
                 "current_matchup_period": data.get("status", {}).get("currentMatchupPeriod", 1),
                 "is_active": data.get("status", {}).get("isActive", False),
@@ -166,9 +166,21 @@ class ESPNService:
                 raise ESPNConnectionError(f"Invalid response format from ESPN API: expected dict, got {type(data)}")
             
             logger.info("Data has keys", keys=list(data.keys()) if data else [])
+            logger.info("Teams data type and preview", 
+                       teams_type=type(data.get("teams", [])).__name__,
+                       teams_preview=str(data.get("teams", []))[:200])
             teams = []
             
             for team_data in data.get("teams", []):
+                logger.info("Processing team data", 
+                           team_data_type=type(team_data).__name__,
+                           team_preview=str(team_data)[:200] if isinstance(team_data, dict) else str(team_data))
+                
+                # Skip if team_data is not a dict (should not happen with proper ESPN API)
+                if not isinstance(team_data, dict):
+                    logger.warning("Skipping non-dict team data", data=str(team_data))
+                    continue
+                    
                 teams.append({
                     "id": team_data.get("id"),
                     "name": f"{team_data.get('location', '')} {team_data.get('nickname', '')}".strip(),
@@ -181,12 +193,13 @@ class ESPNService:
                     "ties": team_data.get("record", {}).get("overall", {}).get("ties", 0),
                     "points_for": team_data.get("record", {}).get("overall", {}).get("pointsFor", 0.0),
                     "points_against": team_data.get("record", {}).get("overall", {}).get("pointsAgainst", 0.0),
-                    "owners": [owner.get("id") for owner in team_data.get("owners", [])]
+                    "owners": [owner.get("id") if isinstance(owner, dict) else owner for owner in team_data.get("owners", [])]
                 })
             
             return teams
         except Exception as e:
-            logger.error("Failed to get teams", league_id=league_id, error=str(e))
+            logger.error("Failed to get teams", league_id=league_id, error=str(e), 
+                        error_type=type(e).__name__, traceback=str(e))
             raise
 
     async def get_team_roster(
