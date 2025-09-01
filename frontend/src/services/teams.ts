@@ -17,4 +17,9 @@ export const teamsService = {
     const response = await api.get<RosterResponse>(`/teams/${teamId}/roster`, { params });
     return response.data;
   },
+
+  async claimTeam(teamId: number): Promise<Team> {
+    const response = await api.put<Team>(`/teams/${teamId}/claim`);
+    return response.data;
+  },
 };

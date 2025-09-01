@@ -1,15 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useLeague, useDisconnectLeague, useSyncLeague } from '@/hooks/useLeagues';
 import { useLeagueTeams } from '@/hooks/useTeams';
 import { useMatchups } from '@/hooks/useMatchups';
 import { useWaiverBudgets } from '@/hooks/useWaiverBudgets';
+import { useCurrentUser } from '@/hooks/useAuth';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { MatchupCard } from '@/components/matchups/MatchupCard';
 import { WaiverBudgetCard } from '@/components/budget/WaiverBudgetCard';
 import { StrategicSuggestions } from '@/components/suggestions/StrategicSuggestions';
+import { TeamSelectionModal } from '@/components/team/TeamSelectionModal';
 import {
   TrophyIcon,
   UsersIcon,
@@ -27,6 +29,7 @@ export const LeagueDetailPage: React.FC = () => {
   const { leagueId } = useParams<{ leagueId: string }>();
   const navigate = useNavigate();
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
+  const [showTeamSelectionModal, setShowTeamSelectionModal] = useState(false);
 
   const {
     data: league,
@@ -40,20 +43,30 @@ export const LeagueDetailPage: React.FC = () => {
     error: teamsError,
   } = useLeagueTeams(parseInt(leagueId || '0', 10));
 
+  const { data: currentUser } = useCurrentUser();
   const disconnectLeague = useDisconnectLeague();
   const syncLeague = useSyncLeague();
 
   const { data: matchups, isLoading: matchupsLoading } = useMatchups(parseInt(leagueId || '0', 10), league?.current_week);
   const { data: waiverBudgets, isLoading: budgetsLoading } = useWaiverBudgets(parseInt(leagueId || '0', 10));
 
-  // For demo purposes, assume the first team is the user's team
-  const userTeam = teams?.[0];
+  // Find user's team by owner_user_id
+  const userTeam = teams?.find(team => team.owner_user_id === currentUser?.id);
+
+  // Check if user needs to select their team after sync
+  useEffect(() => {
+    if (teams && teams.length > 0 && !userTeam && currentUser) {
+      // Show team selection modal if no team is claimed by the user
+      setShowTeamSelectionModal(true);
+    }
+  }, [teams, userTeam, currentUser]);
 
   const handleSync = async () => {
     if (!league) return;
 
     try {
       await syncLeague.mutateAsync(league.id);
+      // After sync, the useEffect will trigger team selection modal if needed
     } catch (error) {
       console.error('Failed to sync league:', error);
     }
@@ -369,6 +382,15 @@ export const LeagueDetailPage: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
+                <Button 
+                  fullWidth 
+                  variant="secondary" 
+                  size="sm"
+                  onClick={() => setShowTeamSelectionModal(true)}
+                >
+                  <UsersIcon className="h-4 w-4 mr-2" />
+                  {userTeam ? 'Change My Team' : 'Select My Team'}
+                </Button>
                 <Link to={`/leagues/${league.id}/trades`} className="block">
                   <Button fullWidth variant="secondary" size="sm">
                     <ChartBarIcon className="h-4 w-4 mr-2" />
@@ -401,6 +423,12 @@ export const LeagueDetailPage: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-gray-600">ESPN League ID:</span>
                   <span className="font-mono">{league.espn_league_id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Your Team:</span>
+                  <span className={userTeam ? "text-blue-600 font-medium" : "text-gray-400"}>
+                    {userTeam ? userTeam.name : 'Not selected'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Connected:</span>
@@ -467,6 +495,14 @@ export const LeagueDetailPage: React.FC = () => {
           </Card>
         </div>
       )}
+
+      {/* Team Selection Modal */}
+      <TeamSelectionModal
+        isOpen={showTeamSelectionModal}
+        onClose={() => setShowTeamSelectionModal(false)}
+        teams={teams || []}
+        leagueId={parseInt(leagueId || '0', 10)}
+      />
     </div>
   );
 };

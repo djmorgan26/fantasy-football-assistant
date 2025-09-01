@@ -72,6 +72,7 @@ export interface Team {
   points_for: number;
   points_against: number;
   current_roster?: Player[];
+  owner_user_id?: number;
 }
 
 export interface RosterResponse {

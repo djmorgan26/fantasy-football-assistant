@@ -174,3 +174,67 @@ async def get_team(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve team"
         )
+
+
+@router.put("/{team_id}/claim", response_model=TeamResponse)
+async def claim_team(
+    team_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_database)
+):
+    """Claim ownership of a team by the current user"""
+    try:
+        # Get team and verify it exists
+        team_result = await db.execute(
+            select(Team).where(Team.id == team_id)
+        )
+        team = team_result.scalar_one_or_none()
+        
+        if not team:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Team not found"
+            )
+        
+        # Verify user has access to the league
+        league_result = await db.execute(
+            select(League).where(
+                League.id == team.league_id,
+                League.owner_user_id == current_user.id
+            )
+        )
+        league = league_result.scalar_one_or_none()
+        
+        if not league:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to this league"
+            )
+        
+        # Clear any existing team ownership for this user in this league
+        clear_result = await db.execute(
+            select(Team).where(
+                Team.league_id == team.league_id,
+                Team.owner_user_id == current_user.id
+            )
+        )
+        existing_teams = clear_result.scalars().all()
+        for existing_team in existing_teams:
+            existing_team.owner_user_id = None
+        
+        # Set the current user as owner of this team
+        team.owner_user_id = current_user.id
+        await db.commit()
+        
+        logger.info("Team claimed successfully", team_id=team_id, user_id=current_user.id)
+        return TeamResponse.from_orm(team)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error("Failed to claim team", team_id=team_id, user_id=current_user.id, error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to claim team"
+        )

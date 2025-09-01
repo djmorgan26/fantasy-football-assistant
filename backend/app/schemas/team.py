@@ -17,6 +17,7 @@ class TeamResponse(BaseModel):
     points_for: float
     points_against: float
     current_roster: Optional[List[Dict[str, Any]]] = None
+    owner_user_id: Optional[int] = None
     
     class Config:
         from_attributes = True
