@@ -20,18 +20,14 @@ export const LeaguesPage: React.FC = () => {
   const { data: leagues, isLoading, error, refetch } = useLeagues();
   const [syncingLeagues, setSyncingLeagues] = useState<Set<number>>(new Set());
   
-  console.log('LeaguesPage rendered, leagues data:', leagues);
 
   const handleSyncLeague = async (e: React.MouseEvent, leagueId: number) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log('Sync button clicked for league:', leagueId);
     setSyncingLeagues(prev => new Set([...prev, leagueId]));
     
     try {
-      console.log('Calling leaguesService.syncLeague...');
       const response = await leaguesService.syncLeague(leagueId);
-      console.log('Sync response:', response);
       
       if (response.success) {
         toast.success('League data synced successfully!');
@@ -187,25 +183,19 @@ export const LeaguesPage: React.FC = () => {
                         View League
                       </Button>
                     </Link>
-                    <button 
-                      className="inline-flex items-center justify-center px-3 py-2 text-sm font-medium rounded-md bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-500 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50"
+                    <Button 
+                      size="sm" 
+                      variant="secondary" 
                       title="Sync League Data"
-                      onClick={(e) => {
-                        alert('Button clicked!');
-                        console.log('Button clicked - Raw event:', e);
-                        console.log('League object:', league);
-                        console.log('League ID:', league.id);
-                        handleSyncLeague(e, league.id);
-                      }}
+                      onClick={(e) => handleSyncLeague(e, league.id)}
                       disabled={syncingLeagues.has(league.id)}
-                      style={{ pointerEvents: 'auto', zIndex: 10 }}
                     >
                       {syncingLeagues.has(league.id) ? (
                         <LoadingSpinner size="sm" />
                       ) : (
                         <CogIcon className="h-4 w-4" />
                       )}
-                    </button>
+                    </Button>
                   </div>
 
                   {/* Quick Actions */}
