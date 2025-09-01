@@ -181,6 +181,95 @@ export interface LoadingState {
   error?: string;
 }
 
+// Matchup types
+export interface Matchup {
+  id: number;
+  matchup_id: number;
+  league_id: number;
+  week: number;
+  home_team_id?: number;
+  away_team_id?: number;
+  home_score: number;
+  away_score: number;
+  is_playoff: boolean;
+  winner: 'HOME' | 'AWAY' | 'TIE' | 'UNDECIDED';
+  created_at: string;
+  updated_at: string;
+  home_team_name?: string;
+  away_team_name?: string;
+  home_team_location?: string;
+  away_team_location?: string;
+  home_team_nickname?: string;
+  away_team_nickname?: string;
+}
+
+// Waiver budget types
+export interface WaiverBudget {
+  id: number;
+  league_id: number;
+  team_id: number;
+  total_budget: number;
+  current_budget: number;
+  spent_budget: number;
+  season_year: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WaiverTransaction {
+  id: number;
+  league_id: number;
+  team_id: number;
+  player_id: number;
+  player_name: string;
+  transaction_type: 'ADD' | 'DROP' | 'TRADE';
+  bid_amount: number;
+  status: 'PENDING' | 'SUCCESSFUL' | 'FAILED';
+  week: number;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TeamBudgetSummary {
+  team_id: number;
+  team_name: string;
+  current_budget: number;
+  spent_budget: number;
+  total_budget: number;
+  recent_transactions: WaiverTransaction[];
+}
+
+// Strategic suggestions types
+export interface StrategicSuggestion {
+  id: string;
+  type: 'pickup' | 'drop' | 'trade' | 'lineup';
+  priority: 'high' | 'medium' | 'low';
+  title: string;
+  description: string;
+  reasoning: string;
+  potential_impact: string;
+  confidence_score: number;
+  action_details?: {
+    player_id?: number;
+    player_name?: string;
+    suggested_bid?: number;
+    trade_targets?: number[];
+    lineup_changes?: Record<string, string>;
+  };
+  context?: {
+    current_matchup?: Matchup;
+    budget_remaining?: number;
+    upcoming_matchups?: Matchup[];
+  };
+}
+
+export interface SuggestionFilters {
+  type?: 'pickup' | 'drop' | 'trade' | 'lineup';
+  priority?: 'high' | 'medium' | 'low';
+  week?: number;
+}
+
 // Utility types
 export type Position = 'QB' | 'RB' | 'WR' | 'TE' | 'K' | 'D/ST' | 'FLEX' | 'BENCH' | 'IR';
 

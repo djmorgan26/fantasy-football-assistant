@@ -38,3 +38,6 @@ class League(Base):
     owner = relationship("User", back_populates="owned_leagues", foreign_keys=[owner_user_id])
     teams = relationship("Team", back_populates="league")
     trades = relationship("Trade", back_populates="league")
+    matchups = relationship("Matchup", back_populates="league")
+    waiver_budgets = relationship("WaiverBudget", back_populates="league")
+    waiver_transactions = relationship("WaiverTransaction", back_populates="league")
