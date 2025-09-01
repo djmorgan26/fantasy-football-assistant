@@ -72,6 +72,7 @@ async def connect_league(
             league.scoring_type = league_info["scoring_type"]
             league.roster_settings = league_info["roster_settings"]
             league.scoring_settings = league_info["scoring_settings"]
+            league.is_active = True  # Always set to active when connecting
         else:
             # Create new league
             league = League(
@@ -83,7 +84,8 @@ async def connect_league(
                 scoring_type=league_info["scoring_type"],
                 roster_settings=league_info["roster_settings"],
                 scoring_settings=league_info["scoring_settings"],
-                owner_user_id=current_user.id
+                owner_user_id=current_user.id,
+                is_active=True  # Always set to active when connecting
             )
             db.add(league)
         
@@ -215,6 +217,127 @@ async def get_league(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve league"
+        )
+
+
+@router.post("/{league_id}/sync", response_model=LeagueConnectionResponse)
+async def sync_league(
+    league_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_database)
+):
+    try:
+        # Get the existing league
+        result = await db.execute(
+            select(League).where(
+                League.id == league_id,
+                League.owner_user_id == current_user.id
+            )
+        )
+        league = result.scalar_one_or_none()
+        
+        if not league:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="League not found"
+            )
+        
+        espn_service = ESPNService()
+        
+        # Get stored credentials if available
+        cookies = None
+        if league.espn_s2_encrypted or league.espn_swid_encrypted:
+            # Create temporary cookies object from league credentials
+            cookies = ESPNCookies(
+                espn_s2=ESPNCredentialManager.decrypt_espn_s2(league.espn_s2_encrypted) if league.espn_s2_encrypted else None,
+                swid=ESPNCredentialManager.decrypt_espn_swid(league.espn_swid_encrypted) if league.espn_swid_encrypted else None
+            )
+        
+        # Fetch fresh league data
+        league_info = await espn_service.get_league_info(
+            str(league.espn_league_id),
+            cookies
+        )
+        
+        # Update league with fresh data
+        league.name = league_info["name"]
+        league.size = league_info["size"]
+        league.current_week = league_info["current_week"]
+        league.scoring_type = league_info["scoring_type"]
+        league.roster_settings = league_info["roster_settings"]
+        league.scoring_settings = league_info["scoring_settings"]
+        league.last_synced = func.now()
+        
+        # Get fresh team data
+        teams_data = await espn_service.get_teams(
+            str(league.espn_league_id),
+            cookies
+        )
+        
+        # Update teams
+        for team_data in teams_data:
+            result = await db.execute(
+                select(Team).where(
+                    Team.league_id == league.id,
+                    Team.espn_team_id == team_data["id"]
+                )
+            )
+            existing_team = result.scalar_one_or_none()
+            
+            if existing_team:
+                # Update existing team
+                team = existing_team
+                team.name = team_data["name"]
+                team.location = team_data["location"]
+                team.nickname = team_data["nickname"]
+                team.abbreviation = team_data["abbreviation"]
+                team.logo_url = team_data["logo_url"]
+                team.wins = team_data["wins"]
+                team.losses = team_data["losses"]
+                team.ties = team_data["ties"]
+                team.points_for = team_data["points_for"]
+                team.points_against = team_data["points_against"]
+            else:
+                # Create new team
+                team = Team(
+                    espn_team_id=team_data["id"],
+                    league_id=league.id,
+                    name=team_data["name"],
+                    location=team_data["location"],
+                    nickname=team_data["nickname"],
+                    abbreviation=team_data["abbreviation"],
+                    logo_url=team_data["logo_url"],
+                    wins=team_data["wins"],
+                    losses=team_data["losses"],
+                    ties=team_data["ties"],
+                    points_for=team_data["points_for"],
+                    points_against=team_data["points_against"]
+                )
+                db.add(team)
+        
+        await db.commit()
+        await db.refresh(league)
+        
+        return LeagueConnectionResponse(
+            success=True,
+            message="League data synced successfully",
+            league=LeagueResponse.from_orm(league),
+            teams=teams_data
+        )
+        
+    except ESPNError as e:
+        logger.error("ESPN API error during league sync", error=str(e))
+        return LeagueConnectionResponse(
+            success=False,
+            message=f"ESPN sync failed: {str(e)}"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Unexpected error during league sync", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to sync league data"
         )
 
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useLeague, useDisconnectLeague } from '@/hooks/useLeagues';
+import { useLeague, useDisconnectLeague, useSyncLeague } from '@/hooks/useLeagues';
 import { useLeagueTeams } from '@/hooks/useTeams';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -36,6 +36,17 @@ export const LeagueDetailPage: React.FC = () => {
   } = useLeagueTeams(parseInt(leagueId || '0', 10));
 
   const disconnectLeague = useDisconnectLeague();
+  const syncLeague = useSyncLeague();
+
+  const handleSync = async () => {
+    if (!league) return;
+
+    try {
+      await syncLeague.mutateAsync(league.id);
+    } catch (error) {
+      console.error('Failed to sync league:', error);
+    }
+  };
 
   const handleDisconnect = async () => {
     if (!league) return;
@@ -119,9 +130,14 @@ export const LeagueDetailPage: React.FC = () => {
           </div>
           
           <div className="mt-4 lg:mt-0 flex space-x-3">
-            <Button variant="secondary" size="sm">
+            <Button 
+              variant="secondary" 
+              size="sm" 
+              onClick={handleSync}
+              disabled={syncLeague.isLoading}
+            >
               <CogIcon className="h-4 w-4 mr-2" />
-              Sync Data
+              {syncLeague.isLoading ? 'Syncing...' : 'Sync Data'}
             </Button>
             <Button
               variant="danger"
@@ -187,28 +203,73 @@ export const LeagueDetailPage: React.FC = () => {
               ) : teams && teams.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {teams.map((team: any) => (
-                    <div
-                      key={team.id}
-                      className="p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                    <Link 
+                      key={team.id} 
+                      to={`/leagues/${leagueId}/teams/${team.id}`}
+                      className="block"
                     >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-medium text-gray-900">{team.name}</h4>
-                          <div className="text-sm text-gray-600 mt-1">
-                            <span className="font-medium">
-                              {team.wins}-{team.losses}
-                              {team.ties > 0 && `-${team.ties}`}
-                            </span>
-                            <span className="mx-2">•</span>
-                            <span>{team.points_for.toFixed(1)} PF</span>
+                      <div className="p-4 border rounded-lg hover:bg-gray-50 hover:shadow-md transition-all cursor-pointer border-l-4 border-l-blue-500">
+                        <div className="flex items-center space-x-4">
+                          {/* Team Logo */}
+                          <div className="flex-shrink-0">
+                            <img
+                              src={team.logo_url}
+                              alt={`${team.name || team.abbreviation} logo`}
+                              className="w-12 h-12 rounded-full object-cover bg-gray-100"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                              }}
+                            />
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
+                              {team.abbreviation || team.name?.charAt(0) || '?'}
+                            </div>
+                          </div>
+                          
+                          {/* Team Info */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <h4 className="font-semibold text-gray-900 text-lg">
+                                  {team.name || `Team ${team.abbreviation}`}
+                                </h4>
+                                <p className="text-sm text-gray-500 mb-1">
+                                  {team.abbreviation}
+                                </p>
+                                <div className="flex items-center space-x-3 text-sm">
+                                  <span className="font-medium text-gray-900">
+                                    {team.wins}-{team.losses}
+                                    {team.ties > 0 && `-${team.ties}`}
+                                  </span>
+                                  <span className="text-green-600 font-medium">
+                                    {team.points_for.toFixed(1)} PF
+                                  </span>
+                                  <span className="text-red-500">
+                                    {team.points_against.toFixed(1)} PA
+                                  </span>
+                                </div>
+                              </div>
+                              
+                              {/* Record Badge */}
+                              <div className="text-right">
+                                <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                  team.wins > team.losses 
+                                    ? 'bg-green-100 text-green-800'
+                                    : team.wins < team.losses
+                                    ? 'bg-red-100 text-red-800'
+                                    : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {team.wins > team.losses ? 'Winning' : team.wins < team.losses ? 'Losing' : 'Tied'}
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                  Click to view roster
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <div className="text-sm text-gray-500">Points Against</div>
-                          <div className="font-medium">{team.points_against.toFixed(1)}</div>
-                        </div>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               ) : (
