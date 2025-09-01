@@ -42,6 +42,26 @@ async def test_espn_api():
                         print(f"Keys in response: {list(json_data.keys())}")
                         if "teams" in json_data:
                             print(f"Number of teams: {len(json_data['teams'])}")
+                            
+                            # Look at the first few teams in detail, specifically team ID 9
+                            for i, team in enumerate(json_data['teams']):
+                                if team.get('id') == 9:
+                                print(f"\nTeam {i+1} data:")
+                                print(f"  All keys: {list(team.keys())}")
+                                print(f"  id: {team.get('id')}")
+                                print(f"  name: '{team.get('name', '')}'")
+                                print(f"  location: '{team.get('location', '')}'")
+                                print(f"  nickname: '{team.get('nickname', '')}'")
+                                print(f"  abbrev: '{team.get('abbrev', '')}'")
+                                print(f"  primaryOwner: {team.get('primaryOwner', 'N/A')}")
+                                print(f"  owners: {team.get('owners', [])}")
+                                
+                                # Look for any other name-related fields
+                                name_fields = [k for k in team.keys() if 'name' in k.lower()]
+                                if name_fields:
+                                    print(f"  Name-related fields: {name_fields}")
+                                    for field in name_fields:
+                                        print(f"    {field}: '{team.get(field, '')}'")
                         else:
                             print("No 'teams' key in response")
                     else:

@@ -182,12 +182,24 @@ class ESPNService:
                     continue
                     
                 # Create a friendly team name
+                # Try to get the custom team name first (this is what users set in ESPN)
+                team_name = team_data.get("name", "").strip()
                 location = team_data.get("location", "").strip()
                 nickname = team_data.get("nickname", "").strip()
                 abbrev = team_data.get("abbrev", "").strip()
                 
-                # Use location + nickname if available, otherwise use abbreviation as name
-                if location and nickname:
+                # Log the raw ESPN data for debugging
+                logger.info("ESPN team data fields", 
+                           team_id=team_data.get("id"),
+                           name=team_name,
+                           location=location, 
+                           nickname=nickname,
+                           abbrev=abbrev)
+                
+                # Priority order: custom name > location + nickname > location > nickname > abbrev
+                if team_name:
+                    display_name = team_name
+                elif location and nickname:
                     display_name = f"{location} {nickname}"
                 elif location:
                     display_name = location
