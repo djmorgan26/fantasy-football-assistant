@@ -104,6 +104,13 @@ async def debug_matchups():
                     for i, matchup in enumerate(matchups[:3]):
                         print(f"  {i+1}. Week {matchup['week']} - Home: {matchup['home_team_id']} vs Away: {matchup['away_team_id']}")
                         print(f"       is_playoff: {matchup['is_playoff']} - Winner: {matchup['winner']}")
+                        
+                        # Show actual scores
+                        home_score = matchup.get('home_score', 0)
+                        away_score = matchup.get('away_score', 0)
+                        print(f"       Actual: Home {home_score} - Away {away_score}")
+                        
+                        # Show projected scores
                         home_proj = matchup.get('home_projected_score')
                         away_proj = matchup.get('away_projected_score')
                         home_str = f"{home_proj:.1f}" if home_proj else "None"
