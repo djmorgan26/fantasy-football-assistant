@@ -11,6 +11,8 @@ class MatchupBase(BaseModel):
     away_team_id: Optional[int] = None
     home_score: float = 0.0
     away_score: float = 0.0
+    home_projected_score: Optional[float] = None
+    away_projected_score: Optional[float] = None
     is_playoff: bool = False
     winner: str = "UNDECIDED"
 

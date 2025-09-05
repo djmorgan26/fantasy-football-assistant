@@ -3,86 +3,125 @@
 import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.db.database import engine, get_database
+from app.db.database import engine
 from app.models.league import League
-from app.models.team import Team
 from app.services.espn_service import ESPNService, ESPNCookies
+from app.utils.encryption import ESPNCredentialManager
 
 async def debug_matchups():
-    """Debug the matchup retrieval logic step by step"""
-    print("=== Debugging Matchup Retrieval ===")
+    """Debug the matchups functionality"""
+    print("=== Debugging Matchups ===")
     
     league_id = 1
-    user_id = 1
     
     try:
-        # Create async session
         async with AsyncSession(engine) as db:
-            print(f"1. Testing database connection...")
-            
-            # Get the league and verify ownership
-            print(f"2. Looking for league {league_id} owned by user {user_id}...")
-            result = await db.execute(
-                select(League).where(
-                    League.id == league_id,
-                    League.owner_user_id == user_id
-                )
-            )
+            # Get league
+            result = await db.execute(select(League).where(League.id == league_id))
             league = result.scalar_one_or_none()
             
             if not league:
-                print(f"❌ League not found!")
+                print(f"❌ League {league_id} not found!")
                 return
             
             print(f"✅ Found league: {league.name} (ESPN ID: {league.espn_league_id})")
             
-            # Test ESPN service
-            print(f"3. Testing ESPN API connection...")
+            # Set up ESPN service
             espn_service = ESPNService()
             
-            matchups_data = await espn_service.get_matchups(
-                str(league.espn_league_id),
-                1  # Week 1
-            )
+            # Get ESPN credentials
+            cookies = None
+            if league.espn_s2_encrypted or league.espn_swid_encrypted:
+                s2 = ESPNCredentialManager.decrypt_espn_s2(league.espn_s2_encrypted) if league.espn_s2_encrypted else None
+                swid = ESPNCredentialManager.decrypt_espn_swid(league.espn_swid_encrypted) if league.espn_swid_encrypted else None
+                if s2 or swid:
+                    cookies = ESPNCookies(espn_s2=s2, swid=swid)
+                    print(f"✅ Using ESPN credentials")
+                else:
+                    print("⚠️  No ESPN credentials found")
+            else:
+                print("⚠️  No encrypted ESPN credentials in database")
             
-            print(f"✅ ESPN API returned {len(matchups_data)} matchups")
-            if matchups_data:
-                print(f"   Sample matchup: {matchups_data[0]}")
-            
-            # Test team lookup
-            print(f"4. Testing team lookups...")
-            
-            for i, matchup_data in enumerate(matchups_data[:2]):  # Test first 2 matchups
-                print(f"   Matchup {i+1}: Home team {matchup_data.get('home_team_id')} vs Away team {matchup_data.get('away_team_id')}")
+            # Test direct ESPN API call to see raw matchup data  
+            print(f"🔍 Testing direct ESPN API call for matchups in week 1...")
+            try:
+                params = {"view": "mMatchup", "scoringPeriodId": 1}
+                raw_data = await espn_service._make_request(f"{league.espn_league_id}", cookies, params)
                 
-                # Get team details
-                home_team = None
-                away_team = None
+                print(f"✅ Raw ESPN API call successful")
+                print(f"   Keys in response: {list(raw_data.keys())}")
                 
-                if matchup_data.get("home_team_id"):
-                    result = await db.execute(
-                        select(Team).where(
-                            Team.league_id == league.id,
-                            Team.espn_team_id == matchup_data["home_team_id"]
-                        )
-                    )
-                    home_team = result.scalar_one_or_none()
-                    print(f"     Home team: {home_team.name if home_team else 'Not found'}")
+                schedule_data = raw_data.get("schedule", [])
+                print(f"   Found {len(schedule_data)} schedule entries")
                 
-                if matchup_data.get("away_team_id"):
-                    result = await db.execute(
-                        select(Team).where(
-                            Team.league_id == league.id,
-                            Team.espn_team_id == matchup_data["away_team_id"]
-                        )
-                    )
-                    away_team = result.scalar_one_or_none()
-                    print(f"     Away team: {away_team.name if away_team else 'Not found'}")
-            
-            print("✅ All steps completed successfully!")
-            
+                if schedule_data:
+                    print("\nFirst 3 matchup entries:")
+                    for i, matchup in enumerate(schedule_data[:3]):
+                        print(f"   Matchup {i+1}:")
+                        print(f"     matchupPeriodId: {matchup.get('matchupPeriodId')}")
+                        print(f"     playoffTierType: {matchup.get('playoffTierType')}")
+                        print(f"     home teamId: {matchup.get('home', {}).get('teamId')}")
+                        print(f"     home totalPoints: {matchup.get('home', {}).get('totalPoints', 0)}")
+                        print(f"     home totalPointsLive: {matchup.get('home', {}).get('totalPointsLive', 0)}")
+                        print(f"     away teamId: {matchup.get('away', {}).get('teamId')}")
+                        print(f"     away totalPoints: {matchup.get('away', {}).get('totalPoints', 0)}")
+                        print(f"     away totalPointsLive: {matchup.get('away', {}).get('totalPointsLive', 0)}")
+                        print(f"     winner: {matchup.get('winner', 'UNDECIDED')}")
+                        print(f"     All home keys: {list(matchup.get('home', {}).keys())}")
+                        print(f"     All away keys: {list(matchup.get('away', {}).keys())}")
+                        
+                        # Look at roster data for projected points
+                        home_roster = matchup.get('home', {}).get('rosterForMatchupPeriod', {})
+                        if home_roster:
+                            print(f"     Home roster keys: {list(home_roster.keys())}")
+                            entries = home_roster.get('entries', [])
+                            print(f"     Home roster entries: {len(entries)}")
+                            if entries:
+                                first_entry = entries[0]
+                                print(f"     First home player keys: {list(first_entry.keys())}")
+                                player_data = first_entry.get('playerPoolEntry', {}).get('player', {})
+                                print(f"     Player stats keys: {list(player_data.get('stats', [{}])[0].keys()) if player_data.get('stats') else 'No stats'}")
+                        print()
+                
+            except Exception as e:
+                print(f"❌ Error with direct API call: {e}")
+                import traceback
+                traceback.print_exc()
+                
+            # Test get_matchups method
+            print(f"🔍 Testing get_matchups method for week 1...")
+            try:
+                matchups = await espn_service.get_matchups(
+                    str(league.espn_league_id),
+                    week=1,
+                    cookies=cookies
+                )
+                
+                print(f"✅ Method returned {len(matchups)} matchups")
+                
+                if matchups:
+                    print("\\nFirst 3 processed matchups:")
+                    for i, matchup in enumerate(matchups[:3]):
+                        print(f"  {i+1}. Week {matchup['week']} - Home: {matchup['home_team_id']} vs Away: {matchup['away_team_id']}")
+                        print(f"       is_playoff: {matchup['is_playoff']} - Winner: {matchup['winner']}")
+                        home_proj = matchup.get('home_projected_score')
+                        away_proj = matchup.get('away_projected_score')
+                        home_str = f"{home_proj:.1f}" if home_proj else "None"
+                        away_str = f"{away_proj:.1f}" if away_proj else "None"
+                        print(f"       Projected: Home {home_str} - Away {away_str}")
+                        if home_proj and away_proj:
+                            favorite = "Home" if home_proj > away_proj else "Away" if away_proj > home_proj else "Even"
+                            print(f"       Favorite: {favorite}")
+                else:
+                    print("❌ No matchups returned from method")
+                    
+            except Exception as e:
+                print(f"❌ Error getting matchups: {e}")
+                import traceback
+                traceback.print_exc()
+                
     except Exception as e:
-        print(f"❌ Error occurred: {e}")
+        print(f"❌ Database error: {e}")
         import traceback
         traceback.print_exc()
 

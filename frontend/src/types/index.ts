@@ -192,6 +192,8 @@ export interface Matchup {
   away_team_id?: number;
   home_score: number;
   away_score: number;
+  home_projected_score?: number;
+  away_projected_score?: number;
   is_playoff: boolean;
   winner: 'HOME' | 'AWAY' | 'TIE' | 'UNDECIDED';
   created_at: string;

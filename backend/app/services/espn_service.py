@@ -290,9 +290,11 @@ class ESPNService:
         cookies: Optional[ESPNCookies] = None
     ) -> List[Dict[str, Any]]:
         try:
-            params = {"view": "players_wl"}
-            if week:
-                params["scoringPeriodId"] = week
+            # Use players_wl view to get available players (kona_player_info changes data structure)
+            params = {
+                "view": "players_wl",
+                "scoringPeriodId": week or 1
+            }
                 
             data = await self._make_request(f"{league_id}", cookies, params)
             
@@ -308,19 +310,44 @@ class ESPNService:
                 if player_data.get("onTeamId") is not None:
                     continue
                 
+                # Get season and last week points for better data
+                season_points = 0.0
+                last_week_points = 0.0
+                avg_points = 0.0
+                
+                player_stats = self._extract_player_stats(player, week)
+                projected_points = self._get_projected_points(player, week)
+                
+                # Try to get season totals
+                for stat_entry in player.get("stats", []):
+                    if stat_entry.get("statSourceId") == 0:  # Actual stats
+                        season_points += stat_entry.get("appliedTotal", 0.0)
+                        
+                if season_points > 0:
+                    # Estimate average (assuming we're in week 17 or so)
+                    avg_points = season_points / 17.0
+
                 players.append({
                     "id": player.get("id"),
+                    "espn_player_id": player.get("id"),
                     "full_name": player.get("fullName", ""),
                     "first_name": player.get("firstName", ""),
                     "last_name": player.get("lastName", ""),
                     "position_id": player.get("defaultPositionId"),
                     "position_name": self.position_map.get(player.get("defaultPositionId"), "UNKNOWN"),
                     "pro_team_id": player.get("proTeamId"),
+                    "pro_team_abbr": self._get_pro_team_abbr(player.get("proTeamId")),
                     "eligible_slots": player.get("eligibleSlots", []),
+                    "is_active": player.get("injuryStatus", "ACTIVE") == "ACTIVE",
                     "injury_status": player.get("injuryStatus", "ACTIVE"),
-                    "stats": self._extract_player_stats(player, week),
-                    "ownership_percentage": player_data.get("ratings", {}).get("0", {}).get("positionalRanking", 0),
-                    "projected_points": self._get_projected_points(player, week)
+                    "stats": player_stats,
+                    "season_points": season_points,
+                    "last_week_points": last_week_points,
+                    "average_points": avg_points,
+                    "projected_points": projected_points,
+                    "ownership_percentage": player_data.get("ratings", {}).get("0", {}).get("positionalRanking", 0.0),
+                    "latest_news": player.get("news", {}).get("headline", ""),
+                    "news_updated": player.get("news", {}).get("timeStamp")
                 })
             
             # Sort by projected points descending
@@ -350,6 +377,14 @@ class ESPNService:
                 if week and matchup_data.get("matchupPeriodId") != week:
                     continue
                 
+                # Calculate projected scores from roster data if available
+                home_projected = await self._calculate_team_projected_score(
+                    matchup_data.get("home", {}), league_id, week or 1, cookies
+                )
+                away_projected = await self._calculate_team_projected_score(
+                    matchup_data.get("away", {}), league_id, week or 1, cookies
+                )
+                
                 matchups.append({
                     "matchup_id": matchup_data.get("id"),
                     "week": matchup_data.get("matchupPeriodId"),
@@ -357,7 +392,9 @@ class ESPNService:
                     "away_team_id": matchup_data.get("away", {}).get("teamId"),
                     "home_score": matchup_data.get("home", {}).get("totalPoints", 0),
                     "away_score": matchup_data.get("away", {}).get("totalPoints", 0),
-                    "is_playoff": matchup_data.get("playoffTierType") != "NONE",
+                    "home_projected_score": home_projected,
+                    "away_projected_score": away_projected,
+                    "is_playoff": matchup_data.get("playoffTierType") not in [None, "NONE"],
                     "winner": matchup_data.get("winner", "UNDECIDED")
                 })
             
@@ -366,6 +403,78 @@ class ESPNService:
             logger.error("Failed to get matchups", 
                         league_id=league_id, week=week, error=str(e))
             raise
+
+    async def _calculate_team_projected_score(
+        self,
+        team_data: Dict[str, Any],
+        league_id: str,
+        week: int,
+        cookies: Optional[ESPNCookies] = None
+    ) -> Optional[float]:
+        """Calculate projected score for a team based on their starting lineup"""
+        try:
+            team_id = team_data.get("teamId")
+            if not team_id:
+                return None
+            
+            # Get raw roster data directly from ESPN API to access the original player stats
+            params = {"view": "mRoster", "scoringPeriodId": week}
+            data = await self._make_request(f"{league_id}", cookies, params)
+            
+            # Find the specific team
+            team_data_raw = None
+            for team in data.get("teams", []):
+                if team.get("id") == team_id:
+                    team_data_raw = team
+                    break
+            
+            if not team_data_raw:
+                return None
+            
+            projected_total = 0.0
+            roster_entries = team_data_raw.get("roster", {}).get("entries", [])
+            
+            for entry in roster_entries:
+                lineup_slot = entry.get("lineupSlotId", 0)
+                # Only count starting lineup players (exclude bench=20, IR=21)  
+                if lineup_slot != 20 and lineup_slot != 21:  # Not bench or IR
+                    player = entry.get("playerPoolEntry", {}).get("player", {})
+                    # Use the existing _get_projected_points method with raw player data
+                    projected_points = self._get_projected_points(player, week)
+                    projected_total += projected_points
+                    
+            return projected_total if projected_total > 0 else None
+            
+        except Exception as e:
+            logger.warning(f"Failed to calculate projected score for team {team_data.get('teamId', 'unknown')}: {e}")
+            return None
+
+    def _get_projected_points_for_roster_player(self, player_data: Dict[str, Any]) -> float:
+        """Extract projected points from roster player data"""
+        try:
+            stats = player_data.get("stats", {})
+            projected = stats.get("projected", {})
+            
+            # Try different potential keys for total projected points
+            # Based on debug output, '0' seems to be the main key for totals
+            if "0" in projected:
+                return float(projected["0"])
+            
+            # If that doesn't work, try other common keys from debug output
+            for key in ["213", "210"]:  # These appeared in debug output
+                if key in projected:
+                    return float(projected[key])
+            
+            # If we still can't find it, let's look for the highest value
+            # which is likely the total projected points
+            if projected:
+                max_value = max(float(v) for v in projected.values() if isinstance(v, (int, float)))
+                return max_value
+            
+            return 0.0
+            
+        except (ValueError, TypeError, KeyError, AttributeError):
+            return 0.0
 
     async def get_waiver_budgets(
         self, 
@@ -498,6 +607,18 @@ class ESPNService:
                 return stat_entry.get("appliedTotal", 0.0)
         
         return 0.0
+    
+    def _get_pro_team_abbr(self, pro_team_id: Optional[int]) -> str:
+        """Get NFL team abbreviation from pro team ID"""
+        # ESPN pro team ID mappings (partial list)
+        team_map = {
+            1: "ATL", 2: "BUF", 3: "CHI", 4: "CIN", 5: "CLE", 6: "DAL", 7: "DEN",
+            8: "DET", 9: "GB", 10: "TEN", 11: "IND", 12: "KC", 13: "LV", 14: "LAR",
+            15: "MIA", 16: "MIN", 17: "NE", 18: "NO", 19: "NYG", 20: "NYJ",
+            21: "PHI", 22: "ARI", 23: "PIT", 24: "LAC", 25: "SF", 26: "SEA",
+            27: "TB", 28: "WAS", 29: "CAR", 30: "JAX", 33: "BAL", 34: "HOU"
+        }
+        return team_map.get(pro_team_id, "FA")
 
 
 class ESPNError(Exception):
