@@ -3,10 +3,11 @@ import { useParams, Link } from 'react-router-dom';
 import { useLeague } from '@/hooks/useLeagues';
 import { useLeagueTeams } from '@/hooks/useTeams';
 import { useCurrentUser } from '@/hooks/useAuth';
+import { useAnalyzeTrade } from '@/hooks/useTrades';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { Team } from '@/types';
+import { Team, TradeAnalysisResponse } from '@/types';
 import {
   ArrowLeftIcon,
   ArrowsRightLeftIcon,
@@ -23,40 +24,31 @@ export const TradeAnalyzerPage: React.FC = () => {
   
   const [selectedTeam1, setSelectedTeam1] = useState<Team | null>(null);
   const [selectedTeam2, setSelectedTeam2] = useState<Team | null>(null);
-  const [team1Players, setTeam1Players] = useState<string[]>([]);
-  const [team2Players, setTeam2Players] = useState<string[]>([]);
-  const [analysis, setAnalysis] = useState<any>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [team1Players, setTeam1Players] = useState<number[]>([]);
+  const [team2Players, setTeam2Players] = useState<number[]>([]);
+  const [analysis, setAnalysis] = useState<TradeAnalysisResponse | null>(null);
 
   const userTeam = teams?.find(team => team.owner_user_id === currentUser?.id);
+  const analyzeTradeMutation = useAnalyzeTrade();
 
-  // Mock trade analysis function
-  const analyzeTrade = async () => {
-    if (!selectedTeam1 || !selectedTeam2 || team1Players.length === 0 || team2Players.length === 0) {
+  const handleAnalyzeTrade = async () => {
+    if (!selectedTeam1 || !selectedTeam2 || team1Players.length === 0 || team2Players.length === 0 || !league) {
       return;
     }
 
-    setIsAnalyzing(true);
-    
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Mock analysis result
-    const mockAnalysis = {
-      fairness_score: Math.random() * 100,
-      value_difference: (Math.random() - 0.5) * 50,
-      is_valid: true,
-      analysis_summary: `This trade appears to be ${Math.random() > 0.5 ? 'favorable' : 'unfavorable'} for ${selectedTeam1.name}. The trade involves ${team1Players.length} players from ${selectedTeam1.name} and ${team2Players.length} players from ${selectedTeam2.name}.`,
-      recommendations: [
-        "Consider the injury status of all players involved",
-        "Review upcoming matchup schedules",
-        "Check playoff implications",
-        "Analyze positional needs for both teams"
-      ]
-    };
-    
-    setAnalysis(mockAnalysis);
-    setIsAnalyzing(false);
+    try {
+      const result = await analyzeTradeMutation.mutateAsync({
+        league_id: league.id,
+        proposing_team_id: selectedTeam1.espn_team_id,
+        receiving_team_id: selectedTeam2.espn_team_id,
+        give_players: team1Players,
+        receive_players: team2Players,
+      });
+      
+      setAnalysis(result);
+    } catch (error) {
+      // Error is handled by the mutation hook
+    }
   };
 
   const resetAnalysis = () => {
@@ -165,20 +157,28 @@ export const TradeAnalyzerPage: React.FC = () => {
                       Players from {selectedTeam1.name}
                     </label>
                     <div className="space-y-2">
-                      {/* Mock player inputs */}
+                      {/* Player ID inputs - In a real implementation, you'd have a player selector */}
                       {[1, 2, 3].map(i => (
                         <input
                           key={i}
-                          type="text"
-                          placeholder={`Player ${i} name`}
+                          type="number"
+                          placeholder={`ESPN Player ID ${i}`}
                           className="w-full p-2 border rounded-lg"
                           onChange={(e) => {
+                            const value = e.target.value ? parseInt(e.target.value) : null;
                             const newPlayers = [...team1Players];
-                            newPlayers[i-1] = e.target.value;
+                            if (value) {
+                              newPlayers[i-1] = value;
+                            } else {
+                              newPlayers.splice(i-1, 1);
+                            }
                             setTeam1Players(newPlayers.filter(p => p));
                           }}
                         />
                       ))}
+                      <p className="text-xs text-gray-500">
+                        Enter ESPN Player IDs. You can find these by inspecting the roster endpoints.
+                      </p>
                     </div>
                   </div>
 
@@ -187,31 +187,39 @@ export const TradeAnalyzerPage: React.FC = () => {
                       Players from {selectedTeam2.name}
                     </label>
                     <div className="space-y-2">
-                      {/* Mock player inputs */}
+                      {/* Player ID inputs - In a real implementation, you'd have a player selector */}
                       {[1, 2, 3].map(i => (
                         <input
                           key={i}
-                          type="text"
-                          placeholder={`Player ${i} name`}
+                          type="number"
+                          placeholder={`ESPN Player ID ${i}`}
                           className="w-full p-2 border rounded-lg"
                           onChange={(e) => {
+                            const value = e.target.value ? parseInt(e.target.value) : null;
                             const newPlayers = [...team2Players];
-                            newPlayers[i-1] = e.target.value;
+                            if (value) {
+                              newPlayers[i-1] = value;
+                            } else {
+                              newPlayers.splice(i-1, 1);
+                            }
                             setTeam2Players(newPlayers.filter(p => p));
                           }}
                         />
                       ))}
+                      <p className="text-xs text-gray-500">
+                        Enter ESPN Player IDs. You can find these by inspecting the roster endpoints.
+                      </p>
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-6 flex space-x-3">
                   <Button
-                    onClick={analyzeTrade}
-                    disabled={!selectedTeam1 || !selectedTeam2 || team1Players.length === 0 || team2Players.length === 0 || isAnalyzing}
+                    onClick={handleAnalyzeTrade}
+                    disabled={!selectedTeam1 || !selectedTeam2 || team1Players.length === 0 || team2Players.length === 0 || analyzeTradeMutation.isLoading}
                     className="flex-1"
                   >
-                    {isAnalyzing ? (
+                    {analyzeTradeMutation.isLoading ? (
                       <>
                         <LoadingSpinner size="sm" className="mr-2" />
                         Analyzing...
@@ -238,10 +246,16 @@ export const TradeAnalyzerPage: React.FC = () => {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
-                  {analysis.fairness_score >= 70 ? (
-                    <CheckCircleIcon className="h-5 w-5 text-green-500 mr-2" />
-                  ) : analysis.fairness_score >= 40 ? (
-                    <ExclamationTriangleIcon className="h-5 w-5 text-yellow-500 mr-2" />
+                  {analysis.fairness_score !== undefined ? (
+                    analysis.fairness_score >= 70 ? (
+                      <CheckCircleIcon className="h-5 w-5 text-green-500 mr-2" />
+                    ) : analysis.fairness_score >= 40 ? (
+                      <ExclamationTriangleIcon className="h-5 w-5 text-yellow-500 mr-2" />
+                    ) : (
+                      <XCircleIcon className="h-5 w-5 text-red-500 mr-2" />
+                    )
+                  ) : analysis.is_valid ? (
+                    <CheckCircleIcon className="h-5 w-5 text-blue-500 mr-2" />
                   ) : (
                     <XCircleIcon className="h-5 w-5 text-red-500 mr-2" />
                   )}
@@ -251,30 +265,34 @@ export const TradeAnalyzerPage: React.FC = () => {
               <CardContent>
                 <div className="space-y-6">
                   {/* Fairness Score */}
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm font-medium text-gray-700">Fairness Score</span>
-                      <span className="text-sm font-bold">{analysis.fairness_score.toFixed(1)}/100</span>
+                  {analysis.fairness_score !== undefined && (
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-medium text-gray-700">Fairness Score</span>
+                        <span className="text-sm font-bold">{analysis.fairness_score.toFixed(1)}/100</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className={`h-2 rounded-full ${
+                            analysis.fairness_score >= 70 ? 'bg-green-500' : 
+                            analysis.fairness_score >= 40 ? 'bg-yellow-500' : 'bg-red-500'
+                          }`}
+                          style={{ width: `${Math.min(analysis.fairness_score, 100)}%` }}
+                        ></div>
+                      </div>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className={`h-2 rounded-full ${
-                          analysis.fairness_score >= 70 ? 'bg-green-500' : 
-                          analysis.fairness_score >= 40 ? 'bg-yellow-500' : 'bg-red-500'
-                        }`}
-                        style={{ width: `${Math.min(analysis.fairness_score, 100)}%` }}
-                      ></div>
-                    </div>
-                  </div>
+                  )}
 
                   {/* Value Difference */}
-                  <div>
-                    <h4 className="font-medium text-gray-900 mb-2">Value Assessment</h4>
-                    <p className={`text-sm ${analysis.value_difference > 0 ? 'text-green-600' : analysis.value_difference < 0 ? 'text-red-600' : 'text-gray-600'}`}>
-                      {analysis.value_difference > 0 ? 'Favorable' : analysis.value_difference < 0 ? 'Unfavorable' : 'Neutral'} 
-                      {analysis.value_difference !== 0 && ` (${Math.abs(analysis.value_difference).toFixed(1)} point difference)`}
-                    </p>
-                  </div>
+                  {analysis.value_difference !== undefined && (
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-2">Value Assessment</h4>
+                      <p className={`text-sm ${analysis.value_difference > 0 ? 'text-green-600' : analysis.value_difference < 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                        {analysis.value_difference > 0 ? 'Favorable' : analysis.value_difference < 0 ? 'Unfavorable' : 'Neutral'} 
+                        {analysis.value_difference !== 0 && ` (${Math.abs(analysis.value_difference).toFixed(1)} point difference)`}
+                      </p>
+                    </div>
+                  )}
 
                   {/* Analysis Summary */}
                   <div>
@@ -283,17 +301,19 @@ export const TradeAnalyzerPage: React.FC = () => {
                   </div>
 
                   {/* Recommendations */}
-                  <div>
-                    <h4 className="font-medium text-gray-900 mb-2">Recommendations</h4>
-                    <ul className="space-y-1">
-                      {analysis.recommendations.map((rec: string, index: number) => (
-                        <li key={index} className="text-sm text-gray-600 flex items-start">
-                          <span className="text-blue-500 mr-2">•</span>
-                          {rec}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  {analysis.recommendations && analysis.recommendations.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-2">Recommendations</h4>
+                      <ul className="space-y-1">
+                        {analysis.recommendations.map((rec: string, index: number) => (
+                          <li key={index} className="text-sm text-gray-600 flex items-start">
+                            <span className="text-blue-500 mr-2">•</span>
+                            {rec}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

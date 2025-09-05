@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useLeague } from '@/hooks/useLeagues';
+import { useSearchPlayers } from '@/hooks/usePlayers';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { Player } from '@/types';
 import {
   ArrowLeftIcon,
   MagnifyingGlassIcon,
@@ -12,107 +14,35 @@ import {
   FireIcon,
 } from '@heroicons/react/24/outline';
 
-interface MockPlayer {
-  id: number;
-  name: string;
-  position: string;
-  team: string;
-  points: number;
-  projected: number;
-  ownership: number;
-  status: 'available' | 'owned' | 'waivers';
-  owner?: string;
-}
-
-const mockPlayers: MockPlayer[] = [
-  {
-    id: 1,
-    name: "Lamar Jackson",
-    position: "QB",
-    team: "BAL",
-    points: 284.2,
-    projected: 22.3,
-    ownership: 98,
-    status: "owned",
-    owner: "Team Alpha"
-  },
-  {
-    id: 2,
-    name: "Christian McCaffrey", 
-    position: "RB",
-    team: "SF",
-    points: 312.5,
-    projected: 24.1,
-    ownership: 100,
-    status: "owned",
-    owner: "Team Beta"
-  },
-  {
-    id: 3,
-    name: "Jaylen Warren",
-    position: "RB", 
-    team: "PIT",
-    points: 156.8,
-    projected: 12.4,
-    ownership: 65,
-    status: "available"
-  },
-  {
-    id: 4,
-    name: "Rome Odunze",
-    position: "WR",
-    team: "CHI", 
-    points: 89.3,
-    projected: 8.7,
-    ownership: 45,
-    status: "available"
-  },
-  {
-    id: 5,
-    name: "Brock Bowers",
-    position: "TE",
-    team: "LV",
-    points: 134.6,
-    projected: 11.2,
-    ownership: 78,
-    status: "waivers"
-  },
-  {
-    id: 6,
-    name: "Tucker Kraft",
-    position: "TE", 
-    team: "GB",
-    points: 67.4,
-    projected: 6.8,
-    ownership: 23,
-    status: "available"
-  }
-];
-
 export const PlayerSearchPage: React.FC = () => {
   const { leagueId } = useParams<{ leagueId: string }>();
   const { data: league } = useLeague(parseInt(leagueId || '0', 10));
   
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedPosition, setSelectedPosition] = useState('ALL');
-  const [availableOnly, setAvailableOnly] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [players, setPlayers] = useState<MockPlayer[]>(mockPlayers);
+  const [selectedPosition, setSelectedPosition] = useState('');
+  const [availableOnly, setAvailableOnly] = useState(true);
+  const [shouldSearch, setShouldSearch] = useState(false);
 
-  const filteredPlayers = players.filter(player => {
-    const matchesSearch = player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         player.team.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesPosition = selectedPosition === 'ALL' || player.position === selectedPosition;
-    const matchesAvailability = !availableOnly || player.status === 'available';
-    
-    return matchesSearch && matchesPosition && matchesAvailability;
-  });
+  // Create search request object
+  const searchRequest = {
+    league_id: parseInt(leagueId || '0', 10),
+    week: league?.current_week,
+    position: selectedPosition || undefined,
+    search_term: searchTerm || undefined,
+    available_only: availableOnly,
+  };
 
-  const handleSearch = async () => {
-    setIsLoading(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setIsLoading(false);
+  // Use the search hook with the current search parameters
+  const { data: searchResults, isLoading, error } = useSearchPlayers(
+    searchRequest,
+    shouldSearch && !!league
+  );
+
+  const players = searchResults?.players || [];
+  const totalCount = searchResults?.total_count || 0;
+
+  const handleSearch = () => {
+    setShouldSearch(true);
   };
 
   const getStatusBadge = (status: string, owner?: string) => {
@@ -245,14 +175,28 @@ export const PlayerSearchPage: React.FC = () => {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Search Results ({filteredPlayers.length} players)</span>
+            <span>Search Results ({totalCount} players)</span>
             <div className="text-sm text-gray-500">
               Week {league?.current_week} • 2024 Season
             </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {filteredPlayers.length === 0 ? (
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <LoadingSpinner size="lg" />
+            </div>
+          ) : error ? (
+            <div className="text-center py-12">
+              <UserIcon className="h-12 w-12 text-red-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Search Error
+              </h3>
+              <p className="text-gray-600">
+                Failed to search players. Please try again.
+              </p>
+            </div>
+          ) : players.length === 0 ? (
             <div className="text-center py-12">
               <UserIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -264,7 +208,7 @@ export const PlayerSearchPage: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {filteredPlayers.map((player) => (
+              {players.map((player) => (
                 <div
                   key={player.id}
                   className="p-4 border rounded-lg hover:shadow-md transition-shadow"
@@ -273,48 +217,40 @@ export const PlayerSearchPage: React.FC = () => {
                     <div className="flex items-center space-x-4">
                       {/* Player Avatar */}
                       <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
-                        {player.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                        {player.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
                       </div>
                       
                       {/* Player Info */}
                       <div>
                         <div className="flex items-center space-x-2 mb-1">
-                          <h3 className="font-semibold text-gray-900">{player.name}</h3>
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPositionColor(player.position)}`}>
-                            {player.position}
+                          <h3 className="font-semibold text-gray-900">{player.full_name}</h3>
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPositionColor(player.position_name || '')}`}>
+                            {player.position_name}
                           </span>
-                          <span className="text-sm text-gray-600">{player.team}</span>
+                          <span className="text-sm text-gray-600">{player.pro_team_abbr}</span>
                         </div>
                         
                         <div className="flex items-center space-x-4 text-sm text-gray-600">
                           <span className="flex items-center">
                             <TrophyIcon className="h-4 w-4 mr-1" />
-                            {player.points.toFixed(1)} pts
+                            {player.season_points?.toFixed(1) || '0.0'} pts
                           </span>
                           <span className="flex items-center">
                             <FireIcon className="h-4 w-4 mr-1" />
-                            {player.projected.toFixed(1)} proj
+                            {player.projected_points?.toFixed(1) || '0.0'} proj
                           </span>
-                          <span>{player.ownership}% owned</span>
+                          <span>{player.ownership_percentage?.toFixed(0) || '0'}% owned</span>
                         </div>
                       </div>
                     </div>
                     
                     {/* Status & Actions */}
                     <div className="flex items-center space-x-4">
-                      {getStatusBadge(player.status, player.owner)}
+                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Available</span>
                       
-                      {player.status === 'available' && (
-                        <Button size="sm" variant="secondary">
-                          Add to Watchlist
-                        </Button>
-                      )}
-                      
-                      {player.status === 'waivers' && (
-                        <Button size="sm">
-                          Place Bid
-                        </Button>
-                      )}
+                      <Button size="sm" variant="secondary">
+                        Add to Watchlist
+                      </Button>
                       
                       <Button size="sm" variant="ghost">
                         View Details

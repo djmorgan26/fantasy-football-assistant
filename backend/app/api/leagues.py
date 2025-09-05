@@ -468,6 +468,8 @@ async def get_league_matchups(
                 away_team_id=away_team.id if away_team else None,
                 home_score=matchup_data["home_score"],
                 away_score=matchup_data["away_score"],
+                home_projected_score=matchup_data.get("home_projected_score"),
+                away_projected_score=matchup_data.get("away_projected_score"),
                 is_playoff=matchup_data["is_playoff"],
                 winner=matchup_data["winner"],
                 created_at=datetime.now(timezone.utc),

@@ -19,6 +19,8 @@ class Matchup(Base):
     # Scores
     home_score = Column(Float, default=0.0)
     away_score = Column(Float, default=0.0)
+    home_projected_score = Column(Float, nullable=True)
+    away_projected_score = Column(Float, nullable=True)
     
     # Matchup status
     is_playoff = Column(Boolean, default=False)
