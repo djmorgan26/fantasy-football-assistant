@@ -8,7 +8,9 @@ export const useMatchups = (leagueId: number, week?: number) => {
     () => leaguesService.getMatchups(leagueId, week),
     {
       enabled: !!leagueId,
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 30 * 1000, // 30 seconds - shorter for live scoring
+      refetchInterval: 60 * 1000, // Auto-refetch every 60 seconds during games
+      refetchIntervalInBackground: false, // Only refetch when tab is active
     }
   );
 };

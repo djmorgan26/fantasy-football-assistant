@@ -366,7 +366,8 @@ class ESPNService:
         cookies: Optional[ESPNCookies] = None
     ) -> List[Dict[str, Any]]:
         try:
-            params = {"view": "mMatchup"}
+            # Use multiple views for complete matchup data including live scoring
+            params = {"view": ["mMatchup", "mScoreboard", "mLiveScoring"]}
             if week:
                 params["scoringPeriodId"] = week
                 
@@ -385,13 +386,36 @@ class ESPNService:
                     matchup_data.get("away", {}), league_id, week or 1, cookies
                 )
                 
+                # Try to get scoring data from multiple sources
+                home_data = matchup_data.get("home", {})
+                away_data = matchup_data.get("away", {})
+                
+                # Get the current week for score lookup
+                current_week = matchup_data.get("matchupPeriodId", week or 1)
+                
+                # Get live scoring data with proper fallback logic
+                def get_team_score(team_data, week):
+                    # Priority 1: totalPointsLive (real-time scoring during games)
+                    if "totalPointsLive" in team_data:
+                        return team_data["totalPointsLive"]
+                    # Priority 2: pointsByScoringPeriod for the current week  
+                    elif "pointsByScoringPeriod" in team_data:
+                        week_scores = team_data["pointsByScoringPeriod"]
+                        if str(week) in week_scores:
+                            return week_scores[str(week)]
+                    # Priority 3: totalPoints (final scores)
+                    return team_data.get("totalPoints", 0)
+                
+                home_score = get_team_score(home_data, current_week)
+                away_score = get_team_score(away_data, current_week)
+                
                 matchups.append({
                     "matchup_id": matchup_data.get("id"),
                     "week": matchup_data.get("matchupPeriodId"),
-                    "home_team_id": matchup_data.get("home", {}).get("teamId"),
-                    "away_team_id": matchup_data.get("away", {}).get("teamId"),
-                    "home_score": matchup_data.get("home", {}).get("totalPoints", 0),
-                    "away_score": matchup_data.get("away", {}).get("totalPoints", 0),
+                    "home_team_id": home_data.get("teamId"),
+                    "away_team_id": away_data.get("teamId"),
+                    "home_score": home_score,
+                    "away_score": away_score,
                     "home_projected_score": home_projected,
                     "away_projected_score": away_projected,
                     "is_playoff": matchup_data.get("playoffTierType") not in [None, "NONE"],
