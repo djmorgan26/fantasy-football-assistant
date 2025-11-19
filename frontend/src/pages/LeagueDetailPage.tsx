@@ -8,6 +8,7 @@ import { useCurrentUser } from '@/hooks/useAuth';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { WeeklyRecap } from '@/components/recap/WeeklyRecap';
 import { MatchupCard } from '@/components/matchups/MatchupCard';
 import { WaiverBudgetCard } from '@/components/budget/WaiverBudgetCard';
 import { StrategicSuggestions } from '@/components/suggestions/StrategicSuggestions';
@@ -205,6 +206,13 @@ export const LeagueDetailPage: React.FC = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Weekly Recap - AI-Generated Roast Report */}
+          <WeeklyRecap
+            leagueId={league.id}
+            leagueName={league.name}
+            currentWeek={league.current_week}
+          />
 
           {/* Current Week Matchups */}
           <Card>
