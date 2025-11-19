@@ -8,23 +8,23 @@ interface UseApiState<T> {
   error: string | null;
 }
 
-interface UseApiReturn<T> extends UseApiState<T> {
-  execute: (...args: any[]) => Promise<T>;
+interface UseApiReturn<T, TArgs extends unknown[] = unknown[]> extends UseApiState<T> {
+  execute: (...args: TArgs) => Promise<T>;
   reset: () => void;
 }
 
-export const useApi = <T>(
-  apiFunction: (...args: any[]) => Promise<T>,
+export const useApi = <T, TArgs extends unknown[] = unknown[]>(
+  apiFunction: (...args: TArgs) => Promise<T>,
   showSuccessToast = false,
   successMessage = 'Success!'
-): UseApiReturn<T> => {
+): UseApiReturn<T, TArgs> => {
   const [state, setState] = useState<UseApiState<T>>({
     data: null,
     loading: false,
     error: null,
   });
 
-  const execute = async (...args: any[]): Promise<T> => {
+  const execute = async (...args: TArgs): Promise<T> => {
     setState(prev => ({ ...prev, loading: true, error: null }));
 
     try {
@@ -67,14 +67,14 @@ export const useApi = <T>(
 };
 
 // Hook for form submissions with loading states
-export const useFormSubmission = <T>(
-  submitFunction: (data: any) => Promise<T>,
+export const useFormSubmission = <T, TData = unknown>(
+  submitFunction: (data: TData) => Promise<T>,
   successMessage = 'Success!'
 ) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const submit = async (data: any): Promise<T> => {
+  const submit = async (data: TData): Promise<T> => {
     setIsSubmitting(true);
     setError(null);
 
