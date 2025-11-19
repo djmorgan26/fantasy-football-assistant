@@ -1,6 +1,10 @@
 # Multi-stage build for React frontend
 FROM node:18-alpine as builder
 
+# Build argument for API URL
+ARG VITE_API_URL=http://localhost:8000/api
+ENV VITE_API_URL=$VITE_API_URL
+
 # Set working directory
 WORKDIR /app
 

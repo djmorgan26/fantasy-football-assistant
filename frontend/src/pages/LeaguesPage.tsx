@@ -78,14 +78,20 @@ export const LeaguesPage: React.FC = () => {
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Your Leagues</h1>
             <p className="text-gray-600">
-              Manage your fantasy football leagues and get intelligent insights.
+              Manage your fantasy football leagues across ESPN and Sleeper
             </p>
           </div>
-          <div className="mt-4 sm:mt-0">
+          <div className="mt-4 sm:mt-0 flex space-x-3">
             <Link to="/leagues/connect">
-              <Button className="flex items-center space-x-2">
-                <PlusIcon className="h-4 w-4" />
-                <span>Connect New League</span>
+              <Button variant="secondary" size="sm">
+                <PlusIcon className="h-5 w-5 mr-2" />
+                ESPN League
+              </Button>
+            </Link>
+            <Link to="/leagues/sleeper/connect">
+              <Button variant="primary" size="sm">
+                <PlusIcon className="h-5 w-5 mr-2" />
+                Sleeper League
               </Button>
             </Link>
           </div>

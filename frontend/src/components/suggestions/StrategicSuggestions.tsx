@@ -1,86 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StrategicSuggestion, SuggestionFilters, League } from '@/types';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { 
+import {
   LightBulbIcon,
   FunnelIcon,
   TrophyIcon,
   ArrowTrendingUpIcon,
   UserGroupIcon,
-  SwatchIcon
+  SwatchIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 import { cn } from '@/utils';
+import api from '@/services/api';
 
 interface StrategicSuggestionsProps {
   league: League;
   userTeamId?: number;
   className?: string;
 }
-
-// Mock data for demonstration - in a real app this would come from an AI service
-const generateMockSuggestions = (league: League, userTeamId?: number): StrategicSuggestion[] => {
-  return [
-    {
-      id: '1',
-      type: 'pickup',
-      priority: 'high',
-      title: 'Target Handcuff Running Back',
-      description: 'Consider picking up backup RB for injury protection',
-      reasoning: 'Your starting RB has a history of minor injuries and the backup is available for free',
-      potential_impact: 'Could save your season if your starter gets injured',
-      confidence_score: 0.85,
-      action_details: {
-        player_name: 'Available Backup RB',
-        suggested_bid: 15,
-      },
-      context: {
-        budget_remaining: 85,
-      }
-    },
-    {
-      id: '2',
-      type: 'trade',
-      priority: 'medium',
-      title: 'Upgrade WR Position',
-      description: 'Trade for a more consistent WR2',
-      reasoning: 'Your current WR2 is underperforming and you have RB depth to spare',
-      potential_impact: 'Could increase weekly scoring by 3-5 points',
-      confidence_score: 0.72,
-      action_details: {
-        trade_targets: [12, 34],
-      }
-    },
-    {
-      id: '3',
-      type: 'lineup',
-      priority: 'high',
-      title: 'Optimize This Week\'s Lineup',
-      description: 'Start your flex player over current WR2',
-      reasoning: 'Better matchup against weaker defense this week',
-      potential_impact: 'Projected 4-6 point improvement',
-      confidence_score: 0.91,
-      action_details: {
-        lineup_changes: {
-          'WR2': 'Move to bench',
-          'FLEX': 'Move to WR2'
-        }
-      }
-    },
-    {
-      id: '4',
-      type: 'drop',
-      priority: 'low',
-      title: 'Drop Underperforming Player',
-      description: 'Consider dropping bench player for lottery ticket',
-      reasoning: 'Current bench player has limited upside, better options available',
-      potential_impact: 'Frees up roster spot for better prospect',
-      confidence_score: 0.65,
-    }
-  ];
-};
 
 const SuggestionCard: React.FC<{ suggestion: StrategicSuggestion }> = ({ suggestion }) => {
   const getPriorityColor = (priority: string) => {
@@ -188,17 +128,41 @@ export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
 }) => {
   const [filters, setFilters] = useState<SuggestionFilters>({});
   const [isLoading, setIsLoading] = useState(false);
-  
-  // In a real app, this would be fetched from an API
-  const suggestions = generateMockSuggestions(league, userTeamId);
-  
+  const [suggestions, setSuggestions] = useState<StrategicSuggestion[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchSuggestions = async () => {
+    if (!userTeamId) {
+      setError('No team selected');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await api.get(`/suggestions/${league.id}/${userTeamId}`);
+      setSuggestions(response.data);
+    } catch (err: any) {
+      console.error('Failed to fetch suggestions:', err);
+      setError(err.detail || 'Failed to load AI suggestions. Please try again.');
+      setSuggestions([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSuggestions();
+  }, [league.id, userTeamId]);
+
   const filteredSuggestions = suggestions.filter(suggestion => {
     if (filters.type && suggestion.type !== filters.type) return false;
     if (filters.priority && suggestion.priority !== filters.priority) return false;
     return true;
   });
 
-  const handleFilterChange = (key: keyof SuggestionFilters, value: any) => {
+  const handleFilterChange = (key: keyof SuggestionFilters, value: string) => {
     setFilters(prev => ({
       ...prev,
       [key]: value === 'all' ? undefined : value
@@ -255,7 +219,18 @@ export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
         </div>
 
         {/* Suggestions List */}
-        {isLoading ? (
+        {error ? (
+          <div className="text-center py-8">
+            <ExclamationTriangleIcon className="h-12 w-12 text-orange-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Unable to Load Suggestions
+            </h3>
+            <p className="text-gray-600 mb-4">{error}</p>
+            <Button variant="secondary" size="sm" onClick={fetchSuggestions}>
+              Try Again
+            </Button>
+          </div>
+        ) : isLoading ? (
           <div className="flex justify-center py-8">
             <LoadingSpinner size="lg" />
           </div>
@@ -265,33 +240,41 @@ export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
               <SuggestionCard key={suggestion.id} suggestion={suggestion} />
             ))}
           </div>
+        ) : suggestions.length === 0 ? (
+          <div className="text-center py-8">
+            <LightBulbIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              No suggestions available
+            </h3>
+            <p className="text-gray-600">
+              Check back later for AI-powered recommendations.
+            </p>
+          </div>
         ) : (
           <div className="text-center py-8">
             <LightBulbIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              No suggestions found
+              No suggestions match your filters
             </h3>
             <p className="text-gray-600">
-              Try adjusting your filters or check back later for new recommendations.
+              Try adjusting your filters to see more recommendations.
             </p>
           </div>
         )}
 
         {/* Refresh Button */}
-        <div className="flex justify-center pt-4 border-t border-gray-200">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              setIsLoading(true);
-              // Simulate API call
-              setTimeout(() => setIsLoading(false), 1500);
-            }}
-            disabled={isLoading}
-          >
-            {isLoading ? 'Analyzing...' : 'Refresh Suggestions'}
-          </Button>
-        </div>
+        {!error && (
+          <div className="flex justify-center pt-4 border-t border-gray-200">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={fetchSuggestions}
+              disabled={isLoading}
+            >
+              {isLoading ? 'Analyzing...' : 'Refresh Suggestions'}
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

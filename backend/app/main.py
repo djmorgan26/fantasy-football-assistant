@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from app.core.config import settings
 from app.db.database import engine, Base
-from app.api import auth, leagues, teams, players, trades
+from app.api import auth, leagues, teams, players, trades, suggestions, sleeper_leagues, weekly_recap
 
 # Configure structured logging
 structlog.configure(
@@ -93,9 +93,12 @@ async def health_check():
 # Include API routers
 app.include_router(auth.router, prefix="/api")
 app.include_router(leagues.router, prefix="/api")
+app.include_router(sleeper_leagues.router, prefix="/api")
 app.include_router(teams.router, prefix="/api")
 app.include_router(players.router, prefix="/api")
 app.include_router(trades.router, prefix="/api")
+app.include_router(suggestions.router, prefix="/api")
+app.include_router(weekly_recap.router, prefix="/api")
 
 
 # ESPN service health check

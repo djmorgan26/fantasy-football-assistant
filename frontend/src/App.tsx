@@ -10,6 +10,7 @@ import { RegisterPage } from '@/pages/RegisterPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { LeaguesPage } from '@/pages/LeaguesPage';
 import { LeagueConnectPage } from '@/pages/LeagueConnectPage';
+import { SleeperConnectPage } from '@/pages/SleeperConnectPage';
 import { LeagueDetailPage } from '@/pages/LeagueDetailPage';
 import { TeamRosterPage } from '@/pages/TeamRosterPage';
 import { TradeAnalyzerPage } from '@/pages/TradeAnalyzerPage';
@@ -75,6 +76,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <LeagueConnectPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="leagues/sleeper/connect"
+                element={
+                  <ProtectedRoute>
+                    <SleeperConnectPage />
                   </ProtectedRoute>
                 }
               />

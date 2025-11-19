@@ -9,6 +9,7 @@ from app.models.trade import Trade, TradeStatus
 from app.schemas.trade import TradeAnalysisRequest, TradeAnalysisResponse, TradeCreate, TradeResponse
 from app.core.auth import get_current_active_user
 from app.services.espn_service import ESPNService, ESPNCookies, ESPNError
+from app.services.llm_service import llm_service
 from app.utils.encryption import ESPNCredentialManager
 import structlog
 from datetime import datetime, timedelta
@@ -111,7 +112,7 @@ async def analyze_trade(
                     }
             
             value_difference = receive_total_points - give_total_points
-            
+
             # Calculate fairness score (0-100)
             if give_total_points == 0 and receive_total_points == 0:
                 fairness_score = 50.0
@@ -121,26 +122,60 @@ async def analyze_trade(
                 ratio = receive_total_points / give_total_points
                 # Score closer to 100 when ratio is closer to 1.0
                 fairness_score = max(0, 100 - abs(ratio - 1.0) * 100)
-            
-            # Generate recommendations
+
+            # Use LLM for enhanced analysis if available
             recommendations = []
-            if value_difference > 5:
-                recommendations.append("This trade favors you significantly - great deal!")
-            elif value_difference > 2:
-                recommendations.append("This trade slightly favors you")
-            elif value_difference > -2:
-                recommendations.append("This is a fairly balanced trade")
-            elif value_difference > -5:
-                recommendations.append("This trade slightly favors your opponent")
-            else:
-                recommendations.append("This trade heavily favors your opponent - consider carefully")
-            
-            if fairness_score < 60:
-                recommendations.append("Consider looking for more balanced alternatives")
-            
-            analysis_summary = f"Trade analysis: You give {len(trade_request.give_players)} player(s) for {len(trade_request.receive_players)} player(s). "
-            analysis_summary += f"Projected point difference: {value_difference:+.1f}. "
-            analysis_summary += f"Fairness score: {fairness_score:.0f}/100."
+            analysis_summary = ""
+
+            if llm_service.is_available():
+                try:
+                    # Prepare player data for LLM
+                    give_players_data = [give_player_details[pid] for pid in trade_request.give_players if pid in give_player_details]
+                    receive_players_data = [receive_player_details[pid] for pid in trade_request.receive_players if pid in receive_player_details]
+
+                    # Get LLM analysis
+                    llm_analysis = await llm_service.analyze_trade(
+                        give_players=give_players_data,
+                        receive_players=receive_players_data,
+                        user_roster=proposing_roster["roster"][:15],
+                        opponent_roster=receiving_roster["roster"][:15],
+                        league_settings={"scoring_type": "standard"}
+                    )
+
+                    # Use LLM results
+                    fairness_score = llm_analysis.get("fairness_score", fairness_score)
+                    value_difference = llm_analysis.get("value_difference", value_difference)
+                    analysis_summary = llm_analysis.get("analysis_summary", "")
+                    recommendations = llm_analysis.get("recommendations", [])
+
+                    # Add LLM insights to player details
+                    if "pros" in llm_analysis and llm_analysis["pros"]:
+                        recommendations.insert(0, f"Pros: {', '.join(llm_analysis['pros'][:2])}")
+                    if "cons" in llm_analysis and llm_analysis["cons"]:
+                        recommendations.append(f"Cons: {', '.join(llm_analysis['cons'][:2])}")
+
+                except Exception as llm_error:
+                    logger.warning("LLM trade analysis failed, using basic analysis", error=str(llm_error))
+
+            # Fallback to basic analysis if LLM not available or failed
+            if not analysis_summary:
+                if value_difference > 5:
+                    recommendations.append("This trade favors you significantly - great deal!")
+                elif value_difference > 2:
+                    recommendations.append("This trade slightly favors you")
+                elif value_difference > -2:
+                    recommendations.append("This is a fairly balanced trade")
+                elif value_difference > -5:
+                    recommendations.append("This trade slightly favors your opponent")
+                else:
+                    recommendations.append("This trade heavily favors your opponent - consider carefully")
+
+                if fairness_score < 60:
+                    recommendations.append("Consider looking for more balanced alternatives")
+
+                analysis_summary = f"Trade analysis: You give {len(trade_request.give_players)} player(s) for {len(trade_request.receive_players)} player(s). "
+                analysis_summary += f"Projected point difference: {value_difference:+.1f}. "
+                analysis_summary += f"Fairness score: {fairness_score:.0f}/100."
             
             return TradeAnalysisResponse(
                 is_valid=True,
@@ -168,13 +203,26 @@ async def analyze_trade(
         logger.error("ESPN API error analyzing trade", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"ESPN service error: {str(e)}"
+            detail=f"Could not validate trade with ESPN: {str(e)}. Please verify your league credentials and player IDs."
+        )
+    except ValueError as e:
+        logger.warning("Invalid trade data", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid trade: {str(e)}"
         )
     except Exception as e:
-        logger.error("Failed to analyze trade", error=str(e))
+        logger.error("Failed to analyze trade", error=str(e), exc_info=True)
+        error_detail = "Failed to analyze trade. "
+        if "player" in str(e).lower():
+            error_detail += "One or more players may not be on the expected rosters."
+        elif "timeout" in str(e).lower():
+            error_detail += "ESPN API timed out. Please try again."
+        else:
+            error_detail += "Please verify your trade details and try again."
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to analyze trade"
+            detail=error_detail
         )
 
 
