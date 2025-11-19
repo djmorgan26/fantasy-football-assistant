@@ -37,7 +37,11 @@ class Settings(BaseSettings):
     # Application
     app_name: str = "Fantasy Football Assistant"
     app_version: str = "1.0.0"
-    
+
+    # LLM Integration
+    groq_api_key: str = ""
+    llm_model: str = "llama-3.1-70b-versatile"  # Fast and capable free model
+
     class Config:
         env_file = ".env"
 
