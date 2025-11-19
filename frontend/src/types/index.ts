@@ -27,10 +27,16 @@ export interface RegisterRequest {
   espn_swid?: string;
 }
 
+// Platform types
+export type PlatformType = 'espn' | 'sleeper';
+
 // League types
 export interface League {
   id: number;
-  espn_league_id: number;
+  platform: PlatformType;
+  espn_league_id?: number;
+  sleeper_league_id?: string;
+  sleeper_user_id?: string;
   name: string;
   season_year: number;
   size: number;
@@ -50,6 +56,11 @@ export interface LeagueConnectionRequest {
   espn_swid?: string;
 }
 
+export interface SleeperLeagueConnectionRequest {
+  league_id: string;
+  sleeper_user_id: string;
+}
+
 export interface LeagueConnectionResponse {
   success: boolean;
   message: string;
@@ -57,10 +68,28 @@ export interface LeagueConnectionResponse {
   teams?: Team[];
 }
 
+export interface SleeperLeagueConnectionResponse {
+  success: boolean;
+  message: string;
+  league_id: number;
+  sleeper_league_id: string;
+  league_name: string;
+  teams_synced: number;
+}
+
+export interface SleeperUserLeaguesResponse {
+  user_id: string;
+  username: string;
+  season: number;
+  leagues: Array<Record<string, any>>;
+}
+
 // Team types
 export interface Team {
   id: number;
-  espn_team_id: number;
+  espn_team_id?: number;
+  sleeper_roster_id?: number;
+  sleeper_owner_id?: string;
   name: string;
   location?: string;
   nickname?: string;
