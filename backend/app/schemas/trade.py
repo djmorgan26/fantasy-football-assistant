@@ -13,19 +13,35 @@ class TradeStatusEnum(str, Enum):
 
 
 class TradeCreate(BaseModel):
-    league_id: int
-    proposing_team_id: int
-    receiving_team_id: int
-    give_players: List[int] = Field(description="Player IDs being given away")
-    receive_players: List[int] = Field(description="Player IDs being received")
+    league_id: int = Field(gt=0, description="League ID must be positive")
+    proposing_team_id: int = Field(gt=0, description="Proposing team ID must be positive")
+    receiving_team_id: int = Field(gt=0, description="Receiving team ID must be positive")
+    give_players: List[int] = Field(min_length=1, max_length=10, description="Player IDs being given away (1-10 players)")
+    receive_players: List[int] = Field(min_length=1, max_length=10, description="Player IDs being received (1-10 players)")
+
+    @staticmethod
+    def validate_different_teams(proposing_team_id: int, receiving_team_id: int) -> None:
+        if proposing_team_id == receiving_team_id:
+            raise ValueError("Cannot trade with yourself")
+
+    def model_post_init(self, __context):
+        self.validate_different_teams(self.proposing_team_id, self.receiving_team_id)
 
 
 class TradeAnalysisRequest(BaseModel):
-    league_id: int
-    proposing_team_id: int
-    receiving_team_id: int
-    give_players: List[int]
-    receive_players: List[int]
+    league_id: int = Field(gt=0, description="League ID must be positive")
+    proposing_team_id: int = Field(gt=0, description="Proposing team ID must be positive")
+    receiving_team_id: int = Field(gt=0, description="Receiving team ID must be positive")
+    give_players: List[int] = Field(min_length=1, max_length=10, description="1-10 players to give")
+    receive_players: List[int] = Field(min_length=1, max_length=10, description="1-10 players to receive")
+
+    @staticmethod
+    def validate_different_teams(proposing_team_id: int, receiving_team_id: int) -> None:
+        if proposing_team_id == receiving_team_id:
+            raise ValueError("Cannot analyze trade with same team")
+
+    def model_post_init(self, __context):
+        self.validate_different_teams(self.proposing_team_id, self.receiving_team_id)
 
 
 class TradeResponse(BaseModel):
