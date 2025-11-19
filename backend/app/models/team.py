@@ -8,26 +8,30 @@ class Team(Base):
     __tablename__ = "teams"
 
     id = Column(Integer, primary_key=True, index=True)
-    espn_team_id = Column(Integer, nullable=False)
     league_id = Column(Integer, ForeignKey("leagues.id"), nullable=False)
-    
+
+    # Platform-specific IDs (only one should be populated based on league platform)
+    espn_team_id = Column(Integer, nullable=True)
+    sleeper_roster_id = Column(Integer, nullable=True)
+    sleeper_owner_id = Column(String(255), nullable=True)
+
     # Team details
     name = Column(String(255), nullable=False)
     location = Column(String(255))
     nickname = Column(String(255))
     abbreviation = Column(String(10))
     logo_url = Column(String(500), nullable=True)
-    
+
     # Performance metrics
     wins = Column(Integer, default=0)
     losses = Column(Integer, default=0)
     ties = Column(Integer, default=0)
     points_for = Column(Float, default=0.0)
     points_against = Column(Float, default=0.0)
-    
+
     # Current roster (JSON array of player IDs with positions)
     current_roster = Column(JSON, nullable=True)
-    
+
     # Owner relationship
     owner_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     
