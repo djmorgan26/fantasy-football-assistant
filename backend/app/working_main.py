@@ -1,3 +1,6 @@
+# NOTE: Standalone demo server (NOT the canonical entrypoint).
+# The production app is `app.main:app`. This module is a self-contained
+# SQLite-backed auth prototype kept for reference only.
 import sqlite3
 import bcrypt
 import jwt

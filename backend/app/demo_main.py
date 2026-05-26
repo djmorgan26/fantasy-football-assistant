@@ -1,3 +1,6 @@
+# NOTE: Minimal mock demo server (NOT the canonical entrypoint).
+# The production app is `app.main:app`. This module returns static mock
+# responses and is kept for reference only.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse

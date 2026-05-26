@@ -86,6 +86,13 @@ A comprehensive web application that connects to ESPN Fantasy Football leagues t
    npm run dev
    ```
 
+   > **Entrypoints:** `app.main:app` is the canonical application server (full
+   > ESPN/Sleeper integration, PostgreSQL, JWT auth, Alembic migrations). The
+   > repo also contains two standalone demo servers used during early
+   > prototyping — `app.working_main` (self-contained SQLite auth demo) and
+   > `app.demo_main` (minimal mock API). They are not used in production and are
+   > kept for reference only.
+
 7. **Access the application**
    - Frontend: http://localhost:3000
    - Backend API: http://localhost:8000
@@ -114,8 +121,7 @@ See [ESPN_API_INTEGRATION.md](docs/ESPN_API_INTEGRATION.md) for detailed setup i
 ```
 fantasy-football-assistant/
 ├── frontend/           # React frontend application
-├── backend/            # FastAPI backend application  
-├── shared/             # Shared types and utilities
+├── backend/            # FastAPI backend application
 ├── docs/               # Project documentation
 ├── scripts/            # Build and deployment scripts
 └── docker/             # Docker configuration files
