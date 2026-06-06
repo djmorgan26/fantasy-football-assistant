@@ -120,12 +120,56 @@ default voice) and degrades to a facts-based draft when no AI key is configured.
    npm run dev
    ```
 
-   > **Entrypoints:** `app.main:app` is the canonical application server (full
-   > ESPN/Sleeper integration, PostgreSQL, JWT auth, Alembic migrations). The
-   > repo also contains two standalone demo servers used during early
-   > prototyping — `app.working_main` (self-contained SQLite auth demo) and
-   > `app.demo_main` (minimal mock API). They are not used in production and are
-   > kept for reference only.
+   > **Entrypoints:** `app.main:app` is the canonical application server for
+   > BOTH modes (real and mock) — see "Real mode vs Mock mode" below. The repo
+   > also contains two older standalone demo servers from early prototyping
+   > (`app.working_main`, `app.demo_main`); these are superseded by `MOCK_MODE`
+   > on `app.main` and are kept only for reference.
+
+## Real mode vs Mock mode
+
+The whole app runs in one of two modes, selected by the `MOCK_MODE` environment
+variable. Both use the same canonical entrypoint, `app.main:app`.
+
+| | Real mode | Mock mode |
+|---|---|---|
+| `MOCK_MODE` | `false` | `true` |
+| Data | live ESPN + Sleeper + Groq, your credentials | realistic sample data, no external calls |
+| Database | PostgreSQL (`DATABASE_URL`) | local SQLite (`fantasy_mock.db`), auto-created |
+| Credentials needed | Groq key, ESPN league/cookies, Postgres | none |
+| Use for | your real leagues | demos, UI development, offline work |
+
+In mock mode every feature degrades gracefully to coherent sample data: the
+Draft Room shows a full value board and an in-progress draft, and the Press Box
+shows a seeded league with auto-filled personas. The content engine still uses
+its facts-based fallback when no Groq key is set (add a key to `.env.mock` to
+exercise real AI writing against the mock data).
+
+### Launch mock mode (zero setup)
+
+```bash
+# Backend (from backend/)
+./venv/bin/python -m uvicorn app.main:app --reload --env-file ../.env.mock --port 8000
+# Frontend (from frontend/)
+npm run dev
+```
+
+Open http://localhost:3000 and click **Use demo account** on the login page
+(credentials: `demo@demo.app` / `demo1234`). A demo user, an ESPN league, and a
+Sleeper league are seeded automatically on startup.
+
+### Launch real mode
+
+```bash
+# One-time: create .env from .env.example, set DATABASE_URL, SECRET_KEY
+#   (openssl rand -hex 32), GROQ_API_KEY, and ESPN_SEASON_YEAR.
+# Backend (from backend/) — uvicorn loads .env automatically
+./venv/bin/python -m uvicorn app.main:app --reload --port 8000
+# Frontend (from frontend/)
+npm run dev
+```
+
+Register an account, then connect your ESPN or Sleeper league from the dashboard.
 
 7. **Access the application**
    - Frontend: http://localhost:3000
