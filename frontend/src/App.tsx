@@ -16,6 +16,7 @@ import { TeamRosterPage } from '@/pages/TeamRosterPage';
 import { TradeAnalyzerPage } from '@/pages/TradeAnalyzerPage';
 import { PlayerSearchPage } from '@/pages/PlayerSearchPage';
 import { MyRosterPage } from '@/pages/MyRosterPage';
+import { DraftRoomPage } from '@/pages/DraftRoomPage';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -124,6 +125,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <MyRosterPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="leagues/:leagueId/draft"
+                element={
+                  <ProtectedRoute>
+                    <DraftRoomPage />
                   </ProtectedRoute>
                 }
               />

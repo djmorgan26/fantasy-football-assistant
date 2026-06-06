@@ -23,6 +23,7 @@ import {
   CalendarIcon,
   FireIcon,
   ShieldCheckIcon,
+  BoltIcon,
 } from '@heroicons/react/24/outline';
 import { formatDate } from '@/utils';
 
@@ -399,6 +400,12 @@ export const LeagueDetailPage: React.FC = () => {
                   <UsersIcon className="h-4 w-4 mr-2" />
                   {userTeam ? 'Change My Team' : 'Select My Team'}
                 </Button>
+                <Link to={`/leagues/${league.id}/draft`} className="block">
+                  <Button fullWidth size="sm">
+                    <BoltIcon className="h-4 w-4 mr-2" />
+                    Draft Room
+                  </Button>
+                </Link>
                 <Link to={`/leagues/${league.id}/trades`} className="block">
                   <Button fullWidth variant="secondary" size="sm">
                     <ChartBarIcon className="h-4 w-4 mr-2" />

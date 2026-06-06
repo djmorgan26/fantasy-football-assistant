@@ -310,3 +310,68 @@ export interface PositionLimits {
     limit: number;
   };
 }
+
+// Draft preparation & live draft assistant types
+export interface ValueBoardPlayer {
+  player_id: string;
+  name: string;
+  position: string;
+  team?: string | null;
+  projected_points: number;
+  vbd: number;
+  overall_rank?: number | null;
+  position_rank?: number | null;
+  tier?: number | null;
+  adp?: number | null;
+  bye_week?: number | null;
+  age?: number | null;
+  injury_status?: string | null;
+}
+
+export interface ValueBoardResponse {
+  season: number;
+  scoring: string;
+  team_count: number;
+  player_count: number;
+  replacement_ranks: Record<string, number>;
+  players: ValueBoardPlayer[];
+}
+
+export interface DraftPickRecommendation extends ValueBoardPlayer {
+  need_bonus?: number | null;
+  pick_score?: number | null;
+  adp_delta?: number | null;
+  is_value: boolean;
+}
+
+export interface DraftAdvice {
+  recommended_player?: string | null;
+  alternatives: string[];
+  reasoning: string;
+  strategy_note: string;
+}
+
+export interface DraftRosterPick {
+  name: string;
+  position?: string | null;
+  team?: string | null;
+  round?: number | null;
+}
+
+export interface DraftAssistResponse {
+  draft_id: string;
+  status?: string | null;
+  round?: number | null;
+  picks_made: number;
+  team_count: number;
+  scoring: string;
+  user_roster: DraftRosterPick[];
+  user_position_counts: Record<string, number>;
+  current_pick?: number | null;
+  next_user_pick?: number | null;
+  picks_until_next?: number | null;
+  on_the_clock: boolean;
+  positional_runs: Record<string, number>;
+  recommendations: DraftPickRecommendation[];
+  ai_advice?: DraftAdvice | null;
+}

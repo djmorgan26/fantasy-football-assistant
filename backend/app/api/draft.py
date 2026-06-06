@@ -129,7 +129,7 @@ async def get_league_value_board(
 @router.get("/assist/{league_id}", response_model=DraftAssistResponse)
 async def get_draft_assist(
     league_id: int,
-    ai: bool = Query(True, description="Include AI natural-language pick advice"),
+    ai: bool = Query(False, description="Include AI advice (slower; use on demand, not for polling)"),
     limit: int = Query(10, ge=1, le=30),
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_database),
@@ -182,7 +182,7 @@ async def get_draft_assist(
     # Optional AI narrative advice layered on top of the deterministic ranking
     if ai:
         advice = await llm_service.analyze_draft_pick(
-            round_number=(result.get("picks_made", 0) // max(result.get("team_count", 12), 1)) + 1,
+            round_number=result.get("round") or 1,
             user_roster=result.get("user_roster", []),
             position_needs=result.get("user_position_counts", {}),
             top_available=result.get("recommendations", []),

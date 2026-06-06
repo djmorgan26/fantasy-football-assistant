@@ -39,6 +39,10 @@ class DraftPickRecommendation(ValueBoardPlayer):
     """A value-board player annotated with live-draft pick scoring."""
     need_bonus: Optional[float] = None
     pick_score: Optional[float] = None
+    adp_delta: Optional[float] = Field(
+        default=None, description="current pick minus ADP; positive = falling value"
+    )
+    is_value: bool = False
 
 
 class DraftAdvice(BaseModel):
@@ -59,5 +63,10 @@ class DraftAssistResponse(BaseModel):
     scoring: str
     user_roster: List[Dict[str, Any]] = []
     user_position_counts: Dict[str, int] = {}
+    current_pick: Optional[int] = None
+    next_user_pick: Optional[int] = None
+    picks_until_next: Optional[int] = None
+    on_the_clock: bool = False
+    positional_runs: Dict[str, int] = {}
     recommendations: List[DraftPickRecommendation] = []
     ai_advice: Optional[DraftAdvice] = None

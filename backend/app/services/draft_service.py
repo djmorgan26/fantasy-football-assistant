@@ -9,6 +9,7 @@ each position.
 """
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime, timedelta
+import json
 import structlog
 
 from app.services.sleeper_service import SleeperService, SleeperError
@@ -65,6 +66,13 @@ class DraftService:
         self._players_cache: Optional[Dict[str, Any]] = None
         self._players_cached_at: Optional[datetime] = None
         self._players_ttl = timedelta(hours=12)
+        # Cache season projections (static during a draft) keyed by season
+        self._proj_cache: Dict[int, Tuple[Dict[str, Any], datetime]] = {}
+        self._proj_ttl = timedelta(hours=6)
+        # Cache computed value boards so live-draft polling stays cheap. The board
+        # only depends on scoring/roster/team inputs, all static within a draft.
+        self._board_cache: Dict[str, Tuple[Dict[str, Any], datetime]] = {}
+        self._board_ttl = timedelta(minutes=30)
 
     # ---------------------------------------------------------------- helpers
 
@@ -82,6 +90,16 @@ class DraftService:
         self._players_cache = players
         self._players_cached_at = now
         return players
+
+    async def _get_projections(self, season: int) -> Dict[str, Any]:
+        """Get season projections, cached in memory (static during a draft)."""
+        now = datetime.utcnow()
+        cached = self._proj_cache.get(season)
+        if cached and now - cached[1] < self._proj_ttl:
+            return cached[0]
+        proj = await self.sleeper.get_player_projections(season)
+        self._proj_cache[season] = (proj, now)
+        return proj
 
     @staticmethod
     def _resolve_scoring_weights(
@@ -213,6 +231,76 @@ class DraftService:
                     tier += 1
                 group[i]["tier"] = tier
 
+    # --------------------------------------------------------- draft-day intel
+
+    @staticmethod
+    def _user_slot(draft: Dict[str, Any], user_id: Optional[str]) -> Optional[int]:
+        """Find the user's draft slot (1-indexed) from the draft order."""
+        if not user_id:
+            return None
+        draft_order = draft.get("draft_order") or {}
+        slot = draft_order.get(user_id)
+        if isinstance(slot, int):
+            return slot
+        # Fallback: derive slot from slot_to_roster_id if draft_order is absent
+        return None
+
+    @staticmethod
+    def _pick_number_for_slot(slot: int, round_number: int, team_count: int, snake: bool) -> int:
+        """Overall pick number for a draft slot in a given round."""
+        if snake and round_number % 2 == 0:
+            position = team_count - slot + 1
+        else:
+            position = slot
+        return (round_number - 1) * team_count + position
+
+    @classmethod
+    def _compute_pick_timing(
+        cls,
+        draft: Dict[str, Any],
+        picks_made: int,
+        team_count: int,
+        user_slot: Optional[int],
+    ) -> Dict[str, Any]:
+        """
+        Work out where the draft is and when the user picks next.
+
+        Returns the current overall pick, the user's next pick number, how many
+        picks until then, and whether they're on the clock right now.
+        """
+        settings = draft.get("settings", {}) or {}
+        rounds = settings.get("rounds") or 15
+        snake = (draft.get("type") or "snake") == "snake"
+        current_pick = picks_made + 1
+        current_round = ((current_pick - 1) // team_count) + 1 if team_count else 1
+
+        timing: Dict[str, Any] = {
+            "current_pick": current_pick,
+            "current_round": current_round,
+            "next_user_pick": None,
+            "picks_until_next": None,
+            "on_the_clock": False,
+        }
+        if user_slot:
+            for r in range(1, rounds + 1):
+                pick_no = cls._pick_number_for_slot(user_slot, r, team_count, snake)
+                if pick_no >= current_pick:
+                    timing["next_user_pick"] = pick_no
+                    timing["picks_until_next"] = pick_no - current_pick
+                    timing["on_the_clock"] = pick_no == current_pick
+                    break
+        return timing
+
+    @staticmethod
+    def _positional_runs(picks: List[Dict[str, Any]], window: int = 8) -> Dict[str, int]:
+        """Count positions taken in the last `window` picks to spot runs."""
+        runs: Dict[str, int] = {}
+        for pick in picks[-window:]:
+            pos = (pick.get("metadata") or {}).get("position")
+            if pos:
+                runs[pos] = runs.get(pos, 0) + 1
+        return dict(sorted(runs.items(), key=lambda kv: kv[1], reverse=True))
+
     # ------------------------------------------------------------ value board
 
     async def build_value_board(
@@ -230,8 +318,24 @@ class DraftService:
         Returns players ranked by VBD (value over replacement), each annotated with
         projected points, positional rank, tier, and ADP for spotting value/reaches.
         """
+        # Serve from cache when the same league inputs were computed recently.
+        cache_key = json.dumps(
+            {
+                "season": season,
+                "scoring": scoring_settings or scoring_type,
+                "roster": roster_positions,
+                "teams": team_count,
+                "limit": limit,
+            },
+            sort_keys=True,
+            default=str,
+        )
+        cached = self._board_cache.get(cache_key)
+        if cached and datetime.utcnow() - cached[1] < self._board_ttl:
+            return cached[0]
+
         players = await self._get_players()
-        projections = await self.sleeper.get_player_projections(season)
+        projections = await self._get_projections(season)
 
         weights, is_custom = self._resolve_scoring_weights(scoring_settings, scoring_type)
         replacement_ranks = self._replacement_ranks(team_count, roster_positions)
@@ -266,7 +370,7 @@ class DraftService:
                 "team": meta.get("team"),
                 "projected_points": points,
                 "adp": adp,
-                "bye_week": (proj.get("gms_active") and None) or meta.get("bye_week"),
+                "bye_week": meta.get("bye_week"),
                 "age": meta.get("age"),
                 "injury_status": meta.get("injury_status"),
             })
@@ -293,7 +397,7 @@ class DraftService:
             p["overall_rank"] = i + 1
 
         board = scored[:limit]
-        return {
+        result = {
             "season": season,
             "scoring": "custom" if is_custom else scoring_type,
             "team_count": team_count,
@@ -301,6 +405,8 @@ class DraftService:
             "player_count": len(board),
             "players": board,
         }
+        self._board_cache[cache_key] = (result, datetime.utcnow())
+        return result
 
     # ------------------------------------------------------- live draft assist
 
@@ -365,6 +471,12 @@ class DraftService:
 
         starters, flex = self._starters_from_roster_positions(draft_roster_positions)
 
+        # Draft-day context: where we are, when the user picks next, and any runs
+        user_slot = self._user_slot(draft, user_id)
+        timing = self._compute_pick_timing(draft, len(picks), team_count, user_slot)
+        runs = self._positional_runs(picks)
+        current_pick = timing["current_pick"]
+
         # Need score: how far the user is from filling starting slots at a position
         def need_bonus(position: str) -> float:
             target = starters.get(position, 0)
@@ -376,22 +488,36 @@ class DraftService:
             # Larger bonus the more starting slots remain unfilled
             return (target - have) * 6.0
 
-        available = [p for p in board["players"] if p["player_id"] not in drafted_ids]
+        # Copy dicts so we never mutate the cached value board
+        available = [dict(p) for p in board["players"] if p["player_id"] not in drafted_ids]
         for p in available:
             p["need_bonus"] = round(need_bonus(p["position"]), 1)
             p["pick_score"] = round(p["vbd"] + p["need_bonus"], 1)
+            # Value vs ADP: positive delta means the player has slid past their ADP
+            # (a value/steal); negative means taking them here is a reach.
+            if isinstance(p.get("adp"), (int, float)):
+                p["adp_delta"] = round(current_pick - p["adp"], 1)
+                p["is_value"] = p["adp_delta"] >= team_count  # slid ~a full round+
+            else:
+                p["adp_delta"] = None
+                p["is_value"] = False
 
         available.sort(key=lambda x: (x["pick_score"], x["projected_points"]), reverse=True)
 
         return {
             "draft_id": draft_id,
             "status": draft.get("status"),
-            "round": settings.get("rounds"),
+            "round": timing["current_round"],
             "picks_made": len(picks),
             "team_count": team_count,
             "scoring": board["scoring"],
             "user_roster": user_roster,
             "user_position_counts": user_positions,
+            "current_pick": current_pick,
+            "next_user_pick": timing["next_user_pick"],
+            "picks_until_next": timing["picks_until_next"],
+            "on_the_clock": timing["on_the_clock"],
+            "positional_runs": runs,
             "recommendations": available[:limit],
         }
 
