@@ -17,7 +17,7 @@ from app.models.content_profile import LeagueContentProfile
 from app.core.auth import get_current_active_user
 from app.services.content_service import content_service, CONTENT_TYPES
 from app.services.sleeper_service import SleeperError
-from app.services.espn_service import ESPNCookies, ESPNError
+from app.services.espn_service import ESPNCookies, ESPNError, ESPNService
 from app.services.llm_service import llm_service
 from app.utils.encryption import ESPNCredentialManager
 from app.schemas.content import (
@@ -78,6 +78,22 @@ async def _fetch_narrative(league: League, week: int) -> dict:
     )
 
 
+async def _fetch_owner_pairs(league: League, season: int | None = None) -> list:
+    """[{team_name, owner_name}] for a league, used to auto-seed personas."""
+    if league.platform == PlatformType.SLEEPER:
+        users = await content_service.sleeper.get_league_users(league.sleeper_league_id)
+        pairs = []
+        for u in users:
+            owner = u.get("display_name") or "Unknown Manager"
+            team = (u.get("metadata") or {}).get("team_name") or owner
+            pairs.append({"team_name": team, "owner_name": owner})
+        return pairs
+    espn = ESPNService()
+    return await espn.get_team_owner_pairs(
+        str(league.espn_league_id), _espn_cookies(league), season=season
+    )
+
+
 async def _fetch_standings(league: League) -> list:
     if league.platform == PlatformType.SLEEPER:
         return await content_service.get_standings(league.sleeper_league_id)
@@ -132,6 +148,63 @@ async def update_profile(
     else:
         profile.voice_guide = payload.voice_guide
         profile.humor_examples = humor
+        profile.personas = personas
+
+    await db.commit()
+    await db.refresh(profile)
+    return ContentProfileResponse(league_id=league_id, **_profile_dict(profile))
+
+
+@router.post("/{league_id}/personas/auto-fill", response_model=ContentProfileResponse)
+async def autofill_personas(
+    league_id: int,
+    season: int | None = None,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_database),
+):
+    """
+    Auto-seed the league's manager personas from real team names + owners.
+
+    Pulls teams from the connected platform (ESPN or Sleeper) so you don't have
+    to type them all in. Existing persona notes/bits are preserved for managers
+    that are already in the profile; voice_guide and humor_examples are untouched.
+    For ESPN you can pass ?season=<year> to read a past season's rosters.
+    """
+    league = await _load_league(league_id, current_user, db)
+    _ensure_supported(league)
+
+    try:
+        pairs = await _fetch_owner_pairs(league, season)
+    except (SleeperError, ESPNError) as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Could not fetch league rosters: {str(e)}",
+        )
+
+    profile = await _get_profile(league_id, db)
+    existing = {p.get("name"): p for p in (profile.personas if profile and profile.personas else [])}
+
+    personas = []
+    for pair in pairs:
+        owner = pair["owner_name"]
+        team = pair["team_name"]
+        prev = existing.get(owner) or {}
+        personas.append({
+            "name": owner,
+            "team_name": team,
+            "notes": prev.get("notes") or f"Manager of {team}.",
+            "bits": prev.get("bits") or [],
+        })
+
+    if profile is None:
+        profile = LeagueContentProfile(
+            league_id=league_id,
+            voice_guide=None,
+            humor_examples=[],
+            personas=personas,
+        )
+        db.add(profile)
+    else:
         profile.personas = personas
 
     await db.commit()
