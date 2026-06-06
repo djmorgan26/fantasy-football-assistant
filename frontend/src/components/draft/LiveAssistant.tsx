@@ -67,6 +67,12 @@ export const LiveAssistant: React.FC<LiveAssistantProps> = ({ leagueId }) => {
 
   return (
     <div className="space-y-5">
+      {data.live_pick_tracking === false && data.note && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+          {data.note}
+        </div>
+      )}
+
       {/* Status bar */}
       <Card
         className={cn(

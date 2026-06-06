@@ -70,3 +70,8 @@ class DraftAssistResponse(BaseModel):
     positional_runs: Dict[str, int] = {}
     recommendations: List[DraftPickRecommendation] = []
     ai_advice: Optional[DraftAdvice] = None
+    # Sleeper exposes a public live-draft feed; ESPN does not, so for ESPN
+    # leagues the assistant serves a scoring-adjusted big board instead of
+    # tracking picks in real time.
+    live_pick_tracking: bool = True
+    note: Optional[str] = None

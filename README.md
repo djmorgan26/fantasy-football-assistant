@@ -15,15 +15,21 @@ A comprehensive web application that connects to ESPN Fantasy Football leagues t
 - **Team Optimization**: Lineup suggestions and roster management tools
 - **Mobile-Responsive UI**: Access your tools on any device
 
-### Draft Tools (Sleeper)
+### Draft Tools (ESPN & Sleeper)
 
-The draft endpoints build projections from your league's **exact scoring settings**,
-then convert them to Value-Based Drafting (VBD) scores so rankings reflect positional
-scarcity rather than generic rankings:
+The draft endpoints build projections from your league's scoring settings, then
+convert them to Value-Based Drafting (VBD) scores so rankings reflect positional
+scarcity rather than generic rankings. They work for **both ESPN and Sleeper**
+leagues (Sleeper uses exact scoring pulled live; ESPN uses its scoring type,
+size, and lineup slots). Projections come from the free Sleeper data set either way:
 
 - `GET /api/draft/rankings?scoring_type=ppr&team_count=12` — generic pre-draft cheat sheet
 - `GET /api/draft/value-board/{league_id}` — value board tuned to your league's scoring
-- `GET /api/draft/assist/{league_id}` — live best-available recommendations + optional AI advice
+- `GET /api/draft/assist/{league_id}` — best-available recommendations + optional AI advice
+
+Live in-draft pick tracking uses Sleeper's public draft feed. ESPN has no
+equivalent public feed, so for ESPN leagues the assistant serves a
+scoring-adjusted big board of best-available players.
 
 ### Content & Humor Engine (ESPN & Sleeper)
 

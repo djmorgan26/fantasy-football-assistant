@@ -374,6 +374,8 @@ export interface DraftAssistResponse {
   positional_runs: Record<string, number>;
   recommendations: DraftPickRecommendation[];
   ai_advice?: DraftAdvice | null;
+  live_pick_tracking?: boolean;
+  note?: string | null;
 }
 
 // Content & humor engine types
