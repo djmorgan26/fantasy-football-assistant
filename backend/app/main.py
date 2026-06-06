@@ -44,7 +44,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("Failed to create database tables", error=str(e))
         raise
-    
+
+    # In mock/demo mode, seed a ready-to-use demo account + sample leagues.
+    if settings.mock_mode:
+        logger.info("MOCK_MODE enabled — seeding demo data (no external APIs will be called)")
+        try:
+            from app.services.mock_seed import seed_mock_data
+            await seed_mock_data()
+        except Exception as e:
+            logger.error("Failed to seed mock data", error=str(e))
+
     yield
     
     # Shutdown
@@ -86,8 +95,26 @@ async def health_check():
         "status": "healthy",
         "app_name": settings.app_name,
         "version": settings.app_version,
-        "debug": settings.debug
+        "debug": settings.debug,
+        "mock_mode": settings.mock_mode,
     }
+
+
+# Public app metadata (no auth) — lets the frontend show a demo banner + creds.
+@app.get("/api/meta")
+async def app_meta():
+    meta = {
+        "mock_mode": settings.mock_mode,
+        "app_name": settings.app_name,
+        "version": settings.app_version,
+    }
+    if settings.mock_mode:
+        from app.services import mock_data
+        meta["demo_credentials"] = {
+            "email": mock_data.DEMO_USER_EMAIL,
+            "password": mock_data.DEMO_USER_PASSWORD,
+        }
+    return meta
 
 
 # Include API routers

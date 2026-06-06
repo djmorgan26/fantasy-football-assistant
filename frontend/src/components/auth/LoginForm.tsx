@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Link } from 'react-router-dom';
+import { metaService, AppMeta } from '@/services/meta';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -21,7 +22,12 @@ interface LoginFormProps {
 
 export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
   const { login, isLoading } = useAuth();
-  
+  const [meta, setMeta] = useState<AppMeta | null>(null);
+
+  useEffect(() => {
+    metaService.getMeta().then(setMeta).catch(() => setMeta(null));
+  }, []);
+
   const {
     register,
     handleSubmit,
@@ -39,12 +45,43 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
     }
   };
 
+  const handleDemoLogin = async () => {
+    if (!meta?.demo_credentials) return;
+    try {
+      await login(meta.demo_credentials);
+      onSuccess?.();
+    } catch (error) {
+      // Error handling is done in the AuthContext
+    }
+  };
+
   return (
     <Card className="w-full max-w-md mx-auto">
       <CardHeader>
         <CardTitle className="text-center">Sign In</CardTitle>
       </CardHeader>
       <CardContent>
+        {meta?.mock_mode && meta.demo_credentials && (
+          <div className="mb-5 rounded-lg border border-amber-300 bg-amber-50 p-4">
+            <p className="text-sm font-semibold text-amber-800">Demo / Mock Mode</p>
+            <p className="mt-1 text-xs text-amber-700">
+              This instance runs on realistic sample data with no external accounts.
+              Use the demo account to explore the Draft Room and Press Box.
+            </p>
+            <Button
+              type="button"
+              onClick={handleDemoLogin}
+              loading={isLoading}
+              fullWidth
+              className="mt-3"
+            >
+              Use demo account
+            </Button>
+            <p className="mt-2 text-center text-xs text-amber-600">
+              {meta.demo_credentials.email} / {meta.demo_credentials.password}
+            </p>
+          </div>
+        )}
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <Input
             label="Email"

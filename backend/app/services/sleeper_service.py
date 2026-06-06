@@ -8,6 +8,9 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 import structlog
 
+from app.core.config import settings
+from app.services import mock_data
+
 logger = structlog.get_logger()
 
 
@@ -73,6 +76,10 @@ class SleeperService:
             SleeperNotFoundError: For 404 errors
             SleeperError: For other API errors
         """
+        # Mock mode: serve realistic sample data, no network call.
+        if settings.mock_mode:
+            return self._mock_response(endpoint)
+
         url = f"{self.base_url}/{endpoint}"
 
         headers = {
@@ -117,6 +124,62 @@ class SleeperService:
                 raise SleeperConnectionError(f"Connection error: {str(e)}")
 
         raise SleeperConnectionError("Max retries exceeded")
+
+    def _mock_response(self, endpoint: str) -> Any:
+        """Route a Sleeper endpoint to deterministic mock data (MOCK_MODE)."""
+        path = endpoint.split("?", 1)[0].strip("/")
+        parts = path.split("/")
+
+        # players/nfl, players/nfl/trending/<type>
+        if parts[:2] == ["players", "nfl"]:
+            if len(parts) >= 3 and parts[2] == "trending":
+                return []
+            return mock_data.sleeper_all_players()
+
+        # projections/nfl/regular/<season>[/<week>]
+        if parts[:1] == ["projections"]:
+            season = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else mock_data.MOCK_SEASON
+            return mock_data.sleeper_projections(season)
+
+        # stats/nfl/...
+        if parts[:1] == ["stats"]:
+            return {}
+
+        # user/<id>, user/<id>/leagues/nfl/<season>
+        if parts[:1] == ["user"]:
+            if "leagues" in parts:
+                season = int(parts[-1]) if parts[-1].isdigit() else mock_data.MOCK_SEASON
+                return mock_data.sleeper_user_leagues(parts[1], season)
+            return mock_data.sleeper_user(parts[1] if len(parts) > 1 else "")
+
+        # draft/<id>, draft/<id>/picks, draft/<id>/traded_picks
+        if parts[:1] == ["draft"]:
+            if parts[-1] == "picks":
+                return mock_data.sleeper_draft_picks()
+            if parts[-1] == "traded_picks":
+                return []
+            return mock_data.sleeper_draft()
+
+        # league/<id>/...
+        if parts[:1] == ["league"]:
+            if len(parts) == 2:
+                return mock_data.sleeper_league()
+            tail = parts[2]
+            if tail == "rosters":
+                return mock_data._sleeper_rosters()
+            if tail == "users":
+                return mock_data._sleeper_users()
+            if tail == "matchups":
+                week = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else mock_data.MOCK_CURRENT_WEEK - 1
+                return mock_data.sleeper_matchups(week)
+            if tail == "drafts":
+                return mock_data.sleeper_drafts()
+            if tail in ("transactions", "traded_picks", "winners_bracket", "losers_bracket"):
+                return []
+            return mock_data.sleeper_league()
+
+        logger.warning("Unmapped mock Sleeper endpoint", endpoint=endpoint)
+        return {}
 
     # ==================== USER ENDPOINTS ====================
 

@@ -5,6 +5,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 import structlog
 from app.core.config import settings
+from app.services import mock_data
 
 logger = structlog.get_logger()
 
@@ -49,9 +50,11 @@ class ESPNService:
         endpoint: str,
         cookies: Optional[ESPNCookies] = None,
         params: Optional[Dict[str, Any]] = None,
-        max_retries: int = 3
+        max_retries: int = 3,
+        season: Optional[int] = None,
     ) -> Dict[str, Any]:
-        url = f"{self.base_url}/seasons/{self.season_year}/segments/0/leagues/{endpoint}"
+        season = season or self.season_year
+        url = f"{self.base_url}/seasons/{season}/segments/0/leagues/{endpoint}"
         
         headers = {
             "User-Agent": "Mozilla/5.0 (compatible; FantasyFootballAssistant/1.0)",
@@ -131,6 +134,8 @@ class ESPNService:
         league_id: str, 
         cookies: Optional[ESPNCookies] = None
     ) -> Dict[str, Any]:
+        if settings.mock_mode:
+            return mock_data.espn_league_info()
         try:
             data = await self._make_request(f"{league_id}", cookies)
             return {
@@ -153,6 +158,8 @@ class ESPNService:
         league_id: str, 
         cookies: Optional[ESPNCookies] = None
     ) -> List[Dict[str, Any]]:
+        if settings.mock_mode:
+            return mock_data.espn_teams()
         try:
             data = await self._make_request(f"{league_id}", cookies, {"view": "mTeam"})
             logger.info("ESPN API response type", data_type=type(data).__name__)
@@ -231,13 +238,60 @@ class ESPNService:
                         error_type=type(e).__name__, traceback=str(e))
             raise
 
+    async def get_team_owner_pairs(
+        self,
+        league_id: str,
+        cookies: Optional[ESPNCookies] = None,
+        season: Optional[int] = None,
+    ) -> List[Dict[str, str]]:
+        """
+        Return [{team_name, owner_name}] for a league. Used to auto-seed content
+        personas with real team names + managers. `season` can target a past
+        season (ESPN serves historical data by season year).
+        """
+        if settings.mock_mode:
+            return mock_data.espn_team_owner_pairs()
+
+        data = await self._make_request(
+            f"{league_id}", cookies, {"view": "mTeam"}, season=season
+        )
+
+        # member id -> display name
+        members: Dict[str, str] = {}
+        for m in data.get("members", []) or []:
+            if not isinstance(m, dict):
+                continue
+            display = (
+                m.get("displayName")
+                or f"{m.get('firstName', '')} {m.get('lastName', '')}".strip()
+                or "Unknown Manager"
+            )
+            members[m.get("id")] = display
+
+        pairs: List[Dict[str, str]] = []
+        for team in data.get("teams", []) or []:
+            if not isinstance(team, dict):
+                continue
+            name = (team.get("name") or "").strip()
+            if not name:
+                location = (team.get("location") or "").strip()
+                nickname = (team.get("nickname") or "").strip()
+                name = (f"{location} {nickname}").strip() or f"Team {team.get('id')}"
+            owners = team.get("owners") or []
+            primary = team.get("primaryOwner") or (owners[0] if owners else None)
+            owner_name = members.get(primary, "Unknown Manager")
+            pairs.append({"team_name": name, "owner_name": owner_name})
+        return pairs
+
     async def get_team_roster(
-        self, 
-        league_id: str, 
+        self,
+        league_id: str,
         team_id: int,
         week: Optional[int] = None,
         cookies: Optional[ESPNCookies] = None
     ) -> Dict[str, Any]:
+        if settings.mock_mode:
+            return mock_data.espn_team_roster(team_id, week)
         try:
             params = {"view": "mRoster"}
             if week:
@@ -289,6 +343,8 @@ class ESPNService:
         position: Optional[str] = None,
         cookies: Optional[ESPNCookies] = None
     ) -> List[Dict[str, Any]]:
+        if settings.mock_mode:
+            return mock_data.espn_available_players(position)
         try:
             # Use players_wl view to get available players (kona_player_info changes data structure)
             params = {
@@ -365,6 +421,8 @@ class ESPNService:
         week: Optional[int] = None,
         cookies: Optional[ESPNCookies] = None
     ) -> List[Dict[str, Any]]:
+        if settings.mock_mode:
+            return mock_data.espn_matchups(week)
         try:
             # Use multiple views for complete matchup data including live scoring
             params = {"view": ["mMatchup", "mScoreboard", "mLiveScoring"]}
@@ -505,9 +563,11 @@ class ESPNService:
         league_id: str,
         cookies: Optional[ESPNCookies] = None
     ) -> List[Dict[str, Any]]:
+        if settings.mock_mode:
+            return mock_data.espn_waiver_budgets()
         try:
             data = await self._make_request(f"{league_id}", cookies, {"view": "mTeam"})
-            
+
             budgets = []
             for team_data in data.get("teams", []):
                 # ESPN stores acquisition budget info in team settings
@@ -656,6 +716,8 @@ class ESPNService:
         Returns {team_id: {"starters": [{name, points}], "bench": [{name, points}]}}.
         IR slots are ignored (they can't be started, so they aren't "left on the bench").
         """
+        if settings.mock_mode:
+            return mock_data.espn_weekly_player_points(week)
         params = {"view": "mRoster", "scoringPeriodId": week}
         data = await self._make_request(f"{league_id}", cookies, params)
 

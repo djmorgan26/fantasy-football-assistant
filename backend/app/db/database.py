@@ -2,17 +2,20 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy.ext.declarative import declarative_base
 from app.core.config import settings
 
+# Mock mode forces SQLite; real mode uses the configured (Postgres) URL.
+DATABASE_URL = settings.effective_database_url
+
 # For SQLite, we need to handle connection args differently
-if settings.database_url.startswith("sqlite"):
+if DATABASE_URL.startswith("sqlite"):
     engine = create_async_engine(
-        settings.database_url,
+        DATABASE_URL,
         echo=settings.debug,
         future=True,
         connect_args={"check_same_thread": False}
     )
 else:
     engine = create_async_engine(
-        settings.database_url,
+        DATABASE_URL,
         echo=settings.debug,
         future=True
     )
@@ -35,4 +38,4 @@ async def get_database():
 
 
 def get_database_url():
-    return settings.database_url
+    return DATABASE_URL
