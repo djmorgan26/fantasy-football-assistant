@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     
     # CORS
     allowed_origins: str = "http://localhost:3000,http://localhost:5173"
+
+    # Trusted hosts (used in real, non-debug mode). Comma-separated; supports
+    # wildcards like *.vercel.app. Override with ALLOWED_HOSTS for a custom domain.
+    allowed_hosts: str = "localhost,127.0.0.1,*.vercel.app"
     
     # Redis (optional)
     redis_url: str = "redis://localhost:6379"

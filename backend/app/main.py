@@ -81,12 +81,11 @@ app.add_middleware(
 )
 
 # Trusted host middleware for production (skip in mock mode so the public demo
-# can be served from any host, e.g. *.vercel.app).
+# can be served from any host). Hosts are configurable via ALLOWED_HOSTS and
+# default to localhost + *.vercel.app so the real Vercel deployment works.
 if not settings.debug and not settings.mock_mode:
-    app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=["localhost", "127.0.0.1", "*.yourdomain.com"]
-    )
+    hosts = [h.strip() for h in settings.allowed_hosts.split(",") if h.strip()] or ["*"]
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts)
 
 
 # Health check endpoint
