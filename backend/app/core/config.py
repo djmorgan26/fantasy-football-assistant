@@ -68,6 +68,9 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        # Ignore unknown keys (e.g. SLEEPER_API_BASE_URL, VITE_API_URL) so a
+        # shared .env that also configures other tooling never breaks startup.
+        extra = "ignore"
 
 
 settings = Settings()

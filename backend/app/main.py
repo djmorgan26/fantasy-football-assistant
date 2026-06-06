@@ -80,8 +80,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Trusted host middleware for production
-if not settings.debug:
+# Trusted host middleware for production (skip in mock mode so the public demo
+# can be served from any host, e.g. *.vercel.app).
+if not settings.debug and not settings.mock_mode:
     app.add_middleware(
         TrustedHostMiddleware,
         allowed_hosts=["localhost", "127.0.0.1", "*.yourdomain.com"]

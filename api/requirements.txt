@@ -1,0 +1,18 @@
+# Slim dependency set for the Vercel serverless MOCK demo.
+# Excludes Postgres drivers, pandas/numpy, celery/redis, alembic and test deps
+# (none are needed in mock mode) to stay well under Vercel's function size limit.
+fastapi==0.104.1
+sqlalchemy==2.0.23
+greenlet==3.5.1
+aiosqlite==0.19.0
+python-jose[cryptography]==3.3.0
+python-multipart==0.0.6
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+httpx==0.25.2
+pydantic==2.5.1
+pydantic-settings==2.1.0
+email-validator==2.3.0
+structlog==23.2.0
+groq==0.4.1
+cryptography

@@ -1,0 +1,17 @@
+# Keep the Vercel upload small and clean. The build runs npm install + vite
+# build and installs api/requirements.txt; none of these are needed in the upload.
+backend/venv/
+**/__pycache__/
+**/*.pyc
+node_modules/
+frontend/node_modules/
+*.db
+*.sqlite
+*.sqlite3
+.env
+.env.*
+!.env.production
+docker/
+docs/
+scripts/
+*.log
