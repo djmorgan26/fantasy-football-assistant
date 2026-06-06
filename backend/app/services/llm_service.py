@@ -189,6 +189,91 @@ class LLMService:
             logger.error("LLM lineup optimization failed", error=str(e))
             return {"recommendations": [], "error": str(e)}
 
+    async def analyze_draft_pick(
+        self,
+        round_number: int,
+        user_roster: List[Dict[str, Any]],
+        position_needs: Dict[str, int],
+        top_available: List[Dict[str, Any]],
+        scoring: str,
+    ) -> Dict[str, Any]:
+        """
+        Give a natural-language draft recommendation for the current pick.
+
+        Args:
+            round_number: Current draft round
+            user_roster: Players already drafted by the user
+            position_needs: Current counts by position
+            top_available: Best available players (already VBD-ranked)
+            scoring: League scoring description (e.g. "ppr" or "custom")
+
+        Returns:
+            Dict with a recommended pick and reasoning
+        """
+        if not self.is_available():
+            return self._fallback_draft_advice(top_available)
+
+        try:
+            prompt = f"""You are an elite fantasy football draft strategist. It is round {round_number} of a {scoring} league draft.
+
+MY ROSTER SO FAR:
+{json.dumps(user_roster, indent=2) if user_roster else "Empty - this is an early pick"}
+
+CURRENT POSITION COUNTS:
+{json.dumps(position_needs, indent=2)}
+
+BEST AVAILABLE PLAYERS (already ranked by value over replacement; higher vbd/pick_score = better value):
+{json.dumps(top_available[:12], indent=2)}
+
+Recommend who to draft. Balance best-player-available against roster construction and positional scarcity. Return JSON with:
+- recommended_player: the name of your top pick
+- alternatives: array of 1-2 other strong options
+- reasoning: 2-3 sentences explaining the pick (value, scarcity, roster fit)
+- strategy_note: one sentence on what to target in the next round or two
+"""
+            response = self.client.chat.completions.create(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert fantasy football draft strategist. Give sharp, specific draft advice grounded in value-based drafting and roster construction. Respond in JSON."
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                model=self.model,
+                temperature=0.4,
+                max_tokens=800,
+                response_format={"type": "json_object"},
+            )
+
+            result = json.loads(response.choices[0].message.content)
+            logger.info("Draft pick analysis completed", tokens_used=response.usage.total_tokens)
+            return result
+
+        except Exception as e:
+            logger.error("LLM draft advice failed", error=str(e))
+            return self._fallback_draft_advice(top_available)
+
+    def _fallback_draft_advice(self, top_available: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Deterministic draft advice when the LLM is unavailable."""
+        if not top_available:
+            return {
+                "recommended_player": None,
+                "alternatives": [],
+                "reasoning": "No available players to evaluate.",
+                "strategy_note": "Configure GROQ_API_KEY for AI-powered draft reasoning.",
+            }
+        top = top_available[0]
+        alts = [p.get("name") for p in top_available[1:3]]
+        return {
+            "recommended_player": top.get("name"),
+            "alternatives": alts,
+            "reasoning": (
+                f"{top.get('name')} ({top.get('position')}) offers the best value over "
+                f"replacement on the board (VBD {top.get('vbd')}, ~{top.get('projected_points')} projected points)."
+            ),
+            "strategy_note": "Best value by VBD. Add GROQ_API_KEY for fuller AI reasoning.",
+        }
+
     def _build_trade_analysis_prompt(
         self,
         give_players: List[Dict[str, Any]],

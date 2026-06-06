@@ -4,12 +4,28 @@ A comprehensive web application that connects to ESPN Fantasy Football leagues t
 
 ## Features
 
-- **ESPN League Integration**: Seamlessly connect to your ESPN Fantasy Football leagues
+- **ESPN & Sleeper League Integration**: Seamlessly connect to your fantasy leagues
+- **Draft Prep & Live Draft Assistant**: League-scoring-aware value board (VBD rankings,
+  tiers, ADP) plus best-available pick recommendations during your draft
 - **Trade Analyzer**: Get intelligent trade suggestions based on player valuations and team needs
 - **Waiver Wire Assistant**: Receive recommendations for pickup targets and drop candidates
+- **Weekly AI Recap**: Auto-generated, league-personalized roast reports
 - **Real-time Alerts**: Get notified about injuries, breakout performances, and opportunities
 - **Team Optimization**: Lineup suggestions and roster management tools
 - **Mobile-Responsive UI**: Access your tools on any device
+
+### Draft Tools (Sleeper)
+
+The draft endpoints build projections from your league's **exact scoring settings**,
+then convert them to Value-Based Drafting (VBD) scores so rankings reflect positional
+scarcity rather than generic rankings:
+
+- `GET /api/draft/rankings?scoring_type=ppr&team_count=12` — generic pre-draft cheat sheet
+- `GET /api/draft/value-board/{league_id}` — value board tuned to your league's scoring
+- `GET /api/draft/assist/{league_id}` — live best-available recommendations + optional AI advice
+
+> **AI provider:** AI features run on **Groq** (single provider) using the
+> `LLM_MODEL` configured in `.env` (default `llama-3.3-70b-versatile`).
 
 ## Tech Stack
 

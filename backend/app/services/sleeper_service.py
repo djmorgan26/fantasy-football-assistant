@@ -255,6 +255,62 @@ class SleeperService:
         endpoint = f"league/{league_id}/losers_bracket"
         return await self._make_request(endpoint)
 
+    # ==================== DRAFT ENDPOINTS ====================
+
+    async def get_league_drafts(self, league_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all drafts for a league (a league can have multiple over seasons)
+
+        Args:
+            league_id: Sleeper league ID
+
+        Returns:
+            List of draft summaries (most recent first)
+        """
+        endpoint = f"league/{league_id}/drafts"
+        return await self._make_request(endpoint)
+
+    async def get_draft(self, draft_id: str) -> Dict[str, Any]:
+        """
+        Get detailed information for a single draft
+
+        Args:
+            draft_id: Sleeper draft ID
+
+        Returns:
+            Draft data including status, type, settings, draft_order,
+            slot_to_roster_id mapping, and start time
+        """
+        endpoint = f"draft/{draft_id}"
+        return await self._make_request(endpoint)
+
+    async def get_draft_picks(self, draft_id: str) -> List[Dict[str, Any]]:
+        """
+        Get all picks that have been made in a draft
+
+        Args:
+            draft_id: Sleeper draft ID
+
+        Returns:
+            List of picks (player_id, picked_by, roster_id, round, pick_no, metadata).
+            For live drafts this updates in near-real-time as picks are made.
+        """
+        endpoint = f"draft/{draft_id}/picks"
+        return await self._make_request(endpoint)
+
+    async def get_draft_traded_picks(self, draft_id: str) -> List[Dict[str, Any]]:
+        """
+        Get traded picks within a specific draft
+
+        Args:
+            draft_id: Sleeper draft ID
+
+        Returns:
+            List of traded pick data
+        """
+        endpoint = f"draft/{draft_id}/traded_picks"
+        return await self._make_request(endpoint)
+
     # ==================== PLAYER ENDPOINTS ====================
 
     async def get_all_players(self) -> Dict[str, Any]:

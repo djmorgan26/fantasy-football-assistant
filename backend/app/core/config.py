@@ -40,7 +40,9 @@ class Settings(BaseSettings):
 
     # LLM Integration
     groq_api_key: str = ""
-    llm_model: str = "llama-3.1-70b-versatile"  # Fast and capable free model
+    # NOTE: llama-3.1-70b-versatile and mixtral-8x7b-32768 were decommissioned by Groq.
+    # llama-3.3-70b-versatile is the current best free balance of speed and quality.
+    llm_model: str = "llama-3.3-70b-versatile"
 
     class Config:
         env_file = ".env"
