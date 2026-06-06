@@ -132,6 +132,22 @@ default voice) and degrades to a facts-based draft when no AI key is configured.
    > (`app.working_main`, `app.demo_main`); these are superseded by `MOCK_MODE`
    > on `app.main` and are kept only for reference.
 
+## Hosted (Vercel + Supabase, free tier)
+
+The app is deployed on Vercel's free Hobby tier as two projects sharing this repo
+(the run mode is chosen per-project by the `MOCK_MODE` env var):
+
+- **Public mock demo:** runs on ephemeral SQLite with seeded sample data, no
+  credentials needed (one-click "Use demo account").
+- **Real app:** runs against live ESPN/Sleeper + Groq with a free Supabase
+  Postgres database (connected through Supabase's IPv4 transaction pooler;
+  `asyncpg` is configured with `statement_cache_size=0` + `NullPool` for
+  serverless). Row Level Security is enabled on all tables to lock down the
+  Supabase data API; the app connects as a `BYPASSRLS` role so it is unaffected.
+
+The serverless entrypoint is `api/index.py` and the build is configured in
+`vercel.json`. Redeploy with `vercel --prod`.
+
 ## Real mode vs Mock mode
 
 The whole app runs in one of two modes, selected by the `MOCK_MODE` environment
