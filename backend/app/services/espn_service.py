@@ -632,6 +632,56 @@ class ESPNService:
         
         return 0.0
     
+    def _get_applied_points(self, player_data: Dict[str, Any], week: int, source: int = 0) -> float:
+        """
+        Actual (source=0) or projected (source=1) applied fantasy points for a
+        player in a specific week.
+        """
+        for stat_entry in player_data.get("stats", []):
+            if stat_entry.get("scoringPeriodId") == week and stat_entry.get("statSourceId") == source:
+                return float(stat_entry.get("appliedTotal", 0.0) or 0.0)
+        return 0.0
+
+    async def get_weekly_player_points(
+        self,
+        league_id: str,
+        week: int,
+        cookies: Optional[ESPNCookies] = None
+    ) -> Dict[int, Dict[str, Any]]:
+        """
+        Per-team lineup breakdown for a week: which players started vs benched and
+        how many fantasy points each scored. Powers bench-blunder and best-player
+        story hooks for ESPN leagues.
+
+        Returns {team_id: {"starters": [{name, points}], "bench": [{name, points}]}}.
+        IR slots are ignored (they can't be started, so they aren't "left on the bench").
+        """
+        params = {"view": "mRoster", "scoringPeriodId": week}
+        data = await self._make_request(f"{league_id}", cookies, params)
+
+        result: Dict[int, Dict[str, Any]] = {}
+        for team in data.get("teams", []):
+            if not isinstance(team, dict):
+                continue
+            team_id = team.get("id")
+            starters: List[Dict[str, Any]] = []
+            bench: List[Dict[str, Any]] = []
+            for entry in team.get("roster", {}).get("entries", []):
+                slot = entry.get("lineupSlotId")
+                if slot == 21:  # IR — not eligible to start
+                    continue
+                player = entry.get("playerPoolEntry", {}).get("player", {})
+                record = {
+                    "name": player.get("fullName", "Unknown"),
+                    "points": round(self._get_applied_points(player, week, source=0), 2),
+                }
+                if slot == 20:  # BENCH
+                    bench.append(record)
+                else:
+                    starters.append(record)
+            result[team_id] = {"starters": starters, "bench": bench}
+        return result
+
     def _get_pro_team_abbr(self, pro_team_id: Optional[int]) -> str:
         """Get NFL team abbreviation from pro team ID"""
         # ESPN pro team ID mappings (partial list)

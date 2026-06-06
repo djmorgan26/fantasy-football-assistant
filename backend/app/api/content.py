@@ -17,7 +17,9 @@ from app.models.content_profile import LeagueContentProfile
 from app.core.auth import get_current_active_user
 from app.services.content_service import content_service, CONTENT_TYPES
 from app.services.sleeper_service import SleeperError
+from app.services.espn_service import ESPNCookies, ESPNError
 from app.services.llm_service import llm_service
+from app.utils.encryption import ESPNCredentialManager
 from app.schemas.content import (
     ContentProfileUpdate,
     ContentProfileResponse,
@@ -45,6 +47,41 @@ async def _get_profile(league_id: int, db: AsyncSession) -> LeagueContentProfile
         select(LeagueContentProfile).where(LeagueContentProfile.league_id == league_id)
     )
     return result.scalar_one_or_none()
+
+
+def _ensure_supported(league: League) -> None:
+    """Both Sleeper and ESPN leagues are supported, as long as they're connected."""
+    if league.platform == PlatformType.SLEEPER and league.sleeper_league_id:
+        return
+    if league.platform == PlatformType.ESPN and league.espn_league_id:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="This league isn't connected to a supported platform yet.",
+    )
+
+
+def _espn_cookies(league: League) -> ESPNCookies | None:
+    """Build ESPN auth cookies from the league's stored encrypted credentials."""
+    s2 = ESPNCredentialManager.decrypt_espn_s2(league.espn_s2_encrypted) if league.espn_s2_encrypted else None
+    swid = ESPNCredentialManager.decrypt_espn_swid(league.espn_swid_encrypted) if league.espn_swid_encrypted else None
+    if s2 or swid:
+        return ESPNCookies(espn_s2=s2, swid=swid)
+    return None
+
+
+async def _fetch_narrative(league: League, week: int) -> dict:
+    if league.platform == PlatformType.SLEEPER:
+        return await content_service.get_weekly_narrative(league.sleeper_league_id, week)
+    return await content_service.get_weekly_narrative_espn(
+        str(league.espn_league_id), week, _espn_cookies(league)
+    )
+
+
+async def _fetch_standings(league: League) -> list:
+    if league.platform == PlatformType.SLEEPER:
+        return await content_service.get_standings(league.sleeper_league_id)
+    return await content_service.get_standings_espn(str(league.espn_league_id), _espn_cookies(league))
 
 
 def _profile_dict(profile: LeagueContentProfile) -> dict:
@@ -109,20 +146,15 @@ async def get_weekly_narrative(
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_database),
 ):
-    """Get the data-driven story facts for a week (no AI)."""
+    """Get the data-driven story facts for a week (no AI). Works for ESPN and Sleeper."""
     league = await _load_league(league_id, current_user, db)
-    if league.platform != PlatformType.SLEEPER or not league.sleeper_league_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="The content engine currently supports Sleeper leagues only.",
-        )
+    _ensure_supported(league)
     try:
-        narrative = await content_service.get_weekly_narrative(league.sleeper_league_id, week)
-        return narrative
-    except SleeperError as e:
+        return await _fetch_narrative(league, week)
+    except (SleeperError, ESPNError) as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Could not fetch league data from Sleeper: {str(e)}",
+            detail=f"Could not fetch league data: {str(e)}",
         )
 
 
@@ -135,11 +167,7 @@ async def generate_content(
 ):
     """Generate league-personalized content from real data + the league's voice."""
     league = await _load_league(league_id, current_user, db)
-    if league.platform != PlatformType.SLEEPER or not league.sleeper_league_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="The content engine currently supports Sleeper leagues only.",
-        )
+    _ensure_supported(league)
 
     profile = _profile_dict(await _get_profile(league_id, db))
     week = payload.week or max((league.current_week or 1) - 1, 1)
@@ -149,9 +177,9 @@ async def generate_content(
         standings = None
         # Weekly pieces need the week's facts; season recap needs standings.
         if payload.content_type in ("weekly_recap", "power_rankings", "awards"):
-            narrative = await content_service.get_weekly_narrative(league.sleeper_league_id, week)
+            narrative = await _fetch_narrative(league, week)
         if payload.content_type in ("power_rankings", "season_recap"):
-            standings = await content_service.get_standings(league.sleeper_league_id)
+            standings = await _fetch_standings(league)
 
         result = await content_service.generate(
             content_type=payload.content_type,
@@ -167,10 +195,10 @@ async def generate_content(
             narrative=narrative,
             **result,
         )
-    except SleeperError as e:
+    except (SleeperError, ESPNError) as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Could not fetch league data from Sleeper: {str(e)}",
+            detail=f"Could not fetch league data: {str(e)}",
         )
 
 

@@ -25,7 +25,7 @@ scarcity rather than generic rankings:
 - `GET /api/draft/value-board/{league_id}` — value board tuned to your league's scoring
 - `GET /api/draft/assist/{league_id}` — live best-available recommendations + optional AI advice
 
-### Content & Humor Engine (Sleeper)
+### Content & Humor Engine (ESPN & Sleeper)
 
 Generates league-personalized written content from **real weekly data** plus your
 league's own voice. The engine first extracts concrete "story hooks" from the week

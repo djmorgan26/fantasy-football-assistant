@@ -19,6 +19,7 @@ import json
 import structlog
 
 from app.services.sleeper_service import SleeperService, SleeperError
+from app.services.espn_service import ESPNService, ESPNCookies
 from app.services.draft_service import draft_service
 from app.services.llm_service import llm_service
 
@@ -53,6 +54,62 @@ class ContentService:
         )
 
     # ----------------------------------------------- narrative extraction
+
+    @classmethod
+    def _assemble_narrative(
+        cls,
+        teams: List[Dict[str, Any]],
+        results: List[Dict[str, Any]],
+        week: int,
+    ) -> Dict[str, Any]:
+        """
+        Compute league-wide story hooks from normalized per-team entries and
+        matchup results. Shared by both Sleeper and ESPN extraction.
+
+        Each team entry needs: team_name, points, and optionally bench_points,
+        best_starter, top_bench. Each result needs: winner, loser, margin.
+        """
+        scores = [t["points"] for t in teams if t["points"] > 0]
+        median = round(statistics.median(scores), 2) if scores else 0.0
+
+        # Lucky / unlucky: won below the median, or lost above it
+        loser_names = {r["loser"] for r in results}
+        winner_names = {r["winner"] for r in results}
+        lucky, unlucky = [], []
+        for t in teams:
+            if t["team_name"] in winner_names and t["points"] < median:
+                lucky.append({"team_name": t["team_name"], "points": t["points"]})
+            if t["team_name"] in loser_names and t["points"] > median:
+                unlucky.append({"team_name": t["team_name"], "points": t["points"]})
+
+        # Biggest bench blunder across the league (most points stranded on bench)
+        bench_blunder = None
+        bench_candidates = [t for t in teams if t.get("bench_points") is not None]
+        if bench_candidates:
+            worst = max(bench_candidates, key=lambda t: t["bench_points"])
+            if worst["bench_points"] and worst["bench_points"] > 0:
+                bench_blunder = {
+                    "team_name": worst["team_name"],
+                    "bench_points": worst["bench_points"],
+                    "top_bench": worst.get("top_bench"),
+                }
+
+        ranked = sorted(teams, key=lambda t: t["points"], reverse=True)
+        return {
+            "week": week,
+            "team_count": len(teams),
+            "median_score": median,
+            "average_score": round(statistics.mean(scores), 2) if scores else 0.0,
+            "highest_scorer": ranked[0] if ranked else None,
+            "lowest_scorer": ranked[-1] if ranked else None,
+            "biggest_blowout": max(results, key=lambda r: r["margin"]) if results else None,
+            "closest_game": min(results, key=lambda r: r["margin"]) if results else None,
+            "lucky_wins": lucky,
+            "unlucky_losses": unlucky,
+            "bench_blunder": bench_blunder,
+            "results": results,
+            "teams": ranked,
+        }
 
     @classmethod
     def extract_sleeper_narrative(
@@ -138,47 +195,65 @@ class ContentService:
                 "is_nailbiter": margin <= 5,
             })
 
-        scores = [t["points"] for t in teams if t["points"] > 0]
-        median = round(statistics.median(scores), 2) if scores else 0.0
+        return cls._assemble_narrative(teams, results, week)
 
-        # Lucky / unlucky: won below the median, or lost above it
-        loser_names = {r["loser"] for r in results}
-        winner_names = {r["winner"] for r in results}
-        lucky, unlucky = [], []
-        for t in teams:
-            if t["team_name"] in winner_names and t["points"] < median:
-                lucky.append({"team_name": t["team_name"], "points": t["points"]})
-            if t["team_name"] in loser_names and t["points"] > median:
-                unlucky.append({"team_name": t["team_name"], "points": t["points"]})
+    @classmethod
+    def extract_espn_narrative(
+        cls,
+        matchups: List[Dict[str, Any]],
+        teams_meta: List[Dict[str, Any]],
+        weekly_points: Dict[int, Dict[str, Any]],
+        week: int,
+    ) -> Dict[str, Any]:
+        """
+        Build the same story hooks from a week of ESPN data. Pure function.
 
-        # Biggest bench blunder across the league (most points stranded on bench)
-        bench_blunder = None
-        bench_candidates = [t for t in teams if t.get("bench_points") is not None]
-        if bench_candidates:
-            worst = max(bench_candidates, key=lambda t: t["bench_points"])
-            if worst["bench_points"] and worst["bench_points"] > 0:
-                bench_blunder = {
-                    "team_name": worst["team_name"],
-                    "bench_points": worst["bench_points"],
-                    "top_bench": worst.get("top_bench"),
-                }
+        matchups: ESPNService.get_matchups output (home/away team ids + scores)
+        teams_meta: ESPNService.get_teams output (id -> display name)
+        weekly_points: ESPNService.get_weekly_player_points output (starters/bench)
+        """
+        team_name_by_id = {t["id"]: t["name"] for t in teams_meta}
 
-        ranked = sorted(teams, key=lambda t: t["points"], reverse=True)
-        return {
-            "week": week,
-            "team_count": len(teams),
-            "median_score": median,
-            "average_score": round(statistics.mean(scores), 2) if scores else 0.0,
-            "highest_scorer": ranked[0] if ranked else None,
-            "lowest_scorer": ranked[-1] if ranked else None,
-            "biggest_blowout": max(results, key=lambda r: r["margin"]) if results else None,
-            "closest_game": min(results, key=lambda r: r["margin"]) if results else None,
-            "lucky_wins": lucky,
-            "unlucky_losses": unlucky,
-            "bench_blunder": bench_blunder,
-            "results": results,
-            "teams": ranked,
-        }
+        def team_entry(team_id: Any, points: float) -> Dict[str, Any]:
+            lineup = weekly_points.get(team_id) or {}
+            starters = lineup.get("starters") or []
+            bench = lineup.get("bench") or []
+            bench_points = round(sum(p["points"] for p in bench), 2) if bench else None
+            top_bench = max(bench, key=lambda p: p["points"]) if bench else None
+            best_starter = max(starters, key=lambda p: p["points"]) if starters else None
+            return {
+                "team_id": team_id,
+                "team_name": team_name_by_id.get(team_id, f"Team {team_id}"),
+                "points": round(float(points or 0), 2),
+                "bench_points": bench_points,
+                "best_starter": best_starter,
+                "top_bench": top_bench,
+            }
+
+        teams: List[Dict[str, Any]] = []
+        results: List[Dict[str, Any]] = []
+        for m in matchups:
+            home_id = m.get("home_team_id")
+            away_id = m.get("away_team_id")
+            if home_id is None or away_id is None:
+                continue  # bye week / incomplete pairing
+            home = team_entry(home_id, m.get("home_score"))
+            away = team_entry(away_id, m.get("away_score"))
+            teams.extend([home, away])
+
+            winner, loser = (home, away) if home["points"] >= away["points"] else (away, home)
+            margin = round(winner["points"] - loser["points"], 2)
+            results.append({
+                "winner": winner["team_name"],
+                "loser": loser["team_name"],
+                "winner_score": winner["points"],
+                "loser_score": loser["points"],
+                "margin": margin,
+                "is_blowout": margin >= 40,
+                "is_nailbiter": margin <= 5,
+            })
+
+        return cls._assemble_narrative(teams, results, week)
 
     async def get_weekly_narrative(self, league_id_str: str, week: int) -> Dict[str, Any]:
         """Fetch Sleeper data for a week and extract narrative facts."""
@@ -206,6 +281,35 @@ class ContentService:
                 "ties": s.get("ties", 0),
                 "points_for": round(fpts, 2),
             })
+        standings.sort(key=lambda t: (t["wins"], t["points_for"]), reverse=True)
+        return standings
+
+    async def get_weekly_narrative_espn(
+        self, league_id_str: str, week: int, cookies: Optional[ESPNCookies] = None
+    ) -> Dict[str, Any]:
+        """Fetch ESPN data for a week and extract narrative facts."""
+        espn = ESPNService()
+        matchups = await espn.get_matchups(league_id_str, week=week, cookies=cookies)
+        teams_meta = await espn.get_teams(league_id_str, cookies=cookies)
+        weekly_points = await espn.get_weekly_player_points(league_id_str, week, cookies=cookies)
+        return self.extract_espn_narrative(matchups, teams_meta, weekly_points, week)
+
+    async def get_standings_espn(
+        self, league_id_str: str, cookies: Optional[ESPNCookies] = None
+    ) -> List[Dict[str, Any]]:
+        """Season standings from ESPN team records."""
+        espn = ESPNService()
+        teams_meta = await espn.get_teams(league_id_str, cookies=cookies)
+        standings = [
+            {
+                "team_name": t.get("name", f"Team {t.get('id')}"),
+                "wins": t.get("wins", 0),
+                "losses": t.get("losses", 0),
+                "ties": t.get("ties", 0),
+                "points_for": round(float(t.get("points_for", 0) or 0), 2),
+            }
+            for t in teams_meta
+        ]
         standings.sort(key=lambda t: (t["wins"], t["points_for"]), reverse=True)
         return standings
 
