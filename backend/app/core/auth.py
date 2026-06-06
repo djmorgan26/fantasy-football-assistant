@@ -103,10 +103,17 @@ async def get_current_user(
     if payload is None:
         raise credentials_exception
     
-    user_id: int = payload.get("sub")
+    user_id = payload.get("sub")
     if user_id is None:
         raise credentials_exception
-    
+
+    # JWT subject is serialized as a string; the users.id column is an integer.
+    # SQLite coerces this automatically but Postgres does not, so cast explicitly.
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        raise credentials_exception
+
     user = await get_user_by_id(db, user_id)
     if user is None:
         raise credentials_exception

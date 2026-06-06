@@ -4,7 +4,8 @@ from datetime import datetime
 
 
 class LeagueBase(BaseModel):
-    espn_league_id: int
+    # Optional because Sleeper leagues have no ESPN id (and vice versa).
+    espn_league_id: Optional[int] = None
     name: str
     season_year: int = Field(default=2024)
 
@@ -22,6 +23,8 @@ class LeagueUpdate(BaseModel):
 
 class LeagueResponse(LeagueBase):
     id: int
+    platform: Optional[str] = None
+    sleeper_league_id: Optional[str] = None
     size: int
     scoring_type: str
     current_week: int
