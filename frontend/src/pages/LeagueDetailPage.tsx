@@ -24,6 +24,7 @@ import {
   FireIcon,
   ShieldCheckIcon,
   BoltIcon,
+  NewspaperIcon,
 } from '@heroicons/react/24/outline';
 import { formatDate } from '@/utils';
 
@@ -404,6 +405,12 @@ export const LeagueDetailPage: React.FC = () => {
                   <Button fullWidth size="sm">
                     <BoltIcon className="h-4 w-4 mr-2" />
                     Draft Room
+                  </Button>
+                </Link>
+                <Link to={`/leagues/${league.id}/press-box`} className="block">
+                  <Button fullWidth size="sm">
+                    <NewspaperIcon className="h-4 w-4 mr-2" />
+                    Press Box
                   </Button>
                 </Link>
                 <Link to={`/leagues/${league.id}/trades`} className="block">

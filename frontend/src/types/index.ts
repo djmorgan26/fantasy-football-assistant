@@ -375,3 +375,55 @@ export interface DraftAssistResponse {
   recommendations: DraftPickRecommendation[];
   ai_advice?: DraftAdvice | null;
 }
+
+// Content & humor engine types
+export type ContentType = 'weekly_recap' | 'power_rankings' | 'awards' | 'season_recap';
+
+export interface HumorExample {
+  title?: string;
+  text: string;
+  year?: number;
+}
+
+export interface ManagerPersona {
+  name: string;
+  team_name?: string;
+  notes?: string;
+  bits: string[];
+}
+
+export interface ContentProfile {
+  league_id: number;
+  voice_guide?: string | null;
+  humor_examples: HumorExample[];
+  personas: ManagerPersona[];
+}
+
+export interface WeeklyNarrative {
+  week: number;
+  team_count: number;
+  median_score: number;
+  average_score: number;
+  highest_scorer?: { team_name: string; points: number } | null;
+  lowest_scorer?: { team_name: string; points: number } | null;
+  biggest_blowout?: { winner: string; loser: string; margin: number } | null;
+  closest_game?: { winner: string; loser: string; margin: number } | null;
+  lucky_wins: Array<{ team_name: string; points: number }>;
+  unlucky_losses: Array<{ team_name: string; points: number }>;
+  bench_blunder?: {
+    team_name: string;
+    bench_points: number;
+    top_bench?: { name: string; points: number } | null;
+  } | null;
+  results: Array<Record<string, any>>;
+  teams: Array<Record<string, any>>;
+}
+
+export interface GeneratedContent {
+  content: string;
+  content_type: string;
+  generated_by: string;
+  week?: number | null;
+  league_name?: string | null;
+  narrative?: WeeklyNarrative | null;
+}

@@ -9,7 +9,8 @@ A comprehensive web application that connects to ESPN Fantasy Football leagues t
   tiers, ADP) plus best-available pick recommendations during your draft
 - **Trade Analyzer**: Get intelligent trade suggestions based on player valuations and team needs
 - **Waiver Wire Assistant**: Receive recommendations for pickup targets and drop candidates
-- **Weekly AI Recap**: Auto-generated, league-personalized roast reports
+- **Content & Humor Engine**: League-personalized recaps, power rankings, awards, and season
+  write-ups built from real weekly data and your league's own voice
 - **Real-time Alerts**: Get notified about injuries, breakout performances, and opportunities
 - **Team Optimization**: Lineup suggestions and roster management tools
 - **Mobile-Responsive UI**: Access your tools on any device
@@ -23,6 +24,23 @@ scarcity rather than generic rankings:
 - `GET /api/draft/rankings?scoring_type=ppr&team_count=12` — generic pre-draft cheat sheet
 - `GET /api/draft/value-board/{league_id}` — value board tuned to your league's scoring
 - `GET /api/draft/assist/{league_id}` — live best-available recommendations + optional AI advice
+
+### Content & Humor Engine (Sleeper)
+
+Generates league-personalized written content from **real weekly data** plus your
+league's own voice. The engine first extracts concrete "story hooks" from the week
+(biggest blowout, nail-biters, points left on the bench, the should've-started guy,
+lucky/unlucky wins), then writes content in your league's tone using manager personas
+and a corpus of past write-ups you provide.
+
+- `GET /api/content/{league_id}/profile` · `PUT .../profile` — manage voice, personas, and past write-ups
+- `GET /api/content/{league_id}/narrative/week/{week}` — the data-driven story facts (no AI)
+- `POST /api/content/{league_id}/generate` — generate `weekly_recap`, `power_rankings`, `awards`, or `season_recap`
+
+The **Press Box** page (`/leagues/:id/press-box`) drives all of this, including a
+Voice Settings panel where you paste previous years' reports — the single biggest
+lever on output quality. The engine works before any corpus is added (sensible
+default voice) and degrades to a facts-based draft when no AI key is configured.
 
 > **AI provider:** AI features run on **Groq** (single provider) using the
 > `LLM_MODEL` configured in `.env` (default `llama-3.3-70b-versatile`).

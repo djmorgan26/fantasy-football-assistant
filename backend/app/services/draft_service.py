@@ -76,6 +76,10 @@ class DraftService:
 
     # ---------------------------------------------------------------- helpers
 
+    async def get_players_cached(self) -> Dict[str, Any]:
+        """Public accessor for the cached all-players payload (shared by other services)."""
+        return await self._get_players()
+
     async def _get_players(self) -> Dict[str, Any]:
         """Get all NFL players, cached in memory for a few hours."""
         now = datetime.utcnow()

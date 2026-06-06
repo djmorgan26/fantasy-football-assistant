@@ -16,6 +16,7 @@ import { TradeAnalyzerPage } from '@/pages/TradeAnalyzerPage';
 import { PlayerSearchPage } from '@/pages/PlayerSearchPage';
 import { MyRosterPage } from '@/pages/MyRosterPage';
 import { DraftRoomPage } from '@/pages/DraftRoomPage';
+import { PressBoxPage } from '@/pages/PressBoxPage';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -132,6 +133,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <DraftRoomPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="leagues/:leagueId/press-box"
+                element={
+                  <ProtectedRoute>
+                    <PressBoxPage />
                   </ProtectedRoute>
                 }
               />
