@@ -5,7 +5,6 @@ import { useSearchPlayers } from '@/hooks/usePlayers';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { Player } from '@/types';
 import {
   ArrowLeftIcon,
   MagnifyingGlassIcon,
@@ -43,19 +42,6 @@ export const PlayerSearchPage: React.FC = () => {
 
   const handleSearch = () => {
     setShouldSearch(true);
-  };
-
-  const getStatusBadge = (status: string, owner?: string) => {
-    switch (status) {
-      case 'available':
-        return <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Available</span>;
-      case 'waivers':
-        return <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">Waivers</span>;
-      case 'owned':
-        return <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">Owned by {owner}</span>;
-      default:
-        return null;
-    }
   };
 
   const getPositionColor = (position: string) => {

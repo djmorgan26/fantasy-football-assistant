@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { League, LeagueConnectionRequest, LeagueConnectionResponse, ApiError } from '@/types';
 import { leaguesService } from '@/services/leagues';

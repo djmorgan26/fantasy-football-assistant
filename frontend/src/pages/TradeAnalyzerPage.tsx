@@ -28,11 +28,18 @@ export const TradeAnalyzerPage: React.FC = () => {
   const [team2Players, setTeam2Players] = useState<number[]>([]);
   const [analysis, setAnalysis] = useState<TradeAnalysisResponse | null>(null);
 
-  const userTeam = teams?.find(team => team.owner_user_id === currentUser?.id);
   const analyzeTradeMutation = useAnalyzeTrade();
 
   const handleAnalyzeTrade = async () => {
-    if (!selectedTeam1 || !selectedTeam2 || team1Players.length === 0 || team2Players.length === 0 || !league) {
+    if (
+      !selectedTeam1 ||
+      !selectedTeam2 ||
+      selectedTeam1.espn_team_id === undefined ||
+      selectedTeam2.espn_team_id === undefined ||
+      team1Players.length === 0 ||
+      team2Players.length === 0 ||
+      !league
+    ) {
       return;
     }
 

@@ -17,7 +17,6 @@ export const TeamSelectionModal: React.FC<TeamSelectionModalProps> = ({
   isOpen,
   onClose,
   teams,
-  leagueId,
 }) => {
   const claimTeam = useClaimTeam();
 

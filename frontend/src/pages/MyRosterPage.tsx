@@ -52,21 +52,6 @@ export const MyRosterPage: React.FC = () => {
     return sum + (stats['0'] || 0);
   }, 0);
 
-  const getStatusBadge = (status: string, injuryStatus?: string) => {
-    switch (status) {
-      case 'active':
-        return <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Healthy</span>;
-      case 'questionable':
-        return <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">Q - {injuryStatus}</span>;
-      case 'injured':
-        return <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">Injured</span>;
-      case 'bye':
-        return <span className="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded-full">Bye Week</span>;
-      default:
-        return null;
-    }
-  };
-
   const getPositionColor = (position: string) => {
     switch (position) {
       case 'QB': return 'text-purple-600 bg-purple-100';
@@ -195,7 +180,7 @@ export const MyRosterPage: React.FC = () => {
                 <div className="space-y-3">
                   {starterPlayers.map((player) => (
                   <div
-                    key={player.id}
+                    key={player.player_id}
                     className="p-4 border rounded-lg hover:shadow-md transition-shadow"
                   >
                     <div className="flex items-center justify-between">
@@ -261,7 +246,7 @@ export const MyRosterPage: React.FC = () => {
                 <div className="space-y-3">
                   {benchPlayers.map((player) => (
                   <div
-                    key={player.id}
+                    key={player.player_id}
                     className="p-3 border rounded-lg hover:shadow-md transition-shadow bg-gray-50"
                   >
                     <div className="flex items-center space-x-3">

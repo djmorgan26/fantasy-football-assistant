@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Link } from 'react-router-dom';
 import { PlusIcon, TrophyIcon, UsersIcon } from '@heroicons/react/24/outline';
-import { formatDate, formatRecord } from '@/utils';
+import { formatDate } from '@/utils';
 
 export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
@@ -25,7 +25,7 @@ export const DashboardPage: React.FC = () => {
       <div className="container mx-auto px-4 py-8">
         <Card>
           <CardContent>
-            <p className="text-error-600">Failed to load leagues: {error}</p>
+            <p className="text-error-600">Failed to load leagues: {error.detail}</p>
           </CardContent>
         </Card>
       </div>

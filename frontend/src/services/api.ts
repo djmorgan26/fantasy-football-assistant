@@ -58,8 +58,9 @@ api.interceptors.response.use(
     }
     
     // Transform error to our ApiError type
+    const responseData = error.response?.data as { detail?: string } | undefined;
     const apiError: ApiError = {
-      detail: error.response?.data?.detail || error.message || 'An unexpected error occurred',
+      detail: responseData?.detail || error.message || 'An unexpected error occurred',
       status: error.response?.status,
     };
     
