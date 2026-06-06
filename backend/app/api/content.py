@@ -15,7 +15,7 @@ from app.models.user import User
 from app.models.league import League, PlatformType
 from app.models.content_profile import LeagueContentProfile
 from app.core.auth import get_current_active_user
-from app.services.content_service import content_service, CONTENT_TYPES
+from app.services.content_service import content_service, CONTENT_TYPES, DEFAULT_VOICE
 from app.services.sleeper_service import SleeperError
 from app.services.espn_service import ESPNCookies, ESPNError, ESPNService
 from app.services.llm_service import llm_service
@@ -110,17 +110,52 @@ def _profile_dict(profile: LeagueContentProfile) -> dict:
     }
 
 
+async def _ready_personas(league: League) -> list:
+    """Best-effort personas from the connected platform's real team owners."""
+    try:
+        pairs = await _fetch_owner_pairs(league)
+    except Exception:  # noqa: BLE001 - never block opening the Press Box
+        return []
+    return [
+        {"name": p["owner_name"], "team_name": p["team_name"], "notes": f"Manager of {p['team_name']}.", "bits": []}
+        for p in pairs
+    ]
+
+
 @router.get("/{league_id}/profile", response_model=ContentProfileResponse)
 async def get_profile(
     league_id: int,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_database),
 ):
-    """Get the league's voice profile (returns an empty profile if none set)."""
-    await _load_league(league_id, current_user, db)
+    """
+    Get the league's voice profile.
+
+    If none exists yet, seed a ready-to-use default so the Press Box works out of
+    the box: a funny-roast house voice plus personas auto-filled from the league's
+    real team names and owners. Everything is fully editable afterward (paste in
+    past write-ups and per-manager notes to make it sound like your group).
+    """
+    league = await _load_league(league_id, current_user, db)
     profile = await _get_profile(league_id, db)
-    data = _profile_dict(profile)
-    return ContentProfileResponse(league_id=league_id, **data)
+
+    if profile is None:
+        personas = []
+        if (league.platform == PlatformType.SLEEPER and league.sleeper_league_id) or (
+            league.platform == PlatformType.ESPN and league.espn_league_id
+        ):
+            personas = await _ready_personas(league)
+        profile = LeagueContentProfile(
+            league_id=league_id,
+            voice_guide=DEFAULT_VOICE,
+            humor_examples=[],
+            personas=personas,
+        )
+        db.add(profile)
+        await db.commit()
+        await db.refresh(profile)
+
+    return ContentProfileResponse(league_id=league_id, **_profile_dict(profile))
 
 
 @router.put("/{league_id}/profile", response_model=ContentProfileResponse)
