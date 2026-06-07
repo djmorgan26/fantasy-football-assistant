@@ -92,7 +92,7 @@ async def analyze_trade(
             # Calculate totals for players being given away
             for player in proposing_roster["roster"]:
                 if player["player_id"] in trade_request.give_players:
-                    projected = player.get("stats", {}).get("projected", {}).get("0", 0)
+                    projected = player.get("projected_points") or player.get("applied_points") or 0
                     give_total_points += projected
                     give_player_details[player["player_id"]] = {
                         "name": player["full_name"],
@@ -103,7 +103,7 @@ async def analyze_trade(
             # Calculate totals for players being received
             for player in receiving_roster["roster"]:
                 if player["player_id"] in trade_request.receive_players:
-                    projected = player.get("stats", {}).get("projected", {}).get("0", 0)
+                    projected = player.get("projected_points") or player.get("applied_points") or 0
                     receive_total_points += projected
                     receive_player_details[player["player_id"]] = {
                         "name": player["full_name"],

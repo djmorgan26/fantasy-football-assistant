@@ -1,7 +1,11 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
 from enum import Enum
+
+# ESPN player IDs are integers; mock mode (and some other sources) use string
+# IDs like "p0001". The trade endpoints only compare IDs, so accept both.
+PlayerId = Union[int, str]
 
 
 class TradeStatusEnum(str, Enum):
@@ -16,8 +20,8 @@ class TradeCreate(BaseModel):
     league_id: int = Field(gt=0, description="League ID must be positive")
     proposing_team_id: int = Field(gt=0, description="Proposing team ID must be positive")
     receiving_team_id: int = Field(gt=0, description="Receiving team ID must be positive")
-    give_players: List[int] = Field(min_length=1, max_length=10, description="Player IDs being given away (1-10 players)")
-    receive_players: List[int] = Field(min_length=1, max_length=10, description="Player IDs being received (1-10 players)")
+    give_players: List[PlayerId] = Field(min_length=1, max_length=10, description="Player IDs being given away (1-10 players)")
+    receive_players: List[PlayerId] = Field(min_length=1, max_length=10, description="Player IDs being received (1-10 players)")
 
     @staticmethod
     def validate_different_teams(proposing_team_id: int, receiving_team_id: int) -> None:
@@ -32,8 +36,8 @@ class TradeAnalysisRequest(BaseModel):
     league_id: int = Field(gt=0, description="League ID must be positive")
     proposing_team_id: int = Field(gt=0, description="Proposing team ID must be positive")
     receiving_team_id: int = Field(gt=0, description="Receiving team ID must be positive")
-    give_players: List[int] = Field(min_length=1, max_length=10, description="1-10 players to give")
-    receive_players: List[int] = Field(min_length=1, max_length=10, description="1-10 players to receive")
+    give_players: List[PlayerId] = Field(min_length=1, max_length=10, description="1-10 players to give")
+    receive_players: List[PlayerId] = Field(min_length=1, max_length=10, description="1-10 players to receive")
 
     @staticmethod
     def validate_different_teams(proposing_team_id: int, receiving_team_id: int) -> None:
@@ -49,7 +53,7 @@ class TradeResponse(BaseModel):
     league_id: int
     proposing_team_id: int
     receiving_team_id: int
-    proposed_players: Dict[str, List[int]]
+    proposed_players: Dict[str, List[PlayerId]]
     status: TradeStatusEnum
     fairness_score: Optional[float] = None
     value_difference: Optional[float] = None

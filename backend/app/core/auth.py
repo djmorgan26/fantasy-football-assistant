@@ -13,8 +13,10 @@ from app.models.user import User
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# JWT token authentication
-security = HTTPBearer()
+# JWT token authentication. auto_error=False so a missing Authorization
+# header reaches get_current_user and returns 401 (not HTTPBearer's 403);
+# the frontend interceptor only treats 401 as "logged out".
+security = HTTPBearer(auto_error=False)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

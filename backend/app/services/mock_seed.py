@@ -101,6 +101,32 @@ async def seed_mock_data() -> None:
             db.add(sleeper_league)
             await db.commit()
             await db.refresh(sleeper_league)
+
+            # Teams, mirroring what the real Sleeper connect flow creates so
+            # "Select My Team" and the team pages work in the demo.
+            users = mock_data.sleeper_league_users()
+            for roster in mock_data.sleeper_rosters():
+                owner = next(
+                    (u for u in users if u["user_id"] == roster["owner_id"]), None
+                )
+                team_name = (
+                    (owner or {}).get("metadata", {}).get("team_name")
+                    or (owner or {}).get("display_name")
+                    or f"Team {roster['roster_id']}"
+                )
+                settings_ = roster.get("settings", {})
+                db.add(Team(
+                    league_id=sleeper_league.id,
+                    sleeper_roster_id=roster["roster_id"],
+                    sleeper_owner_id=roster["owner_id"],
+                    name=team_name,
+                    wins=settings_.get("wins", 0),
+                    losses=settings_.get("losses", 0),
+                    ties=settings_.get("ties", 0),
+                    points_for=float(settings_.get("fpts", 0)),
+                    points_against=float(settings_.get("fpts_against", 0)),
+                ))
+            await db.commit()
             logger.info("Seeded mock Sleeper league", league_id=sleeper_league.id)
 
         # ---- content / voice profiles for both leagues ----------------------

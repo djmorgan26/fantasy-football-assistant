@@ -405,6 +405,7 @@ def espn_team_roster(team_id: int, week: Optional[int]) -> Dict[str, Any]:
             "eligible_slots": [],
             "stats": {"actual": {}, "projected": {}},
             "applied_points": _player_week_points(pid, wk),
+            "projected_points": _player_week_points(pid, wk),
         })
     return {"team_id": team_id, "roster": roster, "week": wk}
 
@@ -493,6 +494,16 @@ def _sleeper_rosters() -> List[Dict[str, Any]]:
             },
         })
     return rosters
+
+
+def sleeper_rosters() -> List[Dict[str, Any]]:
+    """Public alias used by the seed and the Sleeper mock responses."""
+    return _sleeper_rosters()
+
+
+def sleeper_league_users() -> List[Dict[str, Any]]:
+    """Public alias used by the seed and the Sleeper mock responses."""
+    return _sleeper_users()
 
 
 def sleeper_league() -> Dict[str, Any]:

@@ -166,9 +166,9 @@ class SleeperService:
                 return mock_data.sleeper_league()
             tail = parts[2]
             if tail == "rosters":
-                return mock_data._sleeper_rosters()
+                return mock_data.sleeper_rosters()
             if tail == "users":
-                return mock_data._sleeper_users()
+                return mock_data.sleeper_league_users()
             if tail == "matchups":
                 week = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else mock_data.MOCK_CURRENT_WEEK - 1
                 return mock_data.sleeper_matchups(week)
@@ -506,3 +506,58 @@ class SleeperService:
             Standard position name
         """
         return self.position_map.get(sleeper_position, sleeper_position)
+
+
+async def build_team_roster_entries(
+    sleeper_league_id: str, sleeper_roster_id: int
+) -> List[Dict[str, Any]]:
+    """Build an ESPN-roster-shaped player list for one Sleeper roster.
+
+    Shared by the teams and suggestions APIs so Sleeper leagues get the same
+    response shape the frontend renders for ESPN rosters. Returns None-safe
+    data even when player metadata is missing. Raises SleeperNotFoundError if
+    the roster is not in the league.
+    """
+    # Imported lazily: draft_service imports SleeperService at module level,
+    # so a top-level import here would be circular.
+    from app.services.draft_service import draft_service
+
+    service = SleeperService()
+    rosters = await service.get_rosters(sleeper_league_id)
+    roster_entry = next(
+        (r for r in rosters if r.get("roster_id") == sleeper_roster_id), None
+    )
+    if roster_entry is None:
+        raise SleeperNotFoundError(
+            f"Roster {sleeper_roster_id} not found in league {sleeper_league_id}"
+        )
+
+    players_map = await draft_service.get_players_cached()
+    starters = list(roster_entry.get("starters") or [])
+    starter_set = set(starters)
+
+    roster = []
+    for pid in roster_entry.get("players") or []:
+        meta = players_map.get(pid) or {}
+        position = meta.get("position") or (meta.get("fantasy_positions") or ["UNKNOWN"])[0]
+        full_name = meta.get("full_name") or (
+            f"{meta.get('first_name', '')} {meta.get('last_name', '')}".strip() or str(pid)
+        )
+        is_starter = pid in starter_set
+        roster.append({
+            "player_id": pid,
+            "full_name": full_name,
+            "position_id": 0,
+            "position_name": position,
+            "lineup_slot_id": 0 if is_starter else 20,
+            "lineup_slot_name": position if is_starter else "BENCH",
+            "pro_team_id": 0,
+            "pro_team_abbr": meta.get("team"),
+            "eligible_slots": [],
+            "stats": {"actual": {}, "projected": {}},
+            "injury_status": meta.get("injury_status"),
+        })
+    # Starters first, in lineup order; bench after.
+    order = {pid: i for i, pid in enumerate(starters)}
+    roster.sort(key=lambda p: order.get(p["player_id"], len(order) + 1))
+    return roster

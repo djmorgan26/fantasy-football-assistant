@@ -323,7 +323,12 @@ class ESPNService:
                     "lineup_slot_name": self.lineup_slots.get(entry.get("lineupSlotId"), "UNKNOWN"),
                     "pro_team_id": player.get("proTeamId"),
                     "eligible_slots": player.get("eligibleSlots", []),
-                    "stats": self._extract_player_stats(player, week)
+                    "stats": self._extract_player_stats(player, week),
+                    # Fantasy-point totals (appliedTotal), not raw stat dicts.
+                    "projected_points": self._get_projected_points(player, week),
+                    "applied_points": self._get_applied_points(
+                        player, week or data.get("scoringPeriodId", 1)
+                    ),
                 })
             
             return {

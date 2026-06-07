@@ -4,7 +4,7 @@ from sqlalchemy import select
 from typing import List, Optional
 from app.db.database import get_database
 from app.models.user import User
-from app.models.league import League
+from app.models.league import League, PlatformType
 from app.models.team import Team
 from app.schemas.team import TeamResponse, RosterResponse
 from app.core.auth import get_current_active_user
@@ -14,6 +14,21 @@ import structlog
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/teams", tags=["teams"])
+
+
+async def _get_sleeper_team_roster(league: League, team: Team) -> List[dict]:
+    """Build an ESPN-roster-shaped player list for a Sleeper team."""
+    from app.services.sleeper_service import build_team_roster_entries, SleeperNotFoundError
+
+    try:
+        return await build_team_roster_entries(
+            league.sleeper_league_id, team.sleeper_roster_id
+        )
+    except SleeperNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Roster not found on Sleeper",
+        )
 
 
 @router.get("/league/{league_id}", response_model=List[TeamResponse])
@@ -90,9 +105,19 @@ async def get_team_roster(
                 detail="Access denied to this team"
             )
         
+        # Sleeper teams: build the roster from Sleeper data (the ESPN client
+        # cannot serve them; league.espn_league_id is None).
+        if league.platform == PlatformType.SLEEPER:
+            roster = await _get_sleeper_team_roster(league, team)
+            return RosterResponse(
+                team_id=team_id,
+                week=week or league.current_week or 1,
+                roster=roster,
+            )
+
         # Get roster from ESPN API
         espn_service = ESPNService()
-        
+
         # Get ESPN credentials for the league
         cookies = None
         if league.espn_s2_encrypted or league.espn_swid_encrypted:
@@ -100,14 +125,14 @@ async def get_team_roster(
             swid = ESPNCredentialManager.decrypt_espn_swid(league.espn_swid_encrypted) if league.espn_swid_encrypted else None
             if s2 or swid:
                 cookies = ESPNCookies(espn_s2=s2, swid=swid)
-        
+
         roster_data = await espn_service.get_team_roster(
             str(league.espn_league_id),
             team.espn_team_id,
             week,
             cookies
         )
-        
+
         return RosterResponse(
             team_id=team_id,
             week=roster_data["week"],

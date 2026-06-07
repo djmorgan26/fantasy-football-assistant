@@ -14,10 +14,11 @@ from app.models.matchup import Matchup
 from app.schemas.sleeper import (
     SleeperLeagueConnectionRequest,
     SleeperLeagueConnectionResponse,
-    SleeperUserLeaguesResponse
+    SleeperUserLeaguesResponse,
+    MatchupResponse,  # Sleeper-shaped (roster_id/points/starters/players),
+    # NOT the ESPN-shaped app.schemas.matchup.MatchupResponse
 )
 from app.schemas.league import LeagueResponse
-from app.schemas.matchup import MatchupResponse
 from app.core.auth import get_current_active_user
 from app.services.sleeper_service import SleeperService, SleeperError, SleeperNotFoundError
 import structlog

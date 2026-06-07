@@ -5,7 +5,10 @@ from datetime import datetime
 
 class TeamResponse(BaseModel):
     id: int
-    espn_team_id: int
+    # Platform-specific identifiers: ESPN teams have espn_team_id, Sleeper
+    # teams have sleeper_roster_id. Each is None on the other platform.
+    espn_team_id: Optional[int] = None
+    sleeper_roster_id: Optional[int] = None
     name: str
     location: Optional[str] = None
     nickname: Optional[str] = None

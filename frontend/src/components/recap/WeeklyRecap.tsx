@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -29,7 +29,7 @@ export const WeeklyRecap: React.FC<WeeklyRecapProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [selectedWeek, setSelectedWeek] = useState(currentWeek > 1 ? currentWeek - 1 : 1);
 
-  const fetchRecap = async (week: number) => {
+  const fetchRecap = useCallback(async (week: number) => {
     setIsLoading(true);
     setError(null);
 
@@ -44,13 +44,13 @@ export const WeeklyRecap: React.FC<WeeklyRecapProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [leagueId]);
 
   useEffect(() => {
     if (leagueId && selectedWeek) {
       fetchRecap(selectedWeek);
     }
-  }, [leagueId, selectedWeek]);
+  }, [leagueId, selectedWeek, fetchRecap]);
 
   const handleWeekChange = (newWeek: number) => {
     if (newWeek >= 1 && newWeek <= currentWeek) {

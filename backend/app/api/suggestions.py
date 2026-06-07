@@ -7,9 +7,11 @@ from sqlalchemy import select
 from typing import List
 from app.db.database import get_database
 from app.models.user import User
-from app.models.league import League
+from app.models.league import League, PlatformType
+from app.models.team import Team
 from app.core.auth import get_current_active_user
 from app.services.espn_service import ESPNService, ESPNCookies, ESPNError
+from app.services.sleeper_service import SleeperError
 from app.services.llm_service import llm_service
 from app.utils.encryption import ESPNCredentialManager
 from app.schemas.suggestion import SuggestionResponse
@@ -31,7 +33,7 @@ async def get_strategic_suggestions(
 
     Args:
         league_id: Database league ID
-        team_id: ESPN team ID
+        team_id: Database team ID (resolved to the platform team id here)
         current_user: Authenticated user
         db: Database session
 
@@ -54,41 +56,72 @@ async def get_strategic_suggestions(
                 detail="League not found or access denied"
             )
 
-        espn_service = ESPNService()
-
-        # Get ESPN credentials
-        cookies = None
-        if league.espn_s2_encrypted or league.espn_swid_encrypted:
-            s2 = ESPNCredentialManager.decrypt_espn_s2(league.espn_s2_encrypted) if league.espn_s2_encrypted else None
-            swid = ESPNCredentialManager.decrypt_espn_swid(league.espn_swid_encrypted) if league.espn_swid_encrypted else None
-            if s2 or swid:
-                cookies = ESPNCookies(espn_s2=s2, swid=swid)
+        # Resolve the DB team row so we can map to the platform team id.
+        team_result = await db.execute(
+            select(Team).where(Team.id == team_id, Team.league_id == league_id)
+        )
+        team = team_result.scalar_one_or_none()
+        if not team:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Team not found in this league"
+            )
 
         # Fetch team data
         try:
-            roster_data = await espn_service.get_team_roster(
-                str(league.espn_league_id),
-                team_id,
-                cookies=cookies
-            )
+            if league.platform == PlatformType.SLEEPER:
+                from app.services.sleeper_service import (
+                    SleeperService,
+                    build_team_roster_entries,
+                )
 
-            # Get league standings and settings
-            league_data = await espn_service.get_league_info(
-                str(league.espn_league_id),
-                cookies=cookies
-            )
+                raw_roster = await build_team_roster_entries(
+                    league.sleeper_league_id, team.sleeper_roster_id
+                )
+                league_data = {
+                    "name": league.name,
+                    "size": league.size,
+                    "scoring_type": league.scoring_type,
+                    "current_week": league.current_week,
+                }
+                sleeper_service = SleeperService()
+                matchups_data = await sleeper_service.get_matchups(
+                    league.sleeper_league_id, league.current_week or 1
+                )
+            else:
+                espn_service = ESPNService()
 
-            # Get recent matchups for context
-            matchups_data = await espn_service.get_matchups(
-                str(league.espn_league_id),
-                week=None,  # Current week
-                cookies=cookies
-            )
+                # Get ESPN credentials
+                cookies = None
+                if league.espn_s2_encrypted or league.espn_swid_encrypted:
+                    s2 = ESPNCredentialManager.decrypt_espn_s2(league.espn_s2_encrypted) if league.espn_s2_encrypted else None
+                    swid = ESPNCredentialManager.decrypt_espn_swid(league.espn_swid_encrypted) if league.espn_swid_encrypted else None
+                    if s2 or swid:
+                        cookies = ESPNCookies(espn_s2=s2, swid=swid)
+
+                roster_data = await espn_service.get_team_roster(
+                    str(league.espn_league_id),
+                    team.espn_team_id,
+                    cookies=cookies
+                )
+                raw_roster = roster_data.get("roster", [])
+
+                # Get league standings and settings
+                league_data = await espn_service.get_league_info(
+                    str(league.espn_league_id),
+                    cookies=cookies
+                )
+
+                # Get recent matchups for context
+                matchups_data = await espn_service.get_matchups(
+                    str(league.espn_league_id),
+                    week=None,  # Current week
+                    cookies=cookies
+                )
 
             # Prepare data for LLM. Strip the heavy per-player stats blobs and
-            # keep only the fields the model needs — the full stats JSON blows
+            # keep only the fields the model needs: the full stats JSON blows
             # past Groq's free-tier token-per-minute limit.
-            raw_roster = roster_data.get("roster", [])
             roster = [
                 {
                     "full_name": p.get("full_name"),
@@ -127,6 +160,12 @@ async def get_strategic_suggestions(
 
     except HTTPException:
         raise
+    except SleeperError as e:
+        logger.error("Sleeper API error getting team data", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Could not fetch team data from Sleeper: {str(e)}"
+        )
     except ESPNError as e:
         logger.error("ESPN API error", error=str(e))
         raise HTTPException(

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { StrategicSuggestion, SuggestionFilters, League } from '@/types';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -131,7 +131,7 @@ export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
   const [suggestions, setSuggestions] = useState<StrategicSuggestion[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchSuggestions = async () => {
+  const fetchSuggestions = useCallback(async () => {
     if (!userTeamId) {
       setError('No team selected');
       return;
@@ -150,11 +150,11 @@ export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [league.id, userTeamId]);
 
   useEffect(() => {
     fetchSuggestions();
-  }, [league.id, userTeamId]);
+  }, [fetchSuggestions]);
 
   const filteredSuggestions = suggestions.filter(suggestion => {
     if (filters.type && suggestion.type !== filters.type) return false;
