@@ -1,0 +1,19 @@
+# Coverage configuration for the backend test suite.
+[run]
+omit =
+    # Legacy/alternative entry points, not used by app.main (candidates for deletion)
+    app/demo_main.py
+    app/working_main.py
+    # Dead code: defined but never imported by the app (candidates for deletion)
+    app/core/middleware.py
+    app/core/exceptions.py
+    app/core/logging.py
+    # Test and migration scaffolding
+    tests/*
+    alembic/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    raise NotImplementedError

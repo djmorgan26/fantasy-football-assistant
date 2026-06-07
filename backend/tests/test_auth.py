@@ -122,3 +122,65 @@ class TestAuth:
         response = await client.get("/api/auth/me")
         
         assert response.status_code == 401
+
+class TestProfile:
+    @pytest.mark.asyncio
+    async def test_update_full_name(self, client: AsyncClient, auth_headers):
+        resp = await client.put(
+            "/api/auth/me",
+            json={"full_name": "Renamed User"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json()["full_name"] == "Renamed User"
+
+    @pytest.mark.asyncio
+    async def test_change_password(self, client: AsyncClient, auth_headers):
+        resp = await client.put(
+            "/api/auth/me",
+            json={
+                "current_password": "testpassword123",
+                "new_password": "newpassword456",
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+
+        # Old password no longer works; new one does.
+        old = await client.post(
+            "/api/auth/login",
+            json={"email": "fixture-user@example.com", "password": "testpassword123"},
+        )
+        assert old.status_code == 401
+        new = await client.post(
+            "/api/auth/login",
+            json={"email": "fixture-user@example.com", "password": "newpassword456"},
+        )
+        assert new.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_change_password_wrong_current(self, client: AsyncClient, auth_headers):
+        resp = await client.put(
+            "/api/auth/me",
+            json={"current_password": "wrong", "new_password": "newpassword456"},
+            headers=auth_headers,
+        )
+        assert resp.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_expired_token_rejected(self, client: AsyncClient):
+        from datetime import timedelta
+        from app.core.auth import create_access_token
+
+        token = create_access_token({"sub": "1"}, expires_delta=timedelta(minutes=-5))
+        resp = await client.get(
+            "/api/auth/me", headers={"Authorization": f"Bearer {token}"}
+        )
+        assert resp.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_malformed_token_rejected(self, client: AsyncClient):
+        resp = await client.get(
+            "/api/auth/me", headers={"Authorization": "Bearer garbage"}
+        )
+        assert resp.status_code == 401

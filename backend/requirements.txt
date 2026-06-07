@@ -32,6 +32,8 @@ redis==5.0.1
 # Testing
 pytest==7.4.3
 pytest-asyncio==0.21.1
+pytest-cov==7.1.0
+respx==0.23.1
 httpx==0.25.2
 
 # Development

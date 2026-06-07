@@ -25,3 +25,7 @@ build/
 # OS
 .DS_Store
 .vercel
+
+# Coverage artifacts
+.coverage
+htmlcov/
