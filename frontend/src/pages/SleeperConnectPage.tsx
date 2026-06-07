@@ -62,20 +62,20 @@ export const SleeperConnectPage: React.FC = () => {
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+        <h1 className="text-display-sm text-fg mb-2">
           Connect Your Sleeper League
         </h1>
-        <p className="text-gray-600">
+        <p className="text-fg-muted">
           Link your Sleeper fantasy football league to unlock AI-powered insights
         </p>
       </div>
 
       {/* Info Banner */}
-      <Card className="mb-6 bg-blue-50 border-blue-200">
+      <Card className="mb-6 bg-brand/5 border-brand/30">
         <CardContent className="p-4">
           <div className="flex items-start space-x-3">
-            <InformationCircleIcon className="h-6 w-6 text-blue-600 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-blue-900">
+            <InformationCircleIcon className="h-6 w-6 text-brand flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-fg-muted">
               <p className="font-semibold mb-2">How to find your Sleeper information:</p>
               <ol className="list-decimal list-inside space-y-1">
                 <li>Open Sleeper app or visit sleeper.com</li>
@@ -92,7 +92,7 @@ export const SleeperConnectPage: React.FC = () => {
       <Card>
         <CardHeader>
           <div className="flex items-center space-x-2">
-            <LinkIcon className="h-6 w-6 text-primary-600" />
+            <LinkIcon className="h-6 w-6 text-brand" />
             <CardTitle>League Connection</CardTitle>
           </div>
         </CardHeader>
@@ -100,41 +100,43 @@ export const SleeperConnectPage: React.FC = () => {
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             {/* League ID */}
             <div>
-              <label htmlFor="league_id" className="block text-sm font-medium text-gray-700 mb-2">
-                League ID <span className="text-red-500">*</span>
+              <label htmlFor="league_id" className="block text-sm font-medium text-fg mb-2">
+                League ID <span className="text-error-500">*</span>
               </label>
               <Input
                 id="league_id"
+                fullWidth
                 {...register('league_id')}
                 placeholder="e.g., 123456789"
                 error={errors.league_id?.message}
                 disabled={isConnecting}
               />
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-fg-muted">
                 Found in your league URL or league settings
               </p>
             </div>
 
             {/* Sleeper Username/User ID */}
             <div>
-              <label htmlFor="sleeper_user_id" className="block text-sm font-medium text-gray-700 mb-2">
-                Your Sleeper Username or User ID <span className="text-red-500">*</span>
+              <label htmlFor="sleeper_user_id" className="block text-sm font-medium text-fg mb-2">
+                Your Sleeper Username or User ID <span className="text-error-500">*</span>
               </label>
               <Input
                 id="sleeper_user_id"
+                fullWidth
                 {...register('sleeper_user_id')}
                 placeholder="e.g., YourUsername or user_id"
                 error={errors.sleeper_user_id?.message}
                 disabled={isConnecting}
               />
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-fg-muted">
                 Your Sleeper username (visible in your profile)
               </p>
             </div>
 
             {/* Benefits List */}
-            <div className="bg-gray-50 rounded-lg p-4">
-              <p className="text-sm font-semibold text-gray-900 mb-3">
+            <div className="bg-surface-sunken rounded-lg p-4">
+              <p className="text-sm font-semibold text-fg mb-3">
                 What you'll get:
               </p>
               <ul className="space-y-2">
@@ -144,8 +146,8 @@ export const SleeperConnectPage: React.FC = () => {
                   'Live roster and matchup tracking',
                   'Performance insights and trends',
                 ].map((benefit, index) => (
-                  <li key={index} className="flex items-start text-sm text-gray-700">
-                    <CheckCircleIcon className="h-5 w-5 text-green-500 mr-2 flex-shrink-0" />
+                  <li key={index} className="flex items-start text-sm text-fg-muted">
+                    <CheckCircleIcon className="h-5 w-5 text-success-500 mr-2 flex-shrink-0" />
                     <span>{benefit}</span>
                   </li>
                 ))}
@@ -187,7 +189,7 @@ export const SleeperConnectPage: React.FC = () => {
 
       {/* Help Text */}
       <div className="mt-6 text-center">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-fg-muted">
           No API key required - Sleeper data is public and free! 🎉
         </p>
       </div>

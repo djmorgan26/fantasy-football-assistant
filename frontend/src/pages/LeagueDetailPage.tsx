@@ -7,7 +7,11 @@ import { useWaiverBudgets } from '@/hooks/useWaiverBudgets';
 import { useCurrentUser } from '@/hooks/useAuth';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { Modal } from '@/components/ui/Modal';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Skeleton, SkeletonCard } from '@/components/ui/Skeleton';
 import { WeeklyRecap } from '@/components/recap/WeeklyRecap';
 import { MatchupCard } from '@/components/matchups/MatchupCard';
 import { WaiverBudgetCard } from '@/components/budget/WaiverBudgetCard';
@@ -88,28 +92,40 @@ export const LeagueDetailPage: React.FC = () => {
 
   if (leagueLoading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <LoadingSpinner size="lg" className="mt-12" />
+      <div className="container mx-auto max-w-6xl px-4 py-8">
+        <div className="mb-8 space-y-3">
+          <Skeleton className="h-9 w-2/3" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="space-y-6 lg:col-span-2">
+            <SkeletonCard />
+            <SkeletonCard />
+          </div>
+          <div className="space-y-6">
+            <SkeletonCard />
+            <SkeletonCard />
+          </div>
+        </div>
       </div>
     );
   }
 
   if (leagueError || !league) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto max-w-6xl px-4 py-8">
         <Card>
-          <CardContent>
-            <div className="text-center py-12">
-              <ExclamationTriangleIcon className="h-12 w-12 text-red-500 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">League Not Found</h3>
-              <p className="text-gray-600 mb-4">
-                The league you're looking for doesn't exist or you don't have access to it.
-              </p>
+          <EmptyState
+            icon={ExclamationTriangleIcon}
+            variant="error"
+            title="League Not Found"
+            description="The league you're looking for doesn't exist or you don't have access to it."
+            action={
               <Link to="/dashboard">
                 <Button>Back to Dashboard</Button>
               </Link>
-            </div>
-          </CardContent>
+            }
+          />
         </Card>
       </div>
     );
@@ -133,10 +149,10 @@ export const LeagueDetailPage: React.FC = () => {
         
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            <h1 className="text-display-sm text-fg mb-2">
               {league.name}
             </h1>
-            <div className="flex items-center space-x-4 text-sm text-gray-600">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-fg-muted">
               <span className="flex items-center">
                 <UsersIcon className="h-4 w-4 mr-1" />
                 {league.size} teams
@@ -187,23 +203,23 @@ export const LeagueDetailPage: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">{league.size}</div>
-                  <div className="text-sm text-blue-800">Teams</div>
+                <div className="rounded-lg bg-surface-sunken p-4 text-center">
+                  <div className="font-display text-2xl font-bold text-brand tabular">{league.size}</div>
+                  <div className="mt-1 text-sm text-fg-muted">Teams</div>
                 </div>
-                <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">{league.current_week}</div>
-                  <div className="text-sm text-green-800">Current Week</div>
+                <div className="rounded-lg bg-surface-sunken p-4 text-center">
+                  <div className="font-display text-2xl font-bold text-brand tabular">{league.current_week}</div>
+                  <div className="mt-1 text-sm text-fg-muted">Current Week</div>
                 </div>
-                <div className="text-center p-4 bg-purple-50 rounded-lg">
-                  <div className="text-2xl font-bold text-purple-600">{league.season_year}</div>
-                  <div className="text-sm text-purple-800">Season</div>
+                <div className="rounded-lg bg-surface-sunken p-4 text-center">
+                  <div className="font-display text-2xl font-bold text-brand tabular">{league.season_year}</div>
+                  <div className="mt-1 text-sm text-fg-muted">Season</div>
                 </div>
-                <div className="text-center p-4 bg-orange-50 rounded-lg">
-                  <div className="text-2xl font-bold text-orange-600">
+                <div className="rounded-lg bg-surface-sunken p-4 text-center">
+                  <div className="font-display text-2xl font-bold text-brand">
                     {league.is_public ? 'Public' : 'Private'}
                   </div>
-                  <div className="text-sm text-orange-800">League Type</div>
+                  <div className="mt-1 text-sm text-fg-muted">League Type</div>
                 </div>
               </div>
             </CardContent>
@@ -240,9 +256,11 @@ export const LeagueDetailPage: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-gray-600">
-                  No matchups available for this week
-                </div>
+                <EmptyState
+                  icon={TrophyIcon}
+                  title="No matchups available"
+                  description="There are no matchups for this week yet."
+                />
               )}
             </CardContent>
           </Card>
@@ -271,9 +289,11 @@ export const LeagueDetailPage: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-gray-600">
-                  No budget information available
-                </div>
+                <EmptyState
+                  icon={ChartBarIcon}
+                  title="No budget information"
+                  description="Waiver budget data isn't available for this league yet."
+                />
               )}
             </CardContent>
           </Card>
@@ -290,7 +310,7 @@ export const LeagueDetailPage: React.FC = () => {
               <CardTitle className="flex items-center">
                 <UsersIcon className="h-5 w-5 mr-2" />
                 Teams
-                {teams && <span className="ml-2 text-sm font-normal text-gray-500">({teams.length})</span>}
+                {teams && <span className="ml-2 text-sm font-normal text-fg-muted">({teams.length})</span>}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -299,9 +319,12 @@ export const LeagueDetailPage: React.FC = () => {
                   <LoadingSpinner size="sm" />
                 </div>
               ) : teamsError ? (
-                <div className="text-center py-8 text-gray-600">
-                  Failed to load teams
-                </div>
+                <EmptyState
+                  icon={UsersIcon}
+                  variant="error"
+                  title="Failed to load teams"
+                  description="We couldn't load the teams for this league. Try syncing again."
+                />
               ) : teams && teams.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {teams.map((team) => (
@@ -310,60 +333,63 @@ export const LeagueDetailPage: React.FC = () => {
                       to={`/leagues/${leagueId}/teams/${team.id}`}
                       className="block"
                     >
-                      <div className="p-4 border rounded-lg hover:bg-gray-50 hover:shadow-md transition-all cursor-pointer border-l-4 border-l-blue-500">
+                      <div className="rounded-lg border border-border border-l-4 border-l-brand bg-surface-raised p-4 transition-all hover:bg-surface-sunken hover:shadow-elevation-3">
                         <div className="flex items-center space-x-4">
                           {/* Team Logo */}
                           <div className="flex-shrink-0">
                             <img
                               src={team.logo_url}
                               alt={`${team.name || team.abbreviation} logo`}
-                              className="w-12 h-12 rounded-full object-cover bg-gray-100"
+                              className="w-12 h-12 rounded-full object-cover bg-surface-sunken"
                               onError={(e) => {
                                 const target = e.target as HTMLImageElement;
                                 target.style.display = 'none';
                               }}
                             />
-                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-brand to-primary-700 flex items-center justify-center text-brand-fg font-bold text-sm">
                               {team.abbreviation || team.name?.charAt(0) || '?'}
                             </div>
                           </div>
-                          
+
                           {/* Team Info */}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between">
                               <div>
-                                <h4 className="font-semibold text-gray-900 text-lg">
+                                <h4 className="font-semibold text-fg text-lg">
                                   {team.name || `Team ${team.abbreviation}`}
                                 </h4>
-                                <p className="text-sm text-gray-500 mb-1">
+                                <p className="text-sm text-fg-muted mb-1">
                                   {team.abbreviation}
                                 </p>
                                 <div className="flex items-center space-x-3 text-sm">
-                                  <span className="font-medium text-gray-900">
+                                  <span className="font-medium text-fg tabular">
                                     {team.wins}-{team.losses}
                                     {team.ties > 0 && `-${team.ties}`}
                                   </span>
-                                  <span className="text-green-600 font-medium">
+                                  <span className="text-success-600 font-medium tabular">
                                     {team.points_for.toFixed(1)} PF
                                   </span>
-                                  <span className="text-red-500">
+                                  <span className="text-error-500 tabular">
                                     {team.points_against.toFixed(1)} PA
                                   </span>
                                 </div>
                               </div>
-                              
+
                               {/* Record Badge */}
                               <div className="text-right">
-                                <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                  team.wins > team.losses 
-                                    ? 'bg-green-100 text-green-800'
-                                    : team.wins < team.losses
-                                    ? 'bg-red-100 text-red-800'
-                                    : 'bg-gray-100 text-gray-800'
-                                }`}>
+                                <Badge
+                                  size="sm"
+                                  variant={
+                                    team.wins > team.losses
+                                      ? 'success'
+                                      : team.wins < team.losses
+                                      ? 'error'
+                                      : 'default'
+                                  }
+                                >
                                   {team.wins > team.losses ? 'Winning' : team.wins < team.losses ? 'Losing' : 'Tied'}
-                                </div>
-                                <div className="text-xs text-gray-500 mt-1">
+                                </Badge>
+                                <div className="text-xs text-fg-muted mt-1">
                                   Click to view roster
                                 </div>
                               </div>
@@ -375,9 +401,17 @@ export const LeagueDetailPage: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-gray-600">
-                  No teams found. Try syncing your league data.
-                </div>
+                <EmptyState
+                  icon={UsersIcon}
+                  title="No teams found"
+                  description="Try syncing your league data to load teams."
+                  action={
+                    <Button size="sm" variant="secondary" onClick={handleSync} disabled={syncLeague.isLoading}>
+                      <CogIcon className="h-4 w-4 mr-2" />
+                      {syncLeague.isLoading ? 'Syncing...' : 'Sync Data'}
+                    </Button>
+                  }
+                />
               )}
             </CardContent>
           </Card>
@@ -443,29 +477,29 @@ export const LeagueDetailPage: React.FC = () => {
             <CardContent>
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">ESPN League ID:</span>
-                  <span className="font-mono">{league.espn_league_id}</span>
+                  <span className="text-fg-muted">ESPN League ID:</span>
+                  <span className="font-mono text-fg tabular">{league.espn_league_id}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Your Team:</span>
-                  <span className={userTeam ? "text-blue-600 font-medium" : "text-gray-400"}>
+                  <span className="text-fg-muted">Your Team:</span>
+                  <span className={userTeam ? "text-brand font-medium" : "text-fg-subtle"}>
                     {userTeam ? userTeam.name : 'Not selected'}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Connected:</span>
-                  <span>{formatDate(league.created_at)}</span>
+                  <span className="text-fg-muted">Connected:</span>
+                  <span className="text-fg">{formatDate(league.created_at)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Last Synced:</span>
-                  <span>
+                  <span className="text-fg-muted">Last Synced:</span>
+                  <span className="text-fg">
                     {league.last_synced ? formatDate(league.last_synced) : 'Never'}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Status:</span>
-                  <span className="flex items-center">
-                    <ShieldCheckIcon className="h-4 w-4 text-green-500 mr-1" />
+                  <span className="text-fg-muted">Status:</span>
+                  <span className="flex items-center text-fg">
+                    <ShieldCheckIcon className="h-4 w-4 text-success-500 mr-1" />
                     {league.is_active ? 'Active' : 'Inactive'}
                   </span>
                 </div>
@@ -476,47 +510,45 @@ export const LeagueDetailPage: React.FC = () => {
       </div>
 
       {/* Disconnect Modal */}
-      {showDisconnectModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <Card className="max-w-md w-full">
-            <CardHeader>
-              <CardTitle className="text-red-600 flex items-center">
-                <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
-                Disconnect League
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 mb-6">
-                Are you sure you want to disconnect "{league.name}"? This will remove all associated data and cannot be undone.
-              </p>
-              <div className="flex space-x-3">
-                <Button
-                  variant="danger"
-                  onClick={handleDisconnect}
-                  disabled={disconnectLeague.isLoading}
-                  className="flex-1"
-                >
-                  {disconnectLeague.isLoading ? (
-                    <>
-                      <LoadingSpinner size="sm" className="mr-2" />
-                      Disconnecting...
-                    </>
-                  ) : (
-                    'Disconnect'
-                  )}
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => setShowDisconnectModal(false)}
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      <Modal
+        isOpen={showDisconnectModal}
+        onClose={() => setShowDisconnectModal(false)}
+        size="sm"
+        title={
+          <span className="flex items-center text-error-600">
+            <ExclamationTriangleIcon className="h-5 w-5 mr-2" />
+            Disconnect League
+          </span>
+        }
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => setShowDisconnectModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDisconnect}
+              disabled={disconnectLeague.isLoading}
+            >
+              {disconnectLeague.isLoading ? (
+                <>
+                  <LoadingSpinner size="sm" className="mr-2" />
+                  Disconnecting...
+                </>
+              ) : (
+                'Disconnect'
+              )}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-fg-muted">
+          Are you sure you want to disconnect "{league.name}"? This will remove all associated data and cannot be undone.
+        </p>
+      </Modal>
 
       {/* Team Selection Modal */}
       <TeamSelectionModal

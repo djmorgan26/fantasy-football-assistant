@@ -39,30 +39,32 @@ export const MatchupCard: React.FC<MatchupCardProps> = ({
     if (matchup.winner === 'UNDECIDED') return '';
     
     if (isWinner) {
-      return isUser ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200';
+      return isUser
+        ? 'bg-success-50 border-success-200 dark:bg-success-900/20 dark:border-success-800'
+        : 'bg-brand/5 border-brand/30';
     }
-    return 'bg-gray-50 border-gray-200 opacity-75';
+    return 'bg-surface-sunken border-border opacity-75';
   };
 
   return (
     <Card className={cn(
       'overflow-hidden transition-all duration-200',
-      userIsPlaying && 'ring-2 ring-primary-200',
-      matchup.is_playoff && 'border-yellow-300 bg-yellow-50',
+      userIsPlaying && 'ring-2 ring-brand',
+      matchup.is_playoff && 'border-warning-300 bg-warning-50 dark:bg-warning-900/20',
       className
     )}>
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium text-gray-600">
+          <span className="text-sm font-medium text-fg-muted tabular">
             Week {matchup.week}
             {matchup.is_playoff && (
-              <span className="ml-2 px-2 py-1 text-xs bg-yellow-200 text-yellow-800 rounded-full">
+              <span className="ml-2 px-2 py-1 text-xs bg-warning-100 text-warning-800 dark:bg-warning-900/40 dark:text-warning-300 rounded-full">
                 Playoff
               </span>
             )}
           </span>
           {userIsPlaying && (
-            <span className="text-xs px-2 py-1 bg-primary-100 text-primary-800 rounded-full">
+            <span className="text-xs px-2 py-1 bg-brand/10 text-brand rounded-full">
               Your Matchup
             </span>
           )}
@@ -77,17 +79,17 @@ export const MatchupCard: React.FC<MatchupCardProps> = ({
             <div className="flex items-center space-x-3">
               <div className="flex items-center space-x-2">
                 {awayFavorite && (
-                  <StarIcon className="h-4 w-4 text-yellow-500" />
+                  <StarIcon className="h-4 w-4 text-warning-500" />
                 )}
                 <div className="flex flex-col">
                   <span className={cn(
-                    'font-medium text-sm',
-                    isUserAway && 'text-primary-700',
+                    'font-medium text-sm text-fg',
+                    isUserAway && 'text-brand',
                     matchup.winner === 'AWAY' && 'font-bold'
                   )}>
                     {awayTeamName}
                   </span>
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs text-fg-subtle tabular">
                     {awayProjected > 0 ? `Proj: ${awayProjected.toFixed(1)}` : 'No projection'}
                   </span>
                 </div>
@@ -95,19 +97,19 @@ export const MatchupCard: React.FC<MatchupCardProps> = ({
             </div>
             <div className="text-right">
               <div className={cn(
-                'text-lg font-bold',
-                isUserAway && 'text-primary-700',
-                matchup.winner === 'AWAY' && 'text-green-600'
+                'text-lg font-bold tabular text-fg',
+                isUserAway && 'text-brand',
+                matchup.winner === 'AWAY' && 'text-success-600'
               )}>
                 {matchup.away_score.toFixed(1)}
               </div>
-              <div className="text-xs text-gray-500">Actual</div>
+              <div className="text-xs text-fg-subtle">Actual</div>
             </div>
           </div>
 
           {/* VS Divider */}
           <div className="text-center">
-            <span className="text-xs text-gray-400 bg-white px-2 py-1 rounded border">
+            <span className="text-xs text-fg-subtle bg-surface-raised px-2 py-1 rounded border border-border">
               VS
             </span>
           </div>
@@ -120,17 +122,17 @@ export const MatchupCard: React.FC<MatchupCardProps> = ({
             <div className="flex items-center space-x-3">
               <div className="flex items-center space-x-2">
                 {homeFavorite && (
-                  <StarIcon className="h-4 w-4 text-yellow-500" />
+                  <StarIcon className="h-4 w-4 text-warning-500" />
                 )}
                 <div className="flex flex-col">
                   <span className={cn(
-                    'font-medium text-sm',
-                    isUserHome && 'text-primary-700',
+                    'font-medium text-sm text-fg',
+                    isUserHome && 'text-brand',
                     matchup.winner === 'HOME' && 'font-bold'
                   )}>
                     {homeTeamName}
                   </span>
-                  <span className="text-xs text-gray-500">
+                  <span className="text-xs text-fg-subtle tabular">
                     {homeProjected > 0 ? `Proj: ${homeProjected.toFixed(1)}` : 'No projection'}
                   </span>
                 </div>
@@ -138,24 +140,24 @@ export const MatchupCard: React.FC<MatchupCardProps> = ({
             </div>
             <div className="text-right">
               <div className={cn(
-                'text-lg font-bold',
-                isUserHome && 'text-primary-700',
-                matchup.winner === 'HOME' && 'text-green-600'
+                'text-lg font-bold tabular text-fg',
+                isUserHome && 'text-brand',
+                matchup.winner === 'HOME' && 'text-success-600'
               )}>
                 {matchup.home_score.toFixed(1)}
               </div>
-              <div className="text-xs text-gray-500">Actual</div>
+              <div className="text-xs text-fg-subtle">Actual</div>
             </div>
           </div>
         </div>
 
         {/* Result Summary */}
         {matchup.winner !== 'UNDECIDED' && (
-          <div className="mt-3 pt-3 border-t border-gray-200">
+          <div className="mt-3 pt-3 border-t border-border">
             <div className="text-center">
               <span className={cn(
                 'text-xs font-medium',
-                matchup.winner === 'TIE' ? 'text-yellow-600' : 'text-gray-600'
+                matchup.winner === 'TIE' ? 'text-warning-600' : 'text-fg-muted'
               )}>
                 {matchup.winner === 'TIE' 
                   ? 'Tied Game' 

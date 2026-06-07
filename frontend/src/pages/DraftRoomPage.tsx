@@ -3,9 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useLeague } from '@/hooks/useLeagues';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { Tabs } from '@/components/ui/Tabs';
 import { ValueBoard } from '@/components/draft/ValueBoard';
 import { LiveAssistant } from '@/components/draft/LiveAssistant';
-import { cn } from '@/utils';
 import {
   ArrowLeftIcon,
   TableCellsIcon,
@@ -42,49 +42,25 @@ export const DraftRoomPage: React.FC = () => {
       </Button>
 
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Draft Room</h1>
-        <p className="text-gray-600 mt-1">
+        <h1 className="text-3xl font-bold text-fg">Draft Room</h1>
+        <p className="text-fg-muted mt-1">
           {league?.name} · rankings tuned to your league's scoring
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6 border-b border-gray-200">
-        <TabButton
-          active={tab === 'board'}
-          onClick={() => setTab('board')}
-          icon={<TableCellsIcon className="h-5 w-5" />}
-          label="Big Board"
-        />
-        <TabButton
-          active={tab === 'live'}
-          onClick={() => setTab('live')}
-          icon={<BoltIcon className="h-5 w-5" />}
-          label="Live Draft"
-        />
-      </div>
+      <Tabs
+        className="mb-6"
+        aria-label="Draft views"
+        value={tab}
+        onChange={(key) => setTab(key as Tab)}
+        tabs={[
+          { key: 'board', label: 'Big Board', icon: TableCellsIcon },
+          { key: 'live', label: 'Live Draft', icon: BoltIcon },
+        ]}
+      />
 
       {tab === 'board' ? <ValueBoard leagueId={id} /> : <LiveAssistant leagueId={id} />}
     </div>
   );
 };
-
-const TabButton: React.FC<{
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-}> = ({ active, onClick, icon, label }) => (
-  <button
-    onClick={onClick}
-    className={cn(
-      'flex items-center gap-2 px-4 py-2.5 font-medium text-sm border-b-2 -mb-px transition-colors',
-      active
-        ? 'border-primary-600 text-primary-600'
-        : 'border-transparent text-gray-500 hover:text-gray-700'
-    )}
-  >
-    {icon}
-    {label}
-  </button>
-);

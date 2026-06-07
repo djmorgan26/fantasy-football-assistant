@@ -17,9 +17,9 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
   };
   
   return (
-    <div className={cn('flex justify-center items-center', className)}>
+    <div className={cn('flex justify-center items-center', className)} role="status" aria-label="Loading">
       <svg
-        className={cn('animate-spin text-primary-600', sizes[size])}
+        className={cn('animate-spin text-brand', sizes[size])}
         xmlns="http://www.w3.org/2000/svg"
         fill="none"
         viewBox="0 0 24 24"
@@ -52,7 +52,7 @@ export const LoadingPage: React.FC<LoadingPageProps> = ({
   return (
     <div className="flex flex-col items-center justify-center min-h-64 space-y-4">
       <LoadingSpinner size="lg" />
-      <p className="text-gray-600">{message}</p>
+      <p className="text-fg-muted">{message}</p>
     </div>
   );
 };

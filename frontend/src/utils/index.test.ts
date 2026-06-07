@@ -54,8 +54,14 @@ describe('getPositionColor', () => {
     expect(getPositionColor('rb')).toContain('green');
     expect(getPositionColor('D/ST')).toContain('gray');
   });
-  it('falls back for unknown positions', () => {
-    expect(getPositionColor('XX')).toContain('gray');
+  it('treats all defense spellings as neutral', () => {
+    const neutral = getPositionColor('D/ST');
+    expect(getPositionColor('DEF')).toBe(neutral);
+    expect(getPositionColor('DST')).toBe(neutral);
+  });
+  it('falls back to the neutral token for unknown/empty positions', () => {
+    expect(getPositionColor('XX')).toContain('surface-sunken');
+    expect(getPositionColor('')).toContain('surface-sunken');
   });
 });
 

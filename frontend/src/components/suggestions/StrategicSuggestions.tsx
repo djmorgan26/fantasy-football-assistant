@@ -4,6 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { EmptyState } from '@/components/ui/EmptyState';
 import {
   LightBulbIcon,
   FunnelIcon,
@@ -52,10 +53,10 @@ const SuggestionCard: React.FC<{ suggestion: StrategicSuggestion }> = ({ suggest
   };
 
   return (
-    <Card className="hover:shadow-md transition-shadow duration-200">
+    <Card className="hover:shadow-elevation-3 transition-shadow duration-200">
       <CardContent className="p-4">
         <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 text-fg-muted">
             {getTypeIcon(suggestion.type)}
             <Badge variant={getPriorityColor(suggestion.priority)} size="sm">
               {suggestion.priority.toUpperCase()}
@@ -65,40 +66,40 @@ const SuggestionCard: React.FC<{ suggestion: StrategicSuggestion }> = ({ suggest
             </Badge>
           </div>
           <div className="text-right">
-            <div className="text-sm text-gray-600">Confidence</div>
-            <div className="font-bold text-primary-600">
+            <div className="text-sm text-fg-muted">Confidence</div>
+            <div className="font-bold text-brand tabular">
               {Math.round(suggestion.confidence_score * 100)}%
             </div>
           </div>
         </div>
 
-        <h3 className="font-semibold text-lg mb-2">{suggestion.title}</h3>
-        <p className="text-gray-600 mb-3">{suggestion.description}</p>
-        
+        <h3 className="font-semibold text-lg mb-2 text-fg">{suggestion.title}</h3>
+        <p className="text-fg-muted mb-3">{suggestion.description}</p>
+
         <div className="space-y-2">
           <div>
-            <span className="text-sm font-medium text-gray-700">Reasoning:</span>
-            <p className="text-sm text-gray-600">{suggestion.reasoning}</p>
+            <span className="text-sm font-medium text-fg">Reasoning:</span>
+            <p className="text-sm text-fg-muted">{suggestion.reasoning}</p>
           </div>
-          
+
           <div>
-            <span className="text-sm font-medium text-gray-700">Potential Impact:</span>
-            <p className="text-sm text-gray-600">{suggestion.potential_impact}</p>
+            <span className="text-sm font-medium text-fg">Potential Impact:</span>
+            <p className="text-sm text-fg-muted">{suggestion.potential_impact}</p>
           </div>
 
           {suggestion.action_details && (
-            <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-              <div className="text-sm font-medium text-gray-700 mb-2">Action Details:</div>
-              <div className="space-y-1 text-sm">
+            <div className="mt-3 p-3 bg-surface-sunken rounded-lg">
+              <div className="text-sm font-medium text-fg mb-2">Action Details:</div>
+              <div className="space-y-1 text-sm text-fg-muted">
                 {suggestion.action_details.player_name && (
-                  <div>Target: <span className="font-medium">{suggestion.action_details.player_name}</span></div>
+                  <div>Target: <span className="font-medium text-fg">{suggestion.action_details.player_name}</span></div>
                 )}
                 {suggestion.action_details.suggested_bid && (
-                  <div>Suggested Bid: <span className="font-medium">${suggestion.action_details.suggested_bid}</span></div>
+                  <div>Suggested Bid: <span className="font-medium text-fg tabular">${suggestion.action_details.suggested_bid}</span></div>
                 )}
                 {suggestion.action_details.lineup_changes && (
                   <div>
-                    <div className="font-medium">Lineup Changes:</div>
+                    <div className="font-medium text-fg">Lineup Changes:</div>
                     {Object.entries(suggestion.action_details.lineup_changes).map(([position, change]) => (
                       <div key={position} className="ml-2">
                         {position}: {change}
@@ -111,7 +112,7 @@ const SuggestionCard: React.FC<{ suggestion: StrategicSuggestion }> = ({ suggest
           )}
 
           {suggestion.context?.budget_remaining && (
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-fg-subtle tabular">
               Budget Remaining: ${suggestion.context.budget_remaining}
             </div>
           )}
@@ -174,14 +175,14 @@ export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <LightBulbIcon className="h-6 w-6 text-primary-600" />
+            <LightBulbIcon className="h-6 w-6 text-brand" />
             <CardTitle>Strategic Suggestions</CardTitle>
           </div>
           <Badge variant="secondary" size="sm">
             {filteredSuggestions.length} suggestions
           </Badge>
         </div>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-fg-muted">
           AI-powered recommendations to improve your team performance
         </p>
       </CardHeader>
@@ -190,14 +191,14 @@ export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
         {/* Filters */}
         <div className="flex flex-wrap gap-3">
           <div className="flex items-center space-x-2">
-            <FunnelIcon className="h-4 w-4 text-gray-400" />
-            <span className="text-sm font-medium text-gray-700">Filters:</span>
+            <FunnelIcon className="h-4 w-4 text-fg-subtle" />
+            <span className="text-sm font-medium text-fg">Filters:</span>
           </div>
-          
+
           <select
             value={filters.type || 'all'}
             onChange={(e) => handleFilterChange('type', e.target.value)}
-            className="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="px-3 py-1 border border-border rounded text-sm bg-surface-raised text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="all">All Types</option>
             <option value="pickup">Pickup</option>
@@ -209,7 +210,7 @@ export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
           <select
             value={filters.priority || 'all'}
             onChange={(e) => handleFilterChange('priority', e.target.value)}
-            className="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="px-3 py-1 border border-border rounded text-sm bg-surface-raised text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="all">All Priorities</option>
             <option value="high">High Priority</option>
@@ -220,16 +221,17 @@ export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
 
         {/* Suggestions List */}
         {error ? (
-          <div className="text-center py-8">
-            <ExclamationTriangleIcon className="h-12 w-12 text-orange-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Unable to Load Suggestions
-            </h3>
-            <p className="text-gray-600 mb-4">{error}</p>
-            <Button variant="secondary" size="sm" onClick={fetchSuggestions}>
-              Try Again
-            </Button>
-          </div>
+          <EmptyState
+            icon={ExclamationTriangleIcon}
+            variant="error"
+            title="Unable to Load Suggestions"
+            description={error}
+            action={
+              <Button variant="secondary" size="sm" onClick={fetchSuggestions}>
+                Try Again
+              </Button>
+            }
+          />
         ) : isLoading ? (
           <div className="flex justify-center py-8">
             <LoadingSpinner size="lg" />
@@ -241,30 +243,22 @@ export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
             ))}
           </div>
         ) : suggestions.length === 0 ? (
-          <div className="text-center py-8">
-            <LightBulbIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              No suggestions available
-            </h3>
-            <p className="text-gray-600">
-              Check back later for AI-powered recommendations.
-            </p>
-          </div>
+          <EmptyState
+            icon={LightBulbIcon}
+            title="No suggestions available"
+            description="Check back later for AI-powered recommendations."
+          />
         ) : (
-          <div className="text-center py-8">
-            <LightBulbIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              No suggestions match your filters
-            </h3>
-            <p className="text-gray-600">
-              Try adjusting your filters to see more recommendations.
-            </p>
-          </div>
+          <EmptyState
+            icon={LightBulbIcon}
+            title="No suggestions match your filters"
+            description="Try adjusting your filters to see more recommendations."
+          />
         )}
 
         {/* Refresh Button */}
         {!error && (
-          <div className="flex justify-center pt-4 border-t border-gray-200">
+          <div className="flex justify-center pt-4 border-t border-border">
             <Button
               variant="secondary"
               size="sm"

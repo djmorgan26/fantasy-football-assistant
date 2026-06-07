@@ -3,9 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useDraftAssist, useDraftAdvice } from '@/hooks/useDraft';
 import { DraftAdvice, DraftPickRecommendation } from '@/types';
-import { cn } from '@/utils';
+import { cn, getPositionColor } from '@/utils';
 import {
   BoltIcon,
   SparklesIcon,
@@ -13,15 +14,6 @@ import {
   ExclamationTriangleIcon,
   FireIcon,
 } from '@heroicons/react/24/outline';
-
-const POSITION_COLORS: Record<string, string> = {
-  QB: 'bg-red-100 text-red-800',
-  RB: 'bg-green-100 text-green-800',
-  WR: 'bg-blue-100 text-blue-800',
-  TE: 'bg-orange-100 text-orange-800',
-  K: 'bg-purple-100 text-purple-800',
-  DEF: 'bg-gray-200 text-gray-800',
-};
 
 interface LiveAssistantProps {
   leagueId: number;
@@ -49,16 +41,14 @@ export const LiveAssistant: React.FC<LiveAssistantProps> = ({ leagueId }) => {
   if (error || !data) {
     return (
       <Card>
-        <CardContent>
-          <div className="text-center py-12">
-            <ExclamationTriangleIcon className="h-10 w-10 text-yellow-500 mx-auto mb-3" />
-            <p className="text-gray-700 font-medium">No active draft found</p>
-            <p className="text-sm text-gray-500 mt-1">
-              {error?.detail ||
-                "We couldn't find a draft for this league yet. Once your Sleeper draft is created, recommendations will appear here live."}
-            </p>
-          </div>
-        </CardContent>
+        <EmptyState
+          icon={ExclamationTriangleIcon}
+          title="No active draft found"
+          description={
+            error?.detail ||
+            "We couldn't find a draft for this league yet. Once your Sleeper draft is created, recommendations will appear here live."
+          }
+        />
       </Card>
     );
   }
@@ -68,7 +58,7 @@ export const LiveAssistant: React.FC<LiveAssistantProps> = ({ leagueId }) => {
   return (
     <div className="space-y-5">
       {data.live_pick_tracking === false && data.note && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+        <div className="rounded-lg border border-border bg-surface-sunken p-3 text-sm text-fg-muted">
           {data.note}
         </div>
       )}
@@ -76,7 +66,7 @@ export const LiveAssistant: React.FC<LiveAssistantProps> = ({ leagueId }) => {
       {/* Status bar */}
       <Card
         className={cn(
-          data.on_the_clock && 'ring-2 ring-primary-500 bg-primary-50 border-primary-200'
+          data.on_the_clock && 'ring-2 ring-accent bg-accent/10 border-accent'
         )}
       >
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -84,7 +74,7 @@ export const LiveAssistant: React.FC<LiveAssistantProps> = ({ leagueId }) => {
             <Stat label="Round" value={data.round ?? '—'} />
             <Stat label="Pick" value={data.current_pick ?? '—'} />
             {data.on_the_clock ? (
-              <div className="flex items-center text-primary-700 font-bold text-lg">
+              <div className="flex items-center text-accent font-bold text-lg">
                 <BoltIcon className="h-6 w-6 mr-1.5" />
                 YOU'RE ON THE CLOCK
               </div>
@@ -105,13 +95,13 @@ export const LiveAssistant: React.FC<LiveAssistantProps> = ({ leagueId }) => {
               onClick={() => setLive((v) => !v)}
               className={cn(
                 'inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium transition-colors',
-                live ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                live ? 'bg-success-100 text-success-800' : 'bg-surface-sunken text-fg-muted'
               )}
             >
               <span
                 className={cn(
                   'h-2 w-2 rounded-full mr-2',
-                  live ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+                  live ? 'bg-success-500 animate-pulse' : 'bg-fg-subtle'
                 )}
               />
               {live ? 'Live' : 'Paused'}
@@ -123,9 +113,9 @@ export const LiveAssistant: React.FC<LiveAssistantProps> = ({ leagueId }) => {
         </div>
 
         {runs.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-200 flex items-center flex-wrap gap-2">
-            <span className="flex items-center text-sm font-medium text-gray-600">
-              <FireIcon className="h-4 w-4 mr-1 text-orange-500" />
+          <div className="mt-4 pt-4 border-t border-border flex items-center flex-wrap gap-2">
+            <span className="flex items-center text-sm font-medium text-fg-muted">
+              <FireIcon className="h-4 w-4 mr-1 text-accent" />
               Position run:
             </span>
             {runs.map(([pos, n]) => (
@@ -155,11 +145,13 @@ export const LiveAssistant: React.FC<LiveAssistantProps> = ({ leagueId }) => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {advice && <AdvicePanel advice={advice} />}
-              <div className="space-y-2">
-                {data.recommendations.map((p, i) => (
-                  <RecommendationRow key={p.player_id} player={p} rank={i + 1} />
-                ))}
+              <div aria-live="polite">
+                {advice && <AdvicePanel advice={advice} />}
+                <div className="space-y-2">
+                  {data.recommendations.map((p, i) => (
+                    <RecommendationRow key={p.player_id} player={p} rank={i + 1} />
+                  ))}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -180,7 +172,7 @@ export const LiveAssistant: React.FC<LiveAssistantProps> = ({ leagueId }) => {
                       key={pos}
                       className={cn(
                         'inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold',
-                        POSITION_COLORS[pos] || 'bg-gray-100 text-gray-700'
+                        getPositionColor(pos)
                       )}
                     >
                       {pos} {n}
@@ -188,13 +180,13 @@ export const LiveAssistant: React.FC<LiveAssistantProps> = ({ leagueId }) => {
                   ))}
               </div>
               {data.user_roster.length === 0 ? (
-                <p className="text-sm text-gray-500">No picks yet.</p>
+                <p className="text-sm text-fg-muted">No picks yet.</p>
               ) : (
                 <ul className="space-y-1.5 text-sm">
                   {data.user_roster.map((pick, idx) => (
                     <li key={idx} className="flex items-center justify-between">
-                      <span className="text-gray-900">{pick.name || 'Unknown'}</span>
-                      <span className="text-gray-400">
+                      <span className="text-fg">{pick.name || 'Unknown'}</span>
+                      <span className="text-fg-subtle tabular">
                         {pick.position} {pick.round ? `· R${pick.round}` : ''}
                       </span>
                     </li>
@@ -211,8 +203,8 @@ export const LiveAssistant: React.FC<LiveAssistantProps> = ({ leagueId }) => {
 
 const Stat: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
   <div>
-    <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
-    <div className="text-lg font-bold text-gray-900">{value}</div>
+    <div className="text-xs uppercase tracking-wide text-fg-muted">{label}</div>
+    <div className="text-lg font-bold text-fg tabular">{value}</div>
   </div>
 );
 
@@ -220,19 +212,19 @@ const RecommendationRow: React.FC<{ player: DraftPickRecommendation; rank: numbe
   player,
   rank,
 }) => (
-  <div className="flex items-center gap-3 p-2.5 rounded-lg border border-gray-100 hover:bg-gray-50">
-    <span className="w-6 text-center text-sm font-semibold text-gray-400">{rank}</span>
+  <div className="flex items-center gap-3 p-2.5 rounded-lg border border-border hover:bg-surface-sunken">
+    <span className="w-6 text-center text-sm font-semibold text-fg-subtle tabular">{rank}</span>
     <span
       className={cn(
         'inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold',
-        POSITION_COLORS[player.position] || 'bg-gray-100 text-gray-700'
+        getPositionColor(player.position)
       )}
     >
       {player.position}
     </span>
     <div className="flex-1 min-w-0">
       <div className="flex items-center gap-2">
-        <span className="font-medium text-gray-900 truncate">{player.name}</span>
+        <span className="font-medium text-fg truncate">{player.name}</span>
         {player.is_value && (
           <Badge variant="success" size="sm">
             VALUE
@@ -244,34 +236,34 @@ const RecommendationRow: React.FC<{ player: DraftPickRecommendation; rank: numbe
           </Badge>
         )}
       </div>
-      <div className="text-xs text-gray-500">
+      <div className="text-xs text-fg-muted tabular">
         {player.team || 'FA'} · {player.projected_points.toFixed(1)} proj
         {player.adp ? ` · ADP ${player.adp}` : ''}
       </div>
     </div>
     <div className="text-right">
-      <div className="text-sm font-bold text-green-600">
+      <div className="text-sm font-bold text-success-600 tabular">
         {(player.pick_score ?? player.vbd).toFixed(0)}
       </div>
-      <div className="text-[10px] uppercase tracking-wide text-gray-400">score</div>
+      <div className="text-[10px] uppercase tracking-wide text-fg-subtle">score</div>
     </div>
   </div>
 );
 
 const AdvicePanel: React.FC<{ advice: DraftAdvice }> = ({ advice }) => (
-  <div className="mb-4 p-4 rounded-lg bg-gradient-to-br from-primary-50 to-purple-50 border border-primary-100">
-    <div className="flex items-center text-primary-700 font-semibold mb-1">
+  <div className="mb-4 p-4 rounded-lg bg-brand/10 border border-brand/20">
+    <div className="flex items-center text-brand font-semibold mb-1">
       <SparklesIcon className="h-4 w-4 mr-1.5" />
       AI recommends: {advice.recommended_player || '—'}
     </div>
-    <p className="text-sm text-gray-700">{advice.reasoning}</p>
+    <p className="text-sm text-fg">{advice.reasoning}</p>
     {advice.alternatives?.length > 0 && (
-      <p className="text-xs text-gray-500 mt-2">
+      <p className="text-xs text-fg-muted mt-2">
         Alternatives: {advice.alternatives.join(', ')}
       </p>
     )}
     {advice.strategy_note && (
-      <p className="text-xs text-gray-600 mt-1 italic">{advice.strategy_note}</p>
+      <p className="text-xs text-fg-muted mt-1 italic">{advice.strategy_note}</p>
     )}
   </div>
 );

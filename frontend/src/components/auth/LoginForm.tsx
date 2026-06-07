@@ -62,9 +62,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
       </CardHeader>
       <CardContent>
         {meta?.mock_mode && meta.demo_credentials && (
-          <div className="mb-5 rounded-lg border border-amber-300 bg-amber-50 p-4">
-            <p className="text-sm font-semibold text-amber-800">Demo / Mock Mode</p>
-            <p className="mt-1 text-xs text-amber-700">
+          <div className="mb-5 rounded-lg border border-warning-300 bg-warning-50 p-4 dark:bg-warning-900/20">
+            <p className="text-sm font-semibold text-warning-800 dark:text-warning-300">Demo / Mock Mode</p>
+            <p className="mt-1 text-xs text-warning-700 dark:text-warning-300/90">
               This instance runs on realistic sample data with no external accounts.
               Use the demo account to explore the Draft Room and Press Box.
             </p>
@@ -77,7 +77,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
             >
               Use demo account
             </Button>
-            <p className="mt-2 text-center text-xs text-amber-600">
+            <p className="mt-2 text-center text-xs text-warning-700 dark:text-warning-300/90">
               {meta.demo_credentials.email} / {meta.demo_credentials.password}
             </p>
           </div>
@@ -90,6 +90,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
             error={errors.email?.message}
             fullWidth
             placeholder="Enter your email"
+            autoComplete="email"
           />
           
           <Input
@@ -99,6 +100,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
             error={errors.password?.message}
             fullWidth
             placeholder="Enter your password"
+            autoComplete="current-password"
           />
           
           <Button
@@ -111,10 +113,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
           </Button>
           
           <div className="text-center mt-4">
-            <span className="text-gray-600">Don't have an account? </span>
+            <span className="text-fg-muted">Don't have an account? </span>
             <Link
               to="/register"
-              className="text-primary-600 hover:text-primary-700 font-medium"
+              className="font-medium text-brand hover:underline"
             >
               Sign up
             </Link>

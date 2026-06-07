@@ -2,6 +2,7 @@ import React from 'react';
 import { TeamBudgetSummary, WaiverTransaction } from '@/types';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { Progress } from '@/components/ui/Progress';
 import { cn } from '@/utils';
 import { CurrencyDollarIcon } from '@heroicons/react/24/outline';
 
@@ -11,46 +12,48 @@ interface WaiverBudgetCardProps {
   className?: string;
 }
 
+type BadgeVariant = 'default' | 'secondary' | 'success' | 'warning' | 'error';
+
 const TransactionBadge: React.FC<{ transaction: WaiverTransaction }> = ({ transaction }) => {
-  const getTypeColor = (type: string) => {
+  const getTypeVariant = (type: string): BadgeVariant => {
     switch (type) {
       case 'ADD':
-        return 'bg-green-100 text-green-800';
+        return 'success';
       case 'DROP':
-        return 'bg-red-100 text-red-800';
+        return 'error';
       case 'TRADE':
-        return 'bg-blue-100 text-blue-800';
+        return 'secondary';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'default';
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusVariant = (status: string): BadgeVariant => {
     switch (status) {
       case 'SUCCESSFUL':
-        return 'bg-green-100 text-green-800';
+        return 'success';
       case 'FAILED':
-        return 'bg-red-100 text-red-800';
+        return 'error';
       case 'PENDING':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'warning';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'default';
     }
   };
 
   return (
-    <div className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
+    <div className="flex items-center justify-between p-2 bg-surface-sunken rounded text-sm">
       <div className="flex items-center space-x-2">
-        <Badge className={getTypeColor(transaction.transaction_type)} size="sm">
+        <Badge variant={getTypeVariant(transaction.transaction_type)} size="sm">
           {transaction.transaction_type}
         </Badge>
-        <span className="font-medium">{transaction.player_name}</span>
+        <span className="font-medium text-fg">{transaction.player_name}</span>
       </div>
       <div className="flex items-center space-x-2">
         {transaction.bid_amount > 0 && (
-          <span className="text-gray-600">${transaction.bid_amount}</span>
+          <span className="text-fg-muted tabular">${transaction.bid_amount}</span>
         )}
-        <Badge className={getStatusColor(transaction.status)} size="sm">
+        <Badge variant={getStatusVariant(transaction.status)} size="sm">
           {transaction.status}
         </Badge>
       </div>
@@ -68,21 +71,21 @@ export const WaiverBudgetCard: React.FC<WaiverBudgetCardProps> = ({
   const remainingPercentage = 100 - spentPercentage;
 
   const getBudgetHealthColor = () => {
-    if (remainingPercentage >= 70) return 'text-green-600';
-    if (remainingPercentage >= 40) return 'text-yellow-600';
-    return 'text-red-600';
+    if (remainingPercentage >= 70) return 'text-success-600';
+    if (remainingPercentage >= 40) return 'text-warning-600';
+    return 'text-error-600';
   };
 
   const getBudgetHealthBg = () => {
-    if (remainingPercentage >= 70) return 'bg-green-500';
-    if (remainingPercentage >= 40) return 'bg-yellow-500';
-    return 'bg-red-500';
+    if (remainingPercentage >= 70) return 'bg-success-500';
+    if (remainingPercentage >= 40) return 'bg-warning-500';
+    return 'bg-error-500';
   };
 
   return (
     <Card className={cn(
       'transition-all duration-200',
-      isUserTeam && 'ring-2 ring-primary-200 bg-primary-50',
+      isUserTeam && 'ring-2 ring-brand bg-brand/5',
       className
     )}>
       <CardHeader className="pb-3">
@@ -90,12 +93,12 @@ export const WaiverBudgetCard: React.FC<WaiverBudgetCardProps> = ({
           <CardTitle className="text-lg">
             {budget.team_name}
             {isUserTeam && (
-              <span className="ml-2 text-xs px-2 py-1 bg-primary-100 text-primary-800 rounded-full">
+              <span className="ml-2 text-xs px-2 py-1 bg-brand/10 text-brand rounded-full">
                 Your Team
               </span>
             )}
           </CardTitle>
-          <CurrencyDollarIcon className="h-5 w-5 text-gray-400" />
+          <CurrencyDollarIcon className="h-5 w-5 text-fg-subtle" />
         </div>
       </CardHeader>
 
@@ -103,33 +106,32 @@ export const WaiverBudgetCard: React.FC<WaiverBudgetCardProps> = ({
         {/* Budget Overview */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600">Budget Remaining</span>
-            <span className={cn('text-lg font-bold', getBudgetHealthColor())}>
+            <span className="text-sm text-fg-muted">Budget Remaining</span>
+            <span className={cn('text-lg font-bold tabular', getBudgetHealthColor())}>
               ${budget.current_budget}
             </span>
           </div>
-          
+
           {/* Budget Progress Bar */}
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
-              className={cn('h-2 rounded-full transition-all duration-300', getBudgetHealthBg())}
-              style={{ width: `${remainingPercentage}%` }}
-            />
-          </div>
-          
+          <Progress
+            value={remainingPercentage}
+            barClassName={getBudgetHealthBg()}
+            label={`${remainingPercentage}% of budget remaining`}
+          />
+
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div className="flex items-center justify-between">
-              <span className="text-gray-600">Total:</span>
-              <span className="font-medium">${budget.total_budget}</span>
+              <span className="text-fg-muted">Total:</span>
+              <span className="font-medium text-fg tabular">${budget.total_budget}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-gray-600">Spent:</span>
-              <span className="font-medium text-red-600">${budget.spent_budget}</span>
+              <span className="text-fg-muted">Spent:</span>
+              <span className="font-medium text-error-600 tabular">${budget.spent_budget}</span>
             </div>
           </div>
-          
+
           <div className="text-center">
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-fg-subtle tabular">
               {spentPercentage}% of budget used
             </span>
           </div>
@@ -139,9 +141,9 @@ export const WaiverBudgetCard: React.FC<WaiverBudgetCardProps> = ({
         {budget.recent_transactions.length > 0 && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-medium text-gray-700">Recent Activity</h4>
+              <h4 className="text-sm font-medium text-fg">Recent Activity</h4>
               {budget.recent_transactions.some(t => t.status === 'PENDING') && (
-                <Badge className="bg-yellow-100 text-yellow-800" size="sm">
+                <Badge variant="warning" size="sm">
                   Pending
                 </Badge>
               )}
@@ -155,7 +157,7 @@ export const WaiverBudgetCard: React.FC<WaiverBudgetCardProps> = ({
             
             {budget.recent_transactions.length > 3 && (
               <div className="text-center">
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-fg-subtle tabular">
                   +{budget.recent_transactions.length - 3} more transactions
                 </span>
               </div>
@@ -165,7 +167,7 @@ export const WaiverBudgetCard: React.FC<WaiverBudgetCardProps> = ({
 
         {budget.recent_transactions.length === 0 && (
           <div className="text-center py-4">
-            <p className="text-sm text-gray-500">No recent activity</p>
+            <p className="text-sm text-fg-subtle">No recent activity</p>
           </div>
         )}
       </CardContent>

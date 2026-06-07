@@ -96,25 +96,25 @@ export const LeagueConnectPage: React.FC = () => {
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+        <h1 className="text-display-sm text-fg mb-2">
           Connect Your ESPN League
         </h1>
-        <p className="text-gray-600">
+        <p className="text-fg-muted">
           Connect your ESPN Fantasy Football league to get intelligent insights and analysis.
         </p>
       </div>
 
       <div className="space-y-6">
         {/* Instructions Card */}
-        <Card className="border-blue-200 bg-blue-50">
-          <CardHeader>
-            <CardTitle className="text-blue-900 flex items-center">
+        <Card className="border-brand/30 bg-brand/5">
+          <CardHeader className="border-brand/20">
+            <CardTitle className="text-brand flex items-center">
               <InformationCircleIcon className="h-5 w-5 mr-2" />
               How to Connect Your League
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-blue-800 text-sm space-y-2">
+            <div className="text-fg-muted text-sm space-y-2">
               <p className="font-medium">Option 1: Use League ID (Easiest)</p>
               <ol className="list-decimal list-inside space-y-1 ml-4">
                 <li>Go to your ESPN Fantasy Football league</li>
@@ -138,12 +138,13 @@ export const LeagueConnectPage: React.FC = () => {
           <CardContent>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
               <div>
-                <label htmlFor="league_id" className="block text-sm font-medium text-gray-700 mb-2">
+                <label htmlFor="league_id" className="block text-sm font-medium text-fg mb-2">
                   ESPN League ID or Full URL
                 </label>
                 <Input
                   id="league_id"
                   type="text"
+                  fullWidth
                   placeholder="Enter League ID (e.g., 1725275280) or paste full URL"
                   {...register('league_id')}
                   onPaste={handleUrlPaste}
@@ -151,7 +152,7 @@ export const LeagueConnectPage: React.FC = () => {
                   className="font-mono"
                 />
                 {watchedLeagueId && (
-                  <div className="mt-2 flex items-center text-sm text-green-600">
+                  <div className="mt-2 flex items-center text-sm text-success-600">
                     <CheckCircleIcon className="h-4 w-4 mr-1" />
                     League ID: {watchedLeagueId}
                   </div>
@@ -159,11 +160,11 @@ export const LeagueConnectPage: React.FC = () => {
               </div>
 
               {/* Advanced Options Toggle */}
-              <div className="border-t pt-4">
+              <div className="border-t border-border pt-4">
                 <button
                   type="button"
                   onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="flex items-center text-sm text-gray-600 hover:text-gray-900"
+                  className="flex items-center text-sm text-fg-muted hover:text-fg"
                 >
                   <ExclamationTriangleIcon className="h-4 w-4 mr-1" />
                   {showAdvanced ? 'Hide' : 'Show'} ESPN Credentials (For Private Leagues)
@@ -171,22 +172,23 @@ export const LeagueConnectPage: React.FC = () => {
               </div>
 
               {showAdvanced && (
-                <div className="space-y-4 p-4 bg-gray-50 rounded-lg border">
-                  <div className="text-sm text-gray-600 mb-4">
-                    <p className="font-medium text-gray-800 mb-2">ESPN Credentials (Optional)</p>
+                <div className="space-y-4 p-4 bg-surface-sunken rounded-lg border border-border">
+                  <div className="text-sm text-fg-muted mb-4">
+                    <p className="font-medium text-fg mb-2">ESPN Credentials (Optional)</p>
                     <p>
-                      Only needed for private leagues or if you want real-time roster updates. 
+                      Only needed for private leagues or if you want real-time roster updates.
                       You can find these in your browser cookies when logged into ESPN.
                     </p>
                   </div>
 
                   <div>
-                    <label htmlFor="espn_s2" className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="espn_s2" className="block text-sm font-medium text-fg mb-2">
                       ESPN S2 Cookie
                     </label>
                     <Input
                       id="espn_s2"
                       type="password"
+                      fullWidth
                       placeholder="espn_s2 cookie value"
                       {...register('espn_s2')}
                       error={errors.espn_s2?.message}
@@ -194,12 +196,13 @@ export const LeagueConnectPage: React.FC = () => {
                   </div>
 
                   <div>
-                    <label htmlFor="espn_swid" className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="espn_swid" className="block text-sm font-medium text-fg mb-2">
                       ESPN SWID Cookie
                     </label>
                     <Input
                       id="espn_swid"
                       type="text"
+                      fullWidth
                       placeholder="SWID cookie value (usually starts with {)"
                       {...register('espn_swid')}
                       error={errors.espn_swid?.message}
@@ -207,10 +210,10 @@ export const LeagueConnectPage: React.FC = () => {
                   </div>
 
                   {(watchedEspnS2 || watchedEspnSwid) && (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                    <div className="bg-warning-50 border border-warning-200 rounded-md p-3 dark:bg-warning-900/20 dark:border-warning-900/40">
                       <div className="flex items-start">
-                        <ExclamationTriangleIcon className="h-5 w-5 text-yellow-400 mr-2 mt-0.5" />
-                        <div className="text-sm text-yellow-800">
+                        <ExclamationTriangleIcon className="h-5 w-5 text-warning-500 mr-2 mt-0.5" />
+                        <div className="text-sm text-warning-800 dark:text-warning-300">
                           <p className="font-medium">Security Note</p>
                           <p>Your ESPN credentials are encrypted and stored securely. They're only used to access your league data.</p>
                         </div>
@@ -248,21 +251,21 @@ export const LeagueConnectPage: React.FC = () => {
         </Card>
 
         {/* Help Card */}
-        <Card className="border-gray-200">
+        <Card className="border-border">
           <CardHeader>
-            <CardTitle className="text-gray-900">Need Help?</CardTitle>
+            <CardTitle className="text-fg">Need Help?</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-sm text-gray-600 space-y-2">
+            <div className="text-sm text-fg-muted space-y-2">
               <p>
-                <strong>Public Leagues:</strong> Only the League ID is needed. You can find this in your ESPN league URL.
+                <strong className="text-fg">Public Leagues:</strong> Only the League ID is needed. You can find this in your ESPN league URL.
               </p>
               <p>
-                <strong>Private Leagues:</strong> You'll need ESPN S2 and SWID cookies. Check our documentation for detailed instructions.
+                <strong className="text-fg">Private Leagues:</strong> You'll need ESPN S2 and SWID cookies. Check our documentation for detailed instructions.
               </p>
               <p>
-                <strong>Example URL:</strong>{' '}
-                <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">
+                <strong className="text-fg">Example URL:</strong>{' '}
+                <code className="text-xs bg-surface-sunken px-1 py-0.5 rounded">
                   https://fantasy.espn.com/football/team?leagueId=1234567&teamId=1
                 </code>
               </p>

@@ -22,7 +22,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
       {label && (
         <label
           htmlFor={inputId}
-          className="block text-sm font-medium text-gray-700 mb-1"
+          className="block text-sm font-medium text-fg mb-1"
         >
           {label}
         </label>
@@ -30,9 +30,11 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
       <input
         ref={ref}
         id={inputId}
+        aria-invalid={error ? true : undefined}
         className={cn(
-          'block border-gray-300 rounded-md shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm',
-          error && 'border-error-500 focus:border-error-500 focus:ring-error-500',
+          'block rounded-lg border border-border bg-surface-raised text-fg placeholder:text-fg-subtle shadow-sm px-3 py-2 sm:text-sm',
+          'focus:outline-none focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-ring/40',
+          error && 'border-error-500 focus-visible:border-error-500 focus-visible:ring-error-500/40',
           fullWidth && 'w-full',
           className
         )}

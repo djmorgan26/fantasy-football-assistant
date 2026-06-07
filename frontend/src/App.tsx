@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { ReactQueryDevtools } from 'react-query/devtools';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { ThemeProvider } from '@/contexts/ThemeContext';
 import { Layout, AuthLayout } from '@/components/layout/Layout';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { LoginPage } from '@/pages/LoginPage';
@@ -17,6 +18,7 @@ import { PlayerSearchPage } from '@/pages/PlayerSearchPage';
 import { MyRosterPage } from '@/pages/MyRosterPage';
 import { DraftRoomPage } from '@/pages/DraftRoomPage';
 import { PressBoxPage } from '@/pages/PressBoxPage';
+import { ProfilePage } from '@/pages/ProfilePage';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -31,8 +33,9 @@ const queryClient = new QueryClient({
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <Router>
+      <ThemeProvider>
+        <AuthProvider>
+          <Router>
           <Routes>
             {/* Auth routes */}
             <Route path="/auth" element={<AuthLayout />}>
@@ -149,10 +152,7 @@ function App() {
                 path="profile"
                 element={
                   <ProtectedRoute>
-                    <div className="container mx-auto px-4 py-8">
-                      <h1 className="text-2xl font-bold">Profile Settings</h1>
-                      <p className="text-gray-600 mt-2">Profile management coming soon...</p>
-                    </div>
+                    <ProfilePage />
                   </ProtectedRoute>
                 }
               />
@@ -161,9 +161,10 @@ function App() {
             {/* Catch all route */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-        </Router>
-      </AuthProvider>
-      
+          </Router>
+        </AuthProvider>
+      </ThemeProvider>
+
       {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
     </QueryClientProvider>
   );

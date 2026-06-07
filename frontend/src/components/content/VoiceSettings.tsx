@@ -55,7 +55,7 @@ export const VoiceSettings: React.FC<VoiceSettingsProps> = ({ leagueId }) => {
           <CardTitle>League Voice</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-500 mb-2">
+          <p className="text-sm text-fg-muted mb-2">
             The tone the AI should write in. The more specific, the better it sounds like your group.
           </p>
           <textarea
@@ -63,7 +63,7 @@ export const VoiceSettings: React.FC<VoiceSettingsProps> = ({ leagueId }) => {
             onChange={(e) => setVoiceGuide(e.target.value)}
             rows={4}
             placeholder={VOICE_PLACEHOLDER}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            className="w-full px-3 py-2 border border-border rounded-md text-sm bg-surface-raised text-fg placeholder:text-fg-subtle focus:outline-none focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-ring/40"
           />
         </CardContent>
       </Card>
@@ -86,15 +86,15 @@ export const VoiceSettings: React.FC<VoiceSettingsProps> = ({ leagueId }) => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-500 mb-3">
+          <p className="text-sm text-fg-muted mb-3">
             Who's in the league and what are their running jokes? Used to make callouts personal.
           </p>
           {personas.length === 0 && (
-            <p className="text-sm text-gray-400">No personas yet.</p>
+            <p className="text-sm text-fg-subtle">No personas yet.</p>
           )}
           <div className="space-y-4">
             {personas.map((p, i) => (
-              <div key={i} className="p-3 border border-gray-200 rounded-lg space-y-2">
+              <div key={i} className="p-3 border border-border rounded-lg space-y-2">
                 <div className="flex gap-2">
                   <input
                     value={p.name}
@@ -102,7 +102,7 @@ export const VoiceSettings: React.FC<VoiceSettingsProps> = ({ leagueId }) => {
                       setPersonas(personas.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))
                     }
                     placeholder="Name (e.g. Dave)"
-                    className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm"
+                    className="flex-1 px-2 py-1.5 border border-border rounded text-sm bg-surface-raised text-fg placeholder:text-fg-subtle focus:outline-none focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-ring/40"
                   />
                   <input
                     value={p.team_name || ''}
@@ -110,11 +110,11 @@ export const VoiceSettings: React.FC<VoiceSettingsProps> = ({ leagueId }) => {
                       setPersonas(personas.map((x, j) => (j === i ? { ...x, team_name: e.target.value } : x)))
                     }
                     placeholder="Team name"
-                    className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm"
+                    className="flex-1 px-2 py-1.5 border border-border rounded text-sm bg-surface-raised text-fg placeholder:text-fg-subtle focus:outline-none focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-ring/40"
                   />
                   <button
                     onClick={() => setPersonas(personas.filter((_, j) => j !== i))}
-                    className="text-gray-400 hover:text-red-500 px-1"
+                    className="text-fg-subtle hover:text-error-600 px-1"
                     aria-label="Remove persona"
                   >
                     <TrashIcon className="h-4 w-4" />
@@ -126,7 +126,7 @@ export const VoiceSettings: React.FC<VoiceSettingsProps> = ({ leagueId }) => {
                     setPersonas(personas.map((x, j) => (j === i ? { ...x, notes: e.target.value } : x)))
                   }
                   placeholder="Notes / personality (e.g. always benches his best player)"
-                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                  className="w-full px-2 py-1.5 border border-border rounded text-sm bg-surface-raised text-fg placeholder:text-fg-subtle focus:outline-none focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-ring/40"
                 />
                 <input
                   value={p.bits.join(', ')}
@@ -140,7 +140,7 @@ export const VoiceSettings: React.FC<VoiceSettingsProps> = ({ leagueId }) => {
                     )
                   }
                   placeholder="Running bits, comma-separated (e.g. kicker truther, perennial choker)"
-                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                  className="w-full px-2 py-1.5 border border-border rounded text-sm bg-surface-raised text-fg placeholder:text-fg-subtle focus:outline-none focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-ring/40"
                 />
               </div>
             ))}
@@ -164,16 +164,16 @@ export const VoiceSettings: React.FC<VoiceSettingsProps> = ({ leagueId }) => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-gray-500 mb-3">
+          <p className="text-sm text-fg-muted mb-3">
             Paste previous years' reports here. The AI mimics this voice (it won't copy them).
             This is the single biggest lever on quality.
           </p>
           {examples.length === 0 && (
-            <p className="text-sm text-gray-400">No examples yet — paste a few when you have them.</p>
+            <p className="text-sm text-fg-subtle">No examples yet — paste a few when you have them.</p>
           )}
           <div className="space-y-4">
             {examples.map((e, i) => (
-              <div key={i} className="p-3 border border-gray-200 rounded-lg space-y-2">
+              <div key={i} className="p-3 border border-border rounded-lg space-y-2">
                 <div className="flex gap-2">
                   <input
                     value={e.title || ''}
@@ -181,11 +181,11 @@ export const VoiceSettings: React.FC<VoiceSettingsProps> = ({ leagueId }) => {
                       setExamples(examples.map((x, j) => (j === i ? { ...x, title: ev.target.value } : x)))
                     }
                     placeholder="Title (e.g. 2023 Championship Recap)"
-                    className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm"
+                    className="flex-1 px-2 py-1.5 border border-border rounded text-sm bg-surface-raised text-fg placeholder:text-fg-subtle focus:outline-none focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-ring/40"
                   />
                   <button
                     onClick={() => setExamples(examples.filter((_, j) => j !== i))}
-                    className="text-gray-400 hover:text-red-500 px-1"
+                    className="text-fg-subtle hover:text-error-600 px-1"
                     aria-label="Remove example"
                   >
                     <TrashIcon className="h-4 w-4" />
@@ -198,7 +198,7 @@ export const VoiceSettings: React.FC<VoiceSettingsProps> = ({ leagueId }) => {
                   }
                   rows={6}
                   placeholder="Paste the full write-up here..."
-                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                  className="w-full px-2 py-1.5 border border-border rounded text-sm bg-surface-raised text-fg placeholder:text-fg-subtle focus:outline-none focus-visible:border-brand focus-visible:ring-2 focus-visible:ring-ring/40"
                 />
               </div>
             ))}

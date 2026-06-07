@@ -94,11 +94,11 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess }) => {
             autoComplete="new-password"
           />
           
-          <div className="border-t border-gray-200 pt-4 mt-6">
-            <h4 className="text-sm font-medium text-gray-900 mb-2">
+          <div className="border-t border-border pt-4 mt-6">
+            <h4 className="text-sm font-medium text-fg mb-2">
               ESPN League Access (Optional)
             </h4>
-            <p className="text-xs text-gray-600 mb-4">
+            <p className="text-xs text-fg-muted mb-4">
               For private leagues, you can add your ESPN cookies now or later in your profile.
             </p>
             
@@ -131,10 +131,10 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess }) => {
           </Button>
           
           <div className="text-center mt-4">
-            <span className="text-gray-600">Already have an account? </span>
+            <span className="text-fg-muted">Already have an account? </span>
             <Link
               to="/login"
-              className="text-primary-600 hover:text-primary-700 font-medium"
+              className="font-medium text-brand hover:underline"
             >
               Sign in
             </Link>

@@ -3,7 +3,9 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTeam, useTeamRoster } from '@/hooks/useTeams';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { getPositionColor } from '@/utils';
 import {
   ArrowLeftIcon,
   UserIcon,
@@ -30,8 +32,15 @@ export const TeamRosterPage: React.FC = () => {
 
   if (teamLoading || rosterLoading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <LoadingSpinner size="lg" className="mt-12" />
+      <div className="container mx-auto max-w-6xl px-4 py-8">
+        <Skeleton className="mb-8 h-16 w-64" />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="space-y-3 lg:col-span-2">
+            <Skeleton className="h-40 w-full" />
+            <Skeleton className="h-40 w-full" />
+          </div>
+          <Skeleton className="h-64 w-full" />
+        </div>
       </div>
     );
   }
@@ -40,39 +49,27 @@ export const TeamRosterPage: React.FC = () => {
     return (
       <div className="container mx-auto px-4 py-8">
         <Card>
-          <CardContent>
-            <div className="text-center py-12">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Team Not Found</h3>
-              <p className="text-gray-600 mb-4">
-                The team you're looking for doesn't exist or you don't have access to it.
-              </p>
+          <EmptyState
+            icon={UserIcon}
+            variant="error"
+            title="Team Not Found"
+            description="The team you're looking for doesn't exist or you don't have access to it."
+            action={
               <Link to={`/leagues/${leagueId}`}>
                 <Button>Back to League</Button>
               </Link>
-            </div>
-          </CardContent>
+            }
+          />
         </Card>
       </div>
     );
   }
 
-  const getPositionColor = (position: string) => {
-    switch (position) {
-      case 'QB': return 'bg-purple-100 text-purple-800';
-      case 'RB': return 'bg-green-100 text-green-800';
-      case 'WR': return 'bg-blue-100 text-blue-800';
-      case 'TE': return 'bg-orange-100 text-orange-800';
-      case 'K': return 'bg-yellow-100 text-yellow-800';
-      case 'D/ST': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
   const getSlotColor = (slot: string) => {
     switch (slot) {
-      case 'BENCH': return 'bg-gray-100 text-gray-600';
-      case 'IR': return 'bg-red-100 text-red-600';
-      default: return 'bg-green-100 text-green-700';
+      case 'BENCH': return 'bg-surface-sunken text-fg-muted';
+      case 'IR': return 'bg-error-100 text-error-600 dark:bg-error-900/40 dark:text-error-300';
+      default: return 'bg-success-100 text-success-700 dark:bg-success-900/40 dark:text-success-300';
     }
   };
 
@@ -101,7 +98,7 @@ export const TeamRosterPage: React.FC = () => {
             <img
               src={team.logo_url}
               alt={`${team.name || team.abbreviation} logo`}
-              className="w-16 h-16 rounded-full object-cover bg-gray-100"
+              className="w-16 h-16 rounded-full object-cover bg-surface-sunken"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.style.display = 'none';
@@ -111,21 +108,21 @@ export const TeamRosterPage: React.FC = () => {
               {team.abbreviation || team.name?.charAt(0) || '?'}
             </div>
           </div>
-          
+
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            <h1 className="text-3xl font-bold text-fg mb-2">
               {team.name || `Team ${team.abbreviation}`}
             </h1>
-            <div className="flex items-center space-x-4 text-sm text-gray-600">
+            <div className="flex items-center space-x-4 text-sm text-fg-muted">
               <span className="flex items-center">
                 <TrophyIcon className="h-4 w-4 mr-1" />
-                {team.wins}-{team.losses}{team.ties > 0 && `-${team.ties}`}
+                <span className="tabular">{team.wins}-{team.losses}{team.ties > 0 && `-${team.ties}`}</span>
               </span>
               <span className="flex items-center">
                 <ChartBarIcon className="h-4 w-4 mr-1" />
-                {team.points_for.toFixed(1)} PF
+                <span className="tabular">{team.points_for.toFixed(1)}</span> PF
               </span>
-              <span>{team.points_against.toFixed(1)} PA</span>
+              <span><span className="tabular">{team.points_against.toFixed(1)}</span> PA</span>
             </div>
           </div>
         </div>
@@ -139,17 +136,17 @@ export const TeamRosterPage: React.FC = () => {
               <CardTitle className="flex items-center">
                 <StarIcon className="h-5 w-5 mr-2" />
                 Starting Lineup
-                <span className="ml-2 text-sm font-normal text-gray-500">({startingRoster.length})</span>
+                <span className="ml-2 text-sm font-normal text-fg-muted tabular">({startingRoster.length})</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {startingRoster.map((player, index) => (
-                  <div key={index} className="flex items-center p-3 border rounded-lg hover:bg-gray-50">
+                  <div key={index} className="flex items-center p-3 border border-border rounded-lg hover:bg-surface-sunken transition-colors">
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <div>
-                          <h4 className="font-medium text-gray-900">{player.full_name}</h4>
+                          <h4 className="font-medium text-fg">{player.full_name}</h4>
                           <div className="flex items-center space-x-2 mt-1">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPositionColor(player.position_name)}`}>
                               {player.position_name}
@@ -161,13 +158,13 @@ export const TeamRosterPage: React.FC = () => {
                         </div>
                         <div className="text-right">
                           {player.stats?.projected && (
-                            <div className="text-sm text-gray-600">
-                              Proj: {(player.stats.projected['0'] || 0).toFixed(1)}
+                            <div className="text-sm text-fg-muted">
+                              Proj: <span className="tabular">{(player.stats.projected['0'] || 0).toFixed(1)}</span>
                             </div>
                           )}
                           {player.stats?.actual && (
-                            <div className="text-sm font-medium text-gray-900">
-                              Actual: {(player.stats.actual['0'] || 0).toFixed(1)}
+                            <div className="text-sm font-medium text-fg">
+                              Actual: <span className="tabular">{(player.stats.actual['0'] || 0).toFixed(1)}</span>
                             </div>
                           )}
                         </div>
@@ -176,7 +173,7 @@ export const TeamRosterPage: React.FC = () => {
                   </div>
                 ))}
                 {startingRoster.length === 0 && (
-                  <p className="text-gray-500 text-center py-4">No starting lineup data available</p>
+                  <p className="text-fg-muted text-center py-4">No starting lineup data available</p>
                 )}
               </div>
             </CardContent>
@@ -188,17 +185,17 @@ export const TeamRosterPage: React.FC = () => {
               <CardTitle className="flex items-center">
                 <UserIcon className="h-5 w-5 mr-2" />
                 Bench
-                <span className="ml-2 text-sm font-normal text-gray-500">({benchPlayers.length})</span>
+                <span className="ml-2 text-sm font-normal text-fg-muted tabular">({benchPlayers.length})</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {benchPlayers.map((player, index) => (
-                  <div key={index} className="flex items-center p-3 border rounded-lg bg-gray-50">
+                  <div key={index} className="flex items-center p-3 border border-border rounded-lg bg-surface-sunken">
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <div>
-                          <h4 className="font-medium text-gray-700">{player.full_name}</h4>
+                          <h4 className="font-medium text-fg">{player.full_name}</h4>
                           <div className="flex items-center space-x-2 mt-1">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPositionColor(player.position_name)}`}>
                               {player.position_name}
@@ -207,8 +204,8 @@ export const TeamRosterPage: React.FC = () => {
                         </div>
                         <div className="text-right">
                           {player.stats?.projected && (
-                            <div className="text-sm text-gray-500">
-                              Proj: {(player.stats.projected['0'] || 0).toFixed(1)}
+                            <div className="text-sm text-fg-muted">
+                              Proj: <span className="tabular">{(player.stats.projected['0'] || 0).toFixed(1)}</span>
                             </div>
                           )}
                         </div>
@@ -217,7 +214,7 @@ export const TeamRosterPage: React.FC = () => {
                   </div>
                 ))}
                 {benchPlayers.length === 0 && (
-                  <p className="text-gray-500 text-center py-4">No bench players</p>
+                  <p className="text-fg-muted text-center py-4">No bench players</p>
                 )}
               </div>
             </CardContent>
@@ -227,24 +224,24 @@ export const TeamRosterPage: React.FC = () => {
           {irPlayers.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center text-red-600">
+                <CardTitle className="flex items-center text-error-600">
                   Injured Reserve
-                  <span className="ml-2 text-sm font-normal text-gray-500">({irPlayers.length})</span>
+                  <span className="ml-2 text-sm font-normal text-fg-muted tabular">({irPlayers.length})</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   {irPlayers.map((player, index) => (
-                    <div key={index} className="flex items-center p-3 border border-red-200 rounded-lg bg-red-50">
+                    <div key={index} className="flex items-center p-3 border border-error-200 rounded-lg bg-error-50 dark:border-error-900/40 dark:bg-error-900/20">
                       <div className="flex-1">
                         <div className="flex items-center justify-between">
                           <div>
-                            <h4 className="font-medium text-red-900">{player.full_name}</h4>
+                            <h4 className="font-medium text-error-900 dark:text-error-200">{player.full_name}</h4>
                             <div className="flex items-center space-x-2 mt-1">
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPositionColor(player.position_name)}`}>
                                 {player.position_name}
                               </span>
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-error-100 text-error-800 dark:bg-error-900/40 dark:text-error-300">
                                 IR
                               </span>
                             </div>
@@ -268,30 +265,30 @@ export const TeamRosterPage: React.FC = () => {
             <CardContent>
               <div className="space-y-4">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Record:</span>
-                  <span className="font-medium">
+                  <span className="text-fg-muted">Record:</span>
+                  <span className="font-medium text-fg tabular">
                     {team.wins}-{team.losses}{team.ties > 0 && `-${team.ties}`}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Points For:</span>
-                  <span className="font-medium text-green-600">{team.points_for.toFixed(1)}</span>
+                  <span className="text-fg-muted">Points For:</span>
+                  <span className="font-medium text-success-600 tabular">{team.points_for.toFixed(1)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Points Against:</span>
-                  <span className="font-medium text-red-600">{team.points_against.toFixed(1)}</span>
+                  <span className="text-fg-muted">Points Against:</span>
+                  <span className="font-medium text-error-600 tabular">{team.points_against.toFixed(1)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Point Differential:</span>
-                  <span className={`font-medium ${
-                    (team.points_for - team.points_against) > 0 ? 'text-green-600' : 'text-red-600'
+                  <span className="text-fg-muted">Point Differential:</span>
+                  <span className={`font-medium tabular ${
+                    (team.points_for - team.points_against) > 0 ? 'text-success-600' : 'text-error-600'
                   }`}>
                     {(team.points_for - team.points_against > 0 ? '+' : '')}{(team.points_for - team.points_against).toFixed(1)}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">PPG Average:</span>
-                  <span className="font-medium">
+                  <span className="text-fg-muted">PPG Average:</span>
+                  <span className="font-medium text-fg tabular">
                     {((team.points_for) / (team.wins + team.losses + team.ties)).toFixed(1)}
                   </span>
                 </div>
@@ -306,22 +303,22 @@ export const TeamRosterPage: React.FC = () => {
             <CardContent>
               <div className="space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Starting:</span>
-                  <span className="font-medium">{startingRoster.length}</span>
+                  <span className="text-fg-muted">Starting:</span>
+                  <span className="font-medium text-fg tabular">{startingRoster.length}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-600">Bench:</span>
-                  <span className="font-medium">{benchPlayers.length}</span>
+                  <span className="text-fg-muted">Bench:</span>
+                  <span className="font-medium text-fg tabular">{benchPlayers.length}</span>
                 </div>
                 {irPlayers.length > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-gray-600">IR:</span>
-                    <span className="font-medium text-red-600">{irPlayers.length}</span>
+                    <span className="text-fg-muted">IR:</span>
+                    <span className="font-medium text-error-600 tabular">{irPlayers.length}</span>
                   </div>
                 )}
-                <div className="flex justify-between pt-2 border-t">
-                  <span className="font-medium text-gray-900">Total:</span>
-                  <span className="font-medium">{roster?.roster?.length || 0}</span>
+                <div className="flex justify-between pt-2 border-t border-border">
+                  <span className="font-medium text-fg">Total:</span>
+                  <span className="font-medium text-fg tabular">{roster?.roster?.length || 0}</span>
                 </div>
               </div>
             </CardContent>

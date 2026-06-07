@@ -19,25 +19,28 @@ export const formatDateTime = (dateString: string): string => {
   return new Date(dateString).toLocaleString();
 };
 
-// Position color mapping
+// Position color mapping — single source of truth across the app.
+// Dark-mode aware. Keys cover ESPN + Sleeper position spellings.
+const NEUTRAL_POSITION_COLOR =
+  'bg-surface-sunken text-fg-muted dark:bg-surface-sunken dark:text-fg-muted';
+
+const POSITION_COLORS: Record<string, string> = {
+  QB: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+  RB: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+  WR: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
+  TE: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
+  K: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
+  FLEX: 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300',
+};
+
+// Defense spellings all resolve to a neutral chip (keep test: D/ST -> gray).
+['DEF', 'DST', 'D/ST', 'D-ST'].forEach((k) => {
+  POSITION_COLORS[k] = 'bg-gray-200 text-gray-700 dark:bg-gray-700/50 dark:text-gray-300';
+});
+
 export const getPositionColor = (position: string): string => {
-  switch (position.toUpperCase()) {
-    case 'QB':
-      return 'text-red-600 bg-red-100';
-    case 'RB':
-      return 'text-green-600 bg-green-100';
-    case 'WR':
-      return 'text-blue-600 bg-blue-100';
-    case 'TE':
-      return 'text-yellow-600 bg-yellow-100';
-    case 'K':
-      return 'text-purple-600 bg-purple-100';
-    case 'D/ST':
-    case 'DST':
-      return 'text-gray-600 bg-gray-100';
-    default:
-      return 'text-gray-600 bg-gray-100';
-  }
+  if (!position) return NEUTRAL_POSITION_COLOR;
+  return POSITION_COLORS[position.toUpperCase()] || NEUTRAL_POSITION_COLOR;
 };
 
 // Injury status color mapping
