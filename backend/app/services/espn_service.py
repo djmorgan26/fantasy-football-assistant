@@ -430,20 +430,23 @@ class ESPNService:
                 params["scoringPeriodId"] = week
                 
             data = await self._make_request(f"{league_id}", cookies, params)
-            
+
+            # Fetch each team's projected starting-lineup total ONCE for the week
+            # (a single roster request), instead of re-fetching the whole league
+            # roster per team per matchup. That avoids an N+1 explosion that was
+            # slow enough to hit gateway timeouts on serverless hosts.
+            proj_by_team = await self._projected_scores_by_team(
+                league_id, week or 1, cookies
+            )
+
             matchups = []
             for matchup_data in data.get("schedule", []):
                 if week and matchup_data.get("matchupPeriodId") != week:
                     continue
-                
-                # Calculate projected scores from roster data if available
-                home_projected = await self._calculate_team_projected_score(
-                    matchup_data.get("home", {}), league_id, week or 1, cookies
-                )
-                away_projected = await self._calculate_team_projected_score(
-                    matchup_data.get("away", {}), league_id, week or 1, cookies
-                )
-                
+
+                home_projected = proj_by_team.get(matchup_data.get("home", {}).get("teamId"))
+                away_projected = proj_by_team.get(matchup_data.get("away", {}).get("teamId"))
+
                 # Try to get scoring data from multiple sources
                 home_data = matchup_data.get("home", {})
                 away_data = matchup_data.get("away", {})
@@ -485,6 +488,35 @@ class ESPNService:
             logger.error("Failed to get matchups", 
                         league_id=league_id, week=week, error=str(e))
             raise
+
+    async def _projected_scores_by_team(
+        self,
+        league_id: str,
+        week: int,
+        cookies: Optional[ESPNCookies] = None,
+    ) -> Dict[Any, Optional[float]]:
+        """
+        Projected starting-lineup total for every team in the league, computed
+        from a SINGLE roster request for the week. Returns {team_id: projected}.
+        """
+        result: Dict[Any, Optional[float]] = {}
+        try:
+            params = {"view": "mRoster", "scoringPeriodId": week}
+            data = await self._make_request(f"{league_id}", cookies, params)
+            for team in data.get("teams", []):
+                if not isinstance(team, dict):
+                    continue
+                projected_total = 0.0
+                for entry in team.get("roster", {}).get("entries", []):
+                    lineup_slot = entry.get("lineupSlotId", 0)
+                    if lineup_slot in (20, 21):  # bench / IR are not started
+                        continue
+                    player = entry.get("playerPoolEntry", {}).get("player", {})
+                    projected_total += self._get_projected_points(player, week)
+                result[team.get("id")] = projected_total if projected_total > 0 else None
+        except Exception as e:
+            logger.warning(f"Failed to compute projected scores for league {league_id}: {e}")
+        return result
 
     async def _calculate_team_projected_score(
         self,

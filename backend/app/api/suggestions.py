@@ -73,7 +73,7 @@ async def get_strategic_suggestions(
             )
 
             # Get league standings and settings
-            league_data = await espn_service.get_league(
+            league_data = await espn_service.get_league_info(
                 str(league.espn_league_id),
                 cookies=cookies
             )
@@ -85,8 +85,19 @@ async def get_strategic_suggestions(
                 cookies=cookies
             )
 
-            # Prepare data for LLM
-            roster = roster_data.get("roster", [])
+            # Prepare data for LLM. Strip the heavy per-player stats blobs and
+            # keep only the fields the model needs — the full stats JSON blows
+            # past Groq's free-tier token-per-minute limit.
+            raw_roster = roster_data.get("roster", [])
+            roster = [
+                {
+                    "full_name": p.get("full_name"),
+                    "position_name": p.get("position_name"),
+                    "lineup_slot_name": p.get("lineup_slot_name"),
+                    "injury_status": p.get("injury_status"),
+                }
+                for p in raw_roster
+            ]
             league_info = {
                 "name": league_data.get("name", "Unknown League"),
                 "size": league_data.get("size", 10),
@@ -94,7 +105,8 @@ async def get_strategic_suggestions(
                 "current_week": league_data.get("current_week", 1)
             }
 
-            recent_matchups = matchups_data.get("matchups", [])[:5]
+            # get_matchups returns a list, not a dict
+            recent_matchups = (matchups_data or [])[:5]
 
             # Generate suggestions using LLM
             suggestions = await llm_service.generate_strategic_suggestions(
