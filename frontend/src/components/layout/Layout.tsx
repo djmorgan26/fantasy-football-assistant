@@ -1,28 +1,48 @@
 import React, { Fragment, useState } from 'react';
 import { Outlet, Link, useMatch } from 'react-router-dom';
 import { Dialog, Transition } from '@headlessui/react';
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import {
+  XMarkIcon,
+  ChevronDoubleLeftIcon,
+  ChevronDoubleRightIcon,
+} from '@heroicons/react/24/outline';
 import { Header } from './Header';
 import { SidebarNav } from './SidebarNav';
 import { AppToaster } from '@/components/ui/AppToaster';
+import { cn } from '@/utils';
 
 interface LayoutProps {
   children?: React.ReactNode;
 }
 
-const Brand: React.FC = () => (
-  <Link to="/" className="flex items-center gap-2">
-    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand">
+const SIDEBAR_COLLAPSED_KEY = 'ff:sidebar-collapsed';
+
+const Brand: React.FC<{ compact?: boolean }> = ({ compact = false }) => (
+  <Link to="/" className="flex items-center gap-2" aria-label="Fantasy Football home">
+    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-brand">
       <span className="text-sm font-bold text-brand-fg">FF</span>
     </div>
-    <span className="font-display text-lg font-bold leading-tight text-fg">Fantasy&nbsp;Football</span>
+    {!compact && (
+      <span className="font-display text-lg font-bold leading-tight text-fg">Fantasy&nbsp;Football</span>
+    )}
   </Link>
 );
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) !== '0'
+  );
   const match = useMatch('/leagues/:leagueId/*');
   const leagueId = match?.params?.leagueId;
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0');
+      return next;
+    });
+  };
 
   return (
     <div className="min-h-screen bg-surface text-fg">
@@ -34,12 +54,43 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </a>
 
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-border bg-surface-raised lg:flex">
-        <div className="flex h-16 items-center border-b border-border px-5">
-          <Brand />
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 z-30 hidden flex-col border-r border-border bg-surface-raised transition-[width] duration-200 lg:flex',
+          collapsed ? 'w-[4.5rem]' : 'w-64'
+        )}
+      >
+        <div
+          className={cn(
+            'flex h-16 items-center border-b border-border',
+            collapsed ? 'justify-center px-2' : 'px-5'
+          )}
+        >
+          <Brand compact={collapsed} />
         </div>
-        <div className="flex-1 overflow-y-auto p-4">
-          <SidebarNav leagueId={leagueId} />
+        <div className={cn('flex-1 overflow-y-auto', collapsed ? 'p-3' : 'p-4')}>
+          <SidebarNav leagueId={leagueId} collapsed={collapsed} />
+        </div>
+        <div className={cn('border-t border-border', collapsed ? 'p-3' : 'p-4')}>
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className={cn(
+              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold text-fg-muted transition-colors hover:bg-surface-sunken hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              collapsed && 'justify-center px-2'
+            )}
+          >
+            {collapsed ? (
+              <ChevronDoubleRightIcon className="h-5 w-5 flex-shrink-0 text-fg-subtle" />
+            ) : (
+              <>
+                <ChevronDoubleLeftIcon className="h-5 w-5 flex-shrink-0 text-fg-subtle" />
+                Collapse
+              </>
+            )}
+          </button>
         </div>
       </aside>
 
@@ -87,7 +138,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </Transition>
 
       {/* Main column */}
-      <div className="lg:pl-64">
+      <div
+        className={cn(
+          'transition-[padding] duration-200',
+          collapsed ? 'lg:pl-[4.5rem]' : 'lg:pl-64'
+        )}
+      >
         <Header onMenuToggle={() => setDrawerOpen(true)} />
         <main id="main" className="flex-1">
           {children || <Outlet />}
