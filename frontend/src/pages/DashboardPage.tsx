@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLeagues } from '@/hooks/useLeagues';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { PlatformBadge } from '@/components/ui/PlatformBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import { Link } from 'react-router-dom';
@@ -72,9 +72,7 @@ export const DashboardPage: React.FC = () => {
                     <div>
                       <div className="mb-1 flex items-center gap-2">
                         <h3 className="font-display text-lg font-bold text-fg">{league.name}</h3>
-                        <Badge variant="secondary" size="sm" className="uppercase">
-                          {league.platform || 'ESPN'}
-                        </Badge>
+                        <PlatformBadge platform={league.platform || 'ESPN'} size="sm" />
                       </div>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-fg-muted">
                         <span className="flex items-center gap-1">

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { Select } from '@/components/ui/Select';
 import {
   NewspaperIcon,
   FireIcon,
@@ -98,9 +99,16 @@ export const WeeklyRecap: React.FC<WeeklyRecapProps> = ({
           >
             ← Previous
           </Button>
-          <div className="px-4 py-2 bg-surface-sunken rounded-lg font-semibold text-fg tabular">
-            Week {selectedWeek}
-          </div>
+          <Select
+            value={String(selectedWeek)}
+            onChange={(week) => handleWeekChange(Number(week))}
+            options={Array.from({ length: currentWeek }, (_, i) => ({
+              value: String(i + 1),
+              label: `Week ${i + 1}`,
+            }))}
+            disabled={isLoading}
+            className="w-32"
+          />
           <Button
             variant="secondary"
             size="sm"

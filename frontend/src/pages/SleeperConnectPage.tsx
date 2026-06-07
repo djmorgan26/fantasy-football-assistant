@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { PlatformBadge } from '@/components/ui/PlatformBadge';
 import { SleeperLeagueConnectionRequest } from '@/types';
 import api from '@/services/api';
 import {
@@ -62,6 +63,7 @@ export const SleeperConnectPage: React.FC = () => {
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl">
       <div className="mb-8">
+        <PlatformBadge platform="sleeper" size="md" className="mb-3" />
         <h1 className="text-display-sm text-fg mb-2">
           Connect Your Sleeper League
         </h1>

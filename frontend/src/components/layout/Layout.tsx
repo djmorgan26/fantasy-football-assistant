@@ -148,6 +148,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <main id="main" className="flex-1">
           {children || <Outlet />}
         </main>
+        <footer className="px-4 pb-6 pt-2 text-center text-xs text-fg-subtle">
+          Fantasy Football Assistant is an independent project, not affiliated with or endorsed by
+          ESPN or Sleeper. Platform names identify league connections only.
+        </footer>
       </div>
 
       <AppToaster position="top-right" />

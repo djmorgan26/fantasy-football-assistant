@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Select } from '@/components/ui/Select';
 import {
   LightBulbIcon,
   FunnelIcon,
@@ -195,28 +196,32 @@ export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
             <span className="text-sm font-medium text-fg">Filters:</span>
           </div>
 
-          <select
+          <Select
             value={filters.type || 'all'}
-            onChange={(e) => handleFilterChange('type', e.target.value)}
-            className="px-3 py-1 border border-border rounded text-sm bg-surface-raised text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="all">All Types</option>
-            <option value="pickup">Pickup</option>
-            <option value="drop">Drop</option>
-            <option value="trade">Trade</option>
-            <option value="lineup">Lineup</option>
-          </select>
+            onChange={(value) => handleFilterChange('type', value)}
+            options={[
+              { value: 'all', label: 'All Types' },
+              { value: 'pickup', label: 'Pickup' },
+              { value: 'drop', label: 'Drop' },
+              { value: 'trade', label: 'Trade' },
+              { value: 'lineup', label: 'Lineup' },
+            ]}
+            size="sm"
+            className="w-32"
+          />
 
-          <select
+          <Select
             value={filters.priority || 'all'}
-            onChange={(e) => handleFilterChange('priority', e.target.value)}
-            className="px-3 py-1 border border-border rounded text-sm bg-surface-raised text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="all">All Priorities</option>
-            <option value="high">High Priority</option>
-            <option value="medium">Medium Priority</option>
-            <option value="low">Low Priority</option>
-          </select>
+            onChange={(value) => handleFilterChange('priority', value)}
+            options={[
+              { value: 'all', label: 'All Priorities' },
+              { value: 'high', label: 'High Priority' },
+              { value: 'medium', label: 'Medium Priority' },
+              { value: 'low', label: 'Low Priority' },
+            ]}
+            size="sm"
+            className="w-40"
+          />
         </div>
 
         {/* Suggestions List */}

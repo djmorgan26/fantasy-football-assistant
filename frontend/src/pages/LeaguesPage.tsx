@@ -4,6 +4,7 @@ import { useLeagues } from '@/hooks/useLeagues';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { PlatformBadge } from '@/components/ui/PlatformBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -144,7 +145,8 @@ export const LeaguesPage: React.FC = () => {
                       </span>
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="flex flex-col items-end gap-1.5">
+                    <PlatformBadge platform={league.platform} size="sm" />
                     <Badge variant="secondary" size="sm" className="tabular">
                       {league.season_year}
                     </Badge>
@@ -172,8 +174,12 @@ export const LeaguesPage: React.FC = () => {
                   {/* League Info */}
                   <div className="text-xs text-fg-subtle space-y-1">
                     <div className="flex justify-between">
-                      <span>ESPN ID:</span>
-                      <span className="font-mono tabular">{league.espn_league_id}</span>
+                      <span>{league.platform === 'sleeper' ? 'Sleeper ID:' : 'ESPN ID:'}</span>
+                      <span className="font-mono tabular">
+                        {league.platform === 'sleeper'
+                          ? league.sleeper_league_id
+                          : league.espn_league_id}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span>Connected:</span>
@@ -245,7 +251,7 @@ export const LeaguesPage: React.FC = () => {
                   Connect New League
                 </h3>
                 <p className="text-fg-muted text-sm">
-                  Add another ESPN fantasy league to analyze
+                  Add another ESPN or Sleeper league to analyze
                 </p>
               </CardContent>
             </Card>

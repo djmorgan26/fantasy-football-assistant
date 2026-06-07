@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { PlatformBadge } from '@/components/ui/PlatformBadge';
 import { useConnectLeague } from '@/hooks/useLeagues';
 import { LeagueConnectionRequest } from '@/types';
 import { 
@@ -96,6 +97,7 @@ export const LeagueConnectPage: React.FC = () => {
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl">
       <div className="mb-8">
+        <PlatformBadge platform="espn" size="md" className="mb-3" />
         <h1 className="text-display-sm text-fg mb-2">
           Connect Your ESPN League
         </h1>
