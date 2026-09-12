@@ -191,6 +191,11 @@ FACTUAL RULES - these override every style instruction below:
   and never declare a winner or a final margin for it.
 - If something is not in the list, it did not happen. Leave it out.
 
+FORMAT:
+- Plain prose in paragraphs separated by a blank line. The card renders your
+  reply as raw text, so markdown does not format, it just shows up as literal
+  asterisks and hashes. No **bold**, no headings, no bullet lists.
+
 Write an entertaining 3-4 paragraph weekly recap that:
 
 1. **ROASTS THE LOSERS** - Be creative and funny about low scores and lopsided results.
