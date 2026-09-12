@@ -148,7 +148,7 @@ describe('MyRosterPage', () => {
   it('warns when a starter cannot play', () => {
     renderPage();
     expect(screen.getByText('1 starter needs attention')).toBeInTheDocument();
-    expect(screen.getByText(/is injury reserve in your WR slot/)).toBeInTheDocument();
+    expect(screen.getByText(/is on injured reserve in your WR slot/)).toBeInTheDocument();
   });
 
   it('flags a bench player who out-projects a startable slot', () => {

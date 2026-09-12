@@ -47,6 +47,25 @@ const injuryLabel = (status?: string) => {
   }
 };
 
+/** How a status reads inside a sentence: "A.J. Brown is on injured reserve". */
+const injuryPhrase = (status?: string) => {
+  switch (status) {
+    case 'INJURY_RESERVE':
+    case 'IR':
+      return 'on injured reserve';
+    case 'OUT':
+      return 'ruled out';
+    case 'SUSPENSION':
+      return 'suspended';
+    case 'DOUBTFUL':
+      return 'doubtful';
+    case 'QUESTIONABLE':
+      return 'questionable';
+    default:
+      return 'not at full strength';
+  }
+};
+
 const injuryTone = (status?: string): 'error' | 'warning' | 'default' => {
   if (!status) return 'default';
   if (UNAVAILABLE.includes(status)) return 'error';
@@ -73,7 +92,9 @@ const PlayerRow: React.FC<{
   slotLabel: string;
   dimmed?: boolean;
   flag?: string;
-}> = ({ player, slotLabel, dimmed, flag }) => {
+  /** Narrow column layout: identity and one number, nothing that would wrap. */
+  compact?: boolean;
+}> = ({ player, slotLabel, dimmed, flag, compact }) => {
   const status = player.injury_status;
   const label = injuryLabel(status);
   const tone = injuryTone(status);
@@ -81,12 +102,12 @@ const PlayerRow: React.FC<{
 
   return (
     <div
-      className={`flex items-center gap-3 rounded-lg border border-border p-3 transition-all hover:bg-surface-sunken hover:shadow-elevation-3 ${
-        dimmed ? 'bg-surface-sunken/50' : 'bg-surface-raised'
-      }`}
+      className={`flex items-center rounded-lg border border-border transition-all hover:bg-surface-sunken hover:shadow-elevation-3 ${
+        compact ? 'gap-2 p-2' : 'gap-3 p-3'
+      } ${dimmed ? 'bg-surface-sunken/50' : 'bg-surface-raised'}`}
     >
       {/* Lineup slot rail */}
-      <div className="w-12 shrink-0 text-center">
+      <div className={`shrink-0 text-center ${compact ? 'w-9' : 'w-12'}`}>
         <span
           className={`inline-block w-full rounded-md px-1 py-1 text-xs font-semibold ${getPositionColor(
             slotLabel
@@ -96,25 +117,31 @@ const PlayerRow: React.FC<{
         </span>
       </div>
 
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand to-primary-700 text-xs font-bold text-brand-fg">
-        {initials(player.full_name)}
-      </div>
+      {!compact && (
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand to-primary-700 text-xs font-bold text-brand-fg">
+          {initials(player.full_name)}
+        </div>
+      )}
 
       {/* Identity */}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="truncate font-semibold text-fg">{player.full_name}</span>
+        <div className="flex items-center gap-1.5">
+          <span
+            className={`truncate font-semibold text-fg ${compact ? 'text-sm' : ''}`}
+          >
+            {player.full_name}
+          </span>
           {label && (
             <Badge variant={tone === 'default' ? 'secondary' : tone} size="sm">
               {label}
             </Badge>
           )}
         </div>
-        <div className="mt-0.5 flex items-center gap-2 text-xs text-fg-muted">
+        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-fg-muted">
           <span className="font-medium">{player.position_name}</span>
           <span aria-hidden>•</span>
           <span>{player.pro_team_abbr || 'FA'}</span>
-          {!!player.positional_ranking && (
+          {!compact && !!player.positional_ranking && (
             <>
               <span aria-hidden>•</span>
               <span>
@@ -122,7 +149,7 @@ const PlayerRow: React.FC<{
               </span>
             </>
           )}
-          {!!player.percent_owned && (
+          {!compact && !!player.percent_owned && (
             <>
               <span aria-hidden>•</span>
               <span className="tabular">{player.percent_owned.toFixed(0)}% rostered</span>
@@ -130,38 +157,49 @@ const PlayerRow: React.FC<{
           )}
         </div>
         {flag && (
-          <div className="mt-1 flex items-center gap-1 text-xs font-medium text-warning-700 dark:text-warning-400">
-            <ArrowTrendingUpIcon className="h-3 w-3" />
-            {flag}
+          <div className="mt-1 flex items-start gap-1 text-xs font-medium text-warning-700 dark:text-warning-400">
+            <ArrowTrendingUpIcon className="mt-0.5 h-3 w-3 shrink-0" />
+            <span>{flag}</span>
           </div>
         )}
       </div>
 
       {/* Numbers */}
-      <div className="flex shrink-0 items-center gap-4 text-right">
-        <div className="w-12">
-          <div
-            className={`font-display text-base font-bold tabular ${
-              scored ? 'text-fg' : 'text-fg-subtle'
-            }`}
-          >
-            {pts(player.applied_points)}
-          </div>
-          <div className="text-[10px] uppercase tracking-wide text-fg-subtle">pts</div>
-        </div>
-        <div className="w-12">
+      {compact ? (
+        <div className="w-12 shrink-0 text-right">
           <div className="font-display text-base font-bold tabular text-brand">
             {pts(player.projected_points)}
           </div>
-          <div className="text-[10px] uppercase tracking-wide text-fg-subtle">proj</div>
-        </div>
-        <div className="hidden w-14 sm:block">
-          <div className="font-display text-base font-bold tabular text-fg-muted">
-            {pts(player.season_points)}
+          <div className="text-[10px] uppercase tracking-wide text-fg-subtle">
+            {scored ? `${pts(player.applied_points)} pts` : 'proj'}
           </div>
-          <div className="text-[10px] uppercase tracking-wide text-fg-subtle">season</div>
         </div>
-      </div>
+      ) : (
+        <div className="flex shrink-0 items-center gap-4 text-right">
+          <div className="w-12">
+            <div
+              className={`font-display text-base font-bold tabular ${
+                scored ? 'text-fg' : 'text-fg-subtle'
+              }`}
+            >
+              {pts(player.applied_points)}
+            </div>
+            <div className="text-[10px] uppercase tracking-wide text-fg-subtle">pts</div>
+          </div>
+          <div className="w-12">
+            <div className="font-display text-base font-bold tabular text-brand">
+              {pts(player.projected_points)}
+            </div>
+            <div className="text-[10px] uppercase tracking-wide text-fg-subtle">proj</div>
+          </div>
+          <div className="hidden w-14 sm:block">
+            <div className="font-display text-base font-bold tabular text-fg-muted">
+              {pts(player.season_points)}
+            </div>
+            <div className="text-[10px] uppercase tracking-wide text-fg-subtle">season</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -413,8 +451,7 @@ export const MyRosterPage: React.FC = () => {
                   {lineupAlerts.map((p) => (
                     <li key={p.player_id}>
                       <span className="font-medium text-fg">{p.full_name}</span> is{' '}
-                      {(p.injury_status || '').replace('_', ' ').toLowerCase()} in your{' '}
-                      {p.lineup_slot_name} slot
+                      {injuryPhrase(p.injury_status)} in your {p.lineup_slot_name} slot
                     </li>
                   ))}
                 </ul>
@@ -494,6 +531,7 @@ export const MyRosterPage: React.FC = () => {
                       player={player}
                       slotLabel={player.position_name}
                       dimmed
+                      compact
                       flag={startCandidates.get(player.player_id)}
                     />
                   ))}
@@ -520,6 +558,7 @@ export const MyRosterPage: React.FC = () => {
                       player={player}
                       slotLabel="IR"
                       dimmed
+                      compact
                     />
                   ))}
                 </div>
