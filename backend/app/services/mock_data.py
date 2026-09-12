@@ -320,6 +320,7 @@ def _team_season_points(team_id: int) -> float:
 def espn_league_info() -> Dict[str, Any]:
     return {
         "id": MOCK_ESPN_LEAGUE_ID,
+        "season": MOCK_SEASON,
         "name": LEAGUE_NAME,
         "size": len(TEAMS),
         "current_week": MOCK_CURRENT_WEEK,

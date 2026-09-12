@@ -77,6 +77,7 @@ async def connect_league(
             # Update existing league
             league = existing_league
             league.name = league_info["name"]
+            league.season_year = league_info["season"]
             league.size = league_info["size"]
             league.current_week = league_info["current_week"]
             league.scoring_type = league_info["scoring_type"]
@@ -89,7 +90,7 @@ async def connect_league(
             league = League(
                 espn_league_id=connection_request.league_id,
                 name=league_info["name"],
-                season_year=espn_service.season_year,
+                season_year=league_info["season"],
                 size=league_info["size"],
                 current_week=league_info["current_week"],
                 scoring_type=league_info["scoring_type"],
@@ -272,6 +273,9 @@ async def sync_league(
         
         # Update league with fresh data
         league.name = league_info["name"]
+        # ESPN keeps the same league id across seasons, so a sync has to roll the
+        # stored season forward or every downstream fetch stays on last year.
+        league.season_year = league_info["season"]
         league.size = league_info["size"]
         league.current_week = league_info["current_week"]
         league.scoring_type = league_info["scoring_type"]

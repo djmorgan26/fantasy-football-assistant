@@ -132,14 +132,16 @@ class ESPNService:
     async def get_league_info(
         self, 
         league_id: str, 
-        cookies: Optional[ESPNCookies] = None
+        cookies: Optional[ESPNCookies] = None,
+        season: Optional[int] = None
     ) -> Dict[str, Any]:
         if settings.mock_mode:
             return mock_data.espn_league_info()
         try:
-            data = await self._make_request(f"{league_id}", cookies)
+            data = await self._make_request(f"{league_id}", cookies, season=season)
             return {
                 "id": data.get("id"),
+                "season": data.get("seasonId") or season or self.season_year,
                 "name": data.get("settings", {}).get("name", "Unknown League"),
                 "size": len(data.get("teams", [])),
                 "current_week": data.get("scoringPeriodId", 1),

@@ -66,7 +66,7 @@ DATABASE_URL=postgresql+asyncpg://username:password@localhost:5432/fantasy_footb
 ESPN_LEAGUE_ID=your_league_id_here
 ESPN_S2=your_espn_s2_cookie_here
 ESPN_SWID=your_espn_swid_cookie_here
-ESPN_SEASON_YEAR=2024
+# ESPN_SEASON_YEAR=2026   # optional: derived from today's date when unset
 
 # Security
 SECRET_KEY=your-secret-key-here

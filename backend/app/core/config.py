@@ -1,5 +1,18 @@
+from datetime import date
 from typing import List
+
 from pydantic_settings import BaseSettings
+
+
+def current_nfl_season() -> int:
+    """The fantasy season we should target.
+
+    From March onward the upcoming season is the one that matters (draft prep,
+    offseason moves); in January/February the previous year's season is still
+    wrapping up.
+    """
+    today = date.today()
+    return today.year if today.month >= 3 else today.year - 1
 
 
 class Settings(BaseSettings):
@@ -19,7 +32,7 @@ class Settings(BaseSettings):
 
     # ESPN API
     espn_api_base_url: str = "https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl"
-    espn_season_year: int = 2025
+    espn_season_year: int = 0  # 0 = derive from today's date
     espn_rate_limit_requests: int = 100
     espn_rate_limit_window: int = 3600
     
@@ -69,6 +82,10 @@ class Settings(BaseSettings):
         touches) Postgres, regardless of what DATABASE_URL happens to be set to.
         """
         return self.mock_database_url if self.mock_mode else self.database_url
+
+    def model_post_init(self, __context) -> None:
+        if not self.espn_season_year:
+            self.espn_season_year = current_nfl_season()
 
     class Config:
         env_file = ".env"
