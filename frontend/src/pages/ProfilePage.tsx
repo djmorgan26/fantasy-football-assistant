@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { extractESPNCookies } from '@/utils';
+import { PageContainer, PageHeader } from '@/components/layout/Page';
 
 const profileSchema = z
   .object({
@@ -99,13 +100,11 @@ export const ProfilePage: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-8">
-        <h1 className="text-display-sm text-fg">Profile Settings</h1>
-        <p className="mt-2 text-fg-muted">
-          Manage your account details and ESPN league credentials.
-        </p>
-      </div>
+    <PageContainer width="narrow">
+      <PageHeader
+        title="Profile Settings"
+        subtitle="Manage your account details and ESPN league credentials."
+      />
 
       <div className="space-y-6">
         <Card>
@@ -114,17 +113,17 @@ export const ProfilePage: React.FC = () => {
           </CardHeader>
           <CardContent>
             <dl className="space-y-4">
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                 <dt className="text-sm text-fg-muted">Full name</dt>
                 <dd className="text-sm font-medium text-fg">
                   {user?.full_name || 'Not set'}
                 </dd>
               </div>
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                 <dt className="text-sm text-fg-muted">Email</dt>
-                <dd className="text-sm font-medium text-fg">{user?.email}</dd>
+                <dd className="break-all text-sm font-medium text-fg">{user?.email}</dd>
               </div>
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                 <dt className="text-sm text-fg-muted">ESPN credentials</dt>
                 <dd>
                   {user?.has_espn_credentials ? (
@@ -239,6 +238,6 @@ export const ProfilePage: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PageContainer>
   );
 };

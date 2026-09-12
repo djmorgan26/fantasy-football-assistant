@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useLeague } from '@/hooks/useLeagues';
 import { useSearchPlayers } from '@/hooks/usePlayers';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
@@ -8,9 +8,9 @@ import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { PageContainer, PageHeader } from '@/components/layout/Page';
 import { getPositionColor } from '@/utils';
 import {
-  ArrowLeftIcon,
   MagnifyingGlassIcon,
   UserIcon,
   TrophyIcon,
@@ -49,31 +49,15 @@ export const PlayerSearchPage: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center mb-4">
-          <Link
-            to={`/leagues/${leagueId}`}
-            className="flex items-center text-fg-muted hover:text-fg transition-colors"
-          >
-            <ArrowLeftIcon className="h-4 w-4 mr-1" />
-            Back to League
-          </Link>
-        </div>
-
-        <div className="flex items-center">
-          <MagnifyingGlassIcon className="h-8 w-8 text-brand mr-3" />
-          <div>
-            <h1 className="text-3xl font-bold text-fg">
-              Player Search
-            </h1>
-            <p className="text-fg-muted">
-              Search and analyze players in {league?.name}
-            </p>
-          </div>
-        </div>
-      </div>
+    <PageContainer>
+      <PageHeader
+        backTo={`/leagues/${leagueId}`}
+        backLabel="Back to League"
+        title="Player Search"
+        subtitle={`Search and analyze players in ${league?.name ?? 'your league'}`}
+        media={<MagnifyingGlassIcon className="h-8 w-8 text-brand" />}
+        mediaDesktopOnly
+      />
 
       {/* Search Filters */}
       <Card className="mb-6">
@@ -81,7 +65,7 @@ export const PlayerSearchPage: React.FC = () => {
           <CardTitle>Search Filters</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
             <div>
               <label className="block text-sm font-medium text-fg mb-2">
                 Search Players
@@ -93,7 +77,7 @@ export const PlayerSearchPage: React.FC = () => {
                   placeholder="Player name or team..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-border rounded-lg bg-surface-raised text-fg placeholder:text-fg-subtle focus-visible:ring-2 focus-visible:ring-ring focus:border-brand"
+                  className="min-h-[2.75rem] w-full rounded-lg border border-border bg-surface-raised py-2.5 pl-10 pr-4 text-fg placeholder:text-fg-subtle focus:border-brand focus-visible:ring-2 focus-visible:ring-ring sm:min-h-[2.5rem] sm:py-2 sm:text-sm"
                 />
               </div>
             </div>
@@ -115,12 +99,12 @@ export const PlayerSearchPage: React.FC = () => {
             />
 
             <div className="flex items-end">
-              <label className="flex items-center">
+              <label className="flex min-h-[2.75rem] cursor-pointer items-center sm:min-h-0">
                 <input
                   type="checkbox"
                   checked={availableOnly}
                   onChange={(e) => setAvailableOnly(e.target.checked)}
-                  className="mr-2"
+                  className="mr-2 h-4 w-4 accent-[rgb(var(--brand))]"
                 />
                 <span className="text-sm text-fg">Available players only</span>
               </label>
@@ -149,11 +133,13 @@ export const PlayerSearchPage: React.FC = () => {
       {/* Results */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Search Results (<span className="tabular">{totalCount}</span> players)</span>
-            <div className="text-sm font-normal text-fg-muted">
-              Week {league?.current_week} • 2024 Season
-            </div>
+          <CardTitle className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              Search Results (<span className="tabular">{totalCount}</span> players)
+            </span>
+            <span className="text-sm font-normal text-fg-muted">
+              Week {league?.current_week} • {league?.season_year ?? ''} Season
+            </span>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -182,15 +168,15 @@ export const PlayerSearchPage: React.FC = () => {
                   className="p-4 border border-border rounded-lg hover:shadow-elevation-3 transition-shadow"
                 >
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-center space-x-4">
+                    <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                       {/* Player Avatar */}
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand to-primary-700 font-bold text-brand-fg sm:h-12 sm:w-12">
                         {player.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
                       </div>
 
                       {/* Player Info */}
-                      <div>
-                        <div className="flex items-center space-x-2 mb-1">
+                      <div className="min-w-0">
+                        <div className="mb-1 flex flex-wrap items-center gap-2">
                           <h3 className="font-semibold text-fg">{player.full_name}</h3>
                           <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPositionColor(player.position_name || '')}`}>
                             {player.position_name}
@@ -198,7 +184,7 @@ export const PlayerSearchPage: React.FC = () => {
                           <span className="text-sm text-fg-muted">{player.pro_team_abbr}</span>
                         </div>
 
-                        <div className="flex items-center space-x-4 text-sm text-fg-muted">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-fg-muted">
                           <span className="flex items-center">
                             <TrophyIcon className="h-4 w-4 mr-1" />
                             <span className="tabular">{player.season_points?.toFixed(1) || '0.0'}</span> pts
@@ -213,14 +199,14 @@ export const PlayerSearchPage: React.FC = () => {
                     </div>
 
                     {/* Status & Actions */}
-                    <div className="flex items-center space-x-4">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                       <Badge variant="success" size="sm">Available</Badge>
 
-                      <Button size="sm" variant="secondary">
+                      <Button size="sm" variant="secondary" className="flex-1 sm:flex-none">
                         Add to Watchlist
                       </Button>
 
-                      <Button size="sm" variant="ghost">
+                      <Button size="sm" variant="ghost" className="flex-1 sm:flex-none">
                         View Details
                       </Button>
                     </div>
@@ -231,6 +217,6 @@ export const PlayerSearchPage: React.FC = () => {
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageContainer>
   );
 };

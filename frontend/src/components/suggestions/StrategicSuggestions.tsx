@@ -174,13 +174,13 @@ export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
   return (
     <Card className={cn('', className)}>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <LightBulbIcon className="h-6 w-6 text-brand" />
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center space-x-2">
+            <LightBulbIcon className="h-6 w-6 shrink-0 text-brand" />
             <CardTitle>Strategic Suggestions</CardTitle>
           </div>
-          <Badge variant="secondary" size="sm">
-            {filteredSuggestions.length} suggestions
+          <Badge variant="secondary" size="sm" className="shrink-0 whitespace-nowrap">
+            {filteredSuggestions.length}
           </Badge>
         </div>
         <p className="text-sm text-fg-muted">
@@ -190,8 +190,8 @@ export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
 
       <CardContent className="space-y-6">
         {/* Filters */}
-        <div className="flex flex-wrap gap-3">
-          <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="hidden items-center space-x-2 sm:flex">
             <FunnelIcon className="h-4 w-4 text-fg-subtle" />
             <span className="text-sm font-medium text-fg">Filters:</span>
           </div>
@@ -207,7 +207,7 @@ export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
               { value: 'lineup', label: 'Lineup' },
             ]}
             size="sm"
-            className="w-32"
+            className="w-32 flex-1 sm:flex-none"
           />
 
           <Select
@@ -220,7 +220,7 @@ export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
               { value: 'low', label: 'Low Priority' },
             ]}
             size="sm"
-            className="w-40"
+            className="w-40 flex-1 sm:flex-none"
           />
         </div>
 

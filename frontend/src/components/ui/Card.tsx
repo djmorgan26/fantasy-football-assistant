@@ -12,7 +12,7 @@ export const Card: React.FC<CardProps> = ({ children, className, padding = true,
     <div
       className={cn(
         'bg-surface-raised rounded-card border border-border shadow-elevation-2',
-        padding && 'p-6',
+        padding && 'p-4 sm:p-6',
         className
       )}
       {...props}
@@ -28,7 +28,7 @@ interface CardHeaderProps {
 }
 
 export const CardHeader: React.FC<CardHeaderProps> = ({ children, className }) => {
-  return <div className={cn('border-b border-border pb-4 mb-4', className)}>{children}</div>;
+  return <div className={cn('border-b border-border pb-3 mb-3 sm:pb-4 sm:mb-4', className)}>{children}</div>;
 };
 
 interface CardTitleProps {
@@ -37,7 +37,11 @@ interface CardTitleProps {
 }
 
 export const CardTitle: React.FC<CardTitleProps> = ({ children, className }) => {
-  return <h3 className={cn('font-display text-lg font-bold text-fg', className)}>{children}</h3>;
+  return (
+    <h3 className={cn('font-display text-base font-bold text-fg sm:text-lg', className)}>
+      {children}
+    </h3>
+  );
 };
 
 interface CardContentProps {

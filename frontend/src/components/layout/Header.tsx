@@ -4,7 +4,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import {
-  Bars3Icon,
   UserCircleIcon,
   ChevronDownIcon,
   Cog6ToothIcon,
@@ -13,13 +12,12 @@ import {
 import { Menu, Transition } from '@headlessui/react';
 import { cn } from '@/utils';
 
-interface HeaderProps {
-  onMenuToggle?: () => void;
-  showMenuButton?: boolean;
-}
-
-/** Sticky top bar: mobile menu button, brand (mobile), theme toggle, user menu. */
-export const Header: React.FC<HeaderProps> = ({ onMenuToggle, showMenuButton = true }) => {
+/**
+ * Sticky top bar: brand (mobile only, the sidebar carries it on desktop),
+ * theme toggle and the user menu. Navigation lives in the sidebar on desktop
+ * and in the bottom tab bar on phones, so there is no menu button here.
+ */
+export const Header: React.FC = () => {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -30,36 +28,27 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, showMenuButton = t
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-surface/80 backdrop-blur-md">
-      <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6">
-        <div className="flex items-center gap-3">
-          {showMenuButton && (
-            <button
-              type="button"
-              onClick={onMenuToggle}
-              aria-label="Open navigation menu"
-              className="rounded-lg p-2 text-fg-muted hover:bg-surface-sunken hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
-            >
-              <Bars3Icon className="h-6 w-6" />
-            </button>
-          )}
-
+      <div className="flex h-14 items-center justify-between gap-3 px-4 sm:h-16 sm:px-6">
+        <div className="flex min-w-0 items-center gap-3">
           {/* Brand — visible on mobile (sidebar shows it on desktop) */}
-          <Link to="/" className="flex items-center gap-2 lg:hidden">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand">
+          <Link to="/" className="flex min-w-0 items-center gap-2 lg:hidden">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand">
               <span className="text-sm font-bold text-brand-fg">FF</span>
             </div>
-            <span className="font-display text-lg font-bold text-fg">Fantasy Football</span>
+            <span className="truncate font-display text-base font-bold text-fg sm:text-lg">
+              Fantasy Football
+            </span>
           </Link>
         </div>
 
-        <div className="flex items-center gap-1 sm:gap-2">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <ThemeToggle />
 
           {isAuthenticated ? (
             <Menu as="div" className="relative">
-              <Menu.Button className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-fg-muted transition-colors hover:bg-surface-sunken hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <Menu.Button className="flex min-h-[2.5rem] items-center gap-2 rounded-lg px-2 py-1.5 text-fg-muted transition-colors hover:bg-surface-sunken hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <UserCircleIcon className="h-6 w-6" />
-                <span className="hidden text-sm font-medium sm:inline">
+                <span className="hidden max-w-[12rem] truncate text-sm font-medium sm:inline">
                   {user?.full_name || user?.email}
                 </span>
                 <ChevronDownIcon className="h-4 w-4" />
@@ -81,7 +70,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, showMenuButton = t
                         <Link
                           to="/profile"
                           className={cn(
-                            'flex items-center px-4 py-2 text-sm',
+                            'flex min-h-[2.75rem] items-center px-4 py-2 text-sm',
                             active ? 'bg-surface-sunken text-fg' : 'text-fg-muted'
                           )}
                         >
@@ -95,7 +84,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, showMenuButton = t
                         <button
                           onClick={handleLogout}
                           className={cn(
-                            'flex w-full items-center px-4 py-2 text-left text-sm',
+                            'flex min-h-[2.75rem] w-full items-center px-4 py-2 text-left text-sm',
                             active ? 'bg-surface-sunken text-fg' : 'text-fg-muted'
                           )}
                         >

@@ -35,8 +35,8 @@ export function Select<T extends string = string>({
   const selected = options.find((o) => o.value === value);
 
   const buttonSizes = {
-    sm: 'py-1.5 pl-3 pr-8 text-sm',
-    md: 'py-2 pl-3 pr-10 text-sm',
+    sm: 'min-h-[2.25rem] py-1.5 pl-3 pr-8 text-sm',
+    md: 'min-h-[2.75rem] sm:min-h-[2.5rem] py-2.5 sm:py-2 pl-3 pr-10 text-base sm:text-sm',
   };
 
   return (
@@ -82,7 +82,7 @@ export function Select<T extends string = string>({
               leaveFrom="opacity-100"
               leaveTo="opacity-0"
             >
-              <Listbox.Options className="absolute z-50 mt-1.5 max-h-60 w-max min-w-full overflow-auto rounded-lg border border-border bg-surface-raised py-1 text-sm shadow-elevation-3 focus:outline-none">
+              <Listbox.Options className="absolute z-50 mt-1.5 max-h-60 w-max min-w-full max-w-[min(20rem,calc(100vw-2rem))] overflow-auto rounded-lg border border-border bg-surface-raised py-1 text-sm shadow-elevation-3 focus:outline-none">
                 {options.map((opt) => (
                   <Listbox.Option
                     key={opt.value}

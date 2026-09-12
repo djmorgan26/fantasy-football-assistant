@@ -16,6 +16,7 @@ import {
   CheckCircleIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
+import { PageContainer, PageHeader } from '@/components/layout/Page';
 
 const sleeperConnectionSchema = z.object({
   league_id: z.string().min(1, 'League ID is required'),
@@ -61,16 +62,12 @@ export const SleeperConnectPage: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-2xl">
-      <div className="mb-8">
-        <PlatformBadge platform="sleeper" size="md" className="mb-3" />
-        <h1 className="text-display-sm text-fg mb-2">
-          Connect Your Sleeper League
-        </h1>
-        <p className="text-fg-muted">
-          Link your Sleeper fantasy football league to unlock AI-powered insights
-        </p>
-      </div>
+    <PageContainer width="narrow">
+      <PlatformBadge platform="sleeper" size="md" className="mb-3" />
+      <PageHeader
+        title="Connect Your Sleeper League"
+        subtitle="Link your Sleeper fantasy football league to unlock AI-powered insights"
+      />
 
       {/* Info Banner */}
       <Card className="mb-6 bg-brand/5 border-brand/30">
@@ -195,6 +192,6 @@ export const SleeperConnectPage: React.FC = () => {
           No API key required - Sleeper data is public and free! 🎉
         </p>
       </div>
-    </div>
+    </PageContainer>
   );
 };

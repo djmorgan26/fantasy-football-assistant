@@ -5,7 +5,7 @@ import { PRIMARY_NAV, leagueNav, isRealLeagueId, NavItem } from './navConfig';
 
 const linkClasses = (collapsed: boolean) => ({ isActive }: { isActive: boolean }) =>
   cn(
-    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+    'flex min-h-[2.75rem] items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:min-h-0',
     collapsed && 'justify-center px-2',
     isActive
       ? 'bg-brand/10 text-brand'

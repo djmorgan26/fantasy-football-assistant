@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useLeague } from '@/hooks/useLeagues';
 import { useGenerateContent } from '@/hooks/useContent';
 import { VoiceSettings } from '@/components/content/VoiceSettings';
@@ -12,7 +12,6 @@ import { SkeletonCard } from '@/components/ui/Skeleton';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ContentType, GeneratedContent } from '@/types';
 import {
-  ArrowLeftIcon,
   NewspaperIcon,
   TrophyIcon,
   SparklesIcon,
@@ -21,6 +20,7 @@ import {
   Cog6ToothIcon,
   FireIcon,
 } from '@heroicons/react/24/outline';
+import { PageContainer, PageHeader } from '@/components/layout/Page';
 import toast from 'react-hot-toast';
 
 const CONTENT_OPTIONS: {
@@ -62,7 +62,6 @@ const CONTENT_OPTIONS: {
 
 export const PressBoxPage: React.FC = () => {
   const { leagueId } = useParams<{ leagueId: string }>();
-  const navigate = useNavigate();
   const id = parseInt(leagueId || '0', 10);
   const { data: league, isLoading } = useLeague(id);
   const generate = useGenerateContent(id);
@@ -94,34 +93,29 @@ export const PressBoxPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto px-4 py-8 max-w-5xl">
+      <PageContainer>
         <div className="space-y-5">
           <SkeletonCard />
           <SkeletonCard />
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-5xl">
-      <Button variant="ghost" size="sm" onClick={() => navigate(`/leagues/${id}`)} className="mb-4">
-        <ArrowLeftIcon className="h-4 w-4 mr-1" />
-        Back to League
-      </Button>
-
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-fg">Press Box</h1>
-          <p className="text-fg-muted mt-1">
-            {league?.name} · AI content built from real weekly data + your league's voice
-          </p>
-        </div>
-        <Button variant="secondary" size="sm" onClick={() => setShowSettings((v) => !v)}>
-          <Cog6ToothIcon className="h-4 w-4 mr-1.5" />
-          {showSettings ? 'Hide' : 'Voice'} Settings
-        </Button>
-      </div>
+    <PageContainer>
+      <PageHeader
+        backTo={`/leagues/${id}`}
+        backLabel="Back to League"
+        title="Press Box"
+        subtitle={`${league?.name ?? ''} · AI content built from real weekly data + your league's voice`}
+        actions={
+          <Button variant="secondary" size="sm" onClick={() => setShowSettings((v) => !v)}>
+            <Cog6ToothIcon className="h-4 w-4" />
+            {showSettings ? 'Hide settings' : 'Voice settings'}
+          </Button>
+        }
+      />
 
       {showSettings && (
         <div className="mb-8">
@@ -140,27 +134,31 @@ export const PressBoxPage: React.FC = () => {
             label: opt.label,
             icon: opt.icon,
           }))}
-          className="overflow-x-auto"
         />
         <p className="text-sm text-fg-muted mt-2">{selected.description}</p>
       </div>
 
       {/* Generate controls */}
       <Card className="mb-6">
-        <div className="flex flex-wrap items-end gap-4">
+        <div className="flex flex-wrap items-end gap-3 sm:gap-4">
           {selected.needsWeek && (
             <Input
               label="Week"
               type="number"
+              inputMode="numeric"
               min={1}
               max={18}
               value={week}
               onChange={(e) => setWeek(parseInt(e.target.value, 10) || 1)}
-              className="w-24"
+              className="w-20"
             />
           )}
-          <Button onClick={handleGenerate} loading={generate.isLoading}>
-            <SparklesIcon className="h-4 w-4 mr-1.5" />
+          <Button
+            onClick={handleGenerate}
+            loading={generate.isLoading}
+            className="w-full sm:w-auto"
+          >
+            <SparklesIcon className="h-4 w-4" />
             Generate {selected.label}
           </Button>
         </div>
@@ -182,7 +180,7 @@ export const PressBoxPage: React.FC = () => {
           <div className="space-y-5">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
+                <CardTitle className="flex flex-wrap items-center justify-between gap-2">
                   <span>{selected.label}</span>
                   <div className="flex items-center gap-2">
                     <Badge variant={result.generated_by === 'fallback' ? 'warning' : 'success'} size="sm">
@@ -204,7 +202,7 @@ export const PressBoxPage: React.FC = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="whitespace-pre-wrap text-fg leading-relaxed">
+                <div className="whitespace-pre-wrap break-words text-fg leading-relaxed">
                   {result.content}
                 </div>
               </CardContent>
@@ -214,7 +212,7 @@ export const PressBoxPage: React.FC = () => {
           </div>
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 };
 
@@ -256,9 +254,12 @@ const StoryFacts: React.FC<{ narrative: NonNullable<GeneratedContent['narrative'
       <CardContent>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {facts.map((f) => (
-            <div key={f.label} className="flex justify-between text-sm border-b border-border pb-1.5">
+            <div
+              key={f.label}
+              className="flex flex-col gap-0.5 border-b border-border pb-1.5 text-sm sm:flex-row sm:justify-between sm:gap-4"
+            >
               <span className="text-fg-muted">{f.label}</span>
-              <span className="font-medium text-fg text-right">{f.value}</span>
+              <span className="font-medium text-fg sm:text-right">{f.value}</span>
             </div>
           ))}
         </div>

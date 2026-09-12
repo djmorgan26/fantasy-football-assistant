@@ -56,26 +56,28 @@ export const Modal: React.FC<ModalProps> = ({
         </Transition.Child>
 
         <div className="fixed inset-0 overflow-y-auto">
-          <div className="flex min-h-full items-center justify-center p-4">
+          {/* Phones get a sheet anchored to the bottom edge, within thumb reach;
+              from sm: up it is the usual centred dialog. */}
+          <div className="flex min-h-full items-end justify-center p-0 sm:items-center sm:p-4">
             <Transition.Child
               as={Fragment}
               enter="ease-out duration-200"
-              enterFrom="opacity-0 translate-y-2 scale-95"
-              enterTo="opacity-100 translate-y-0 scale-100"
+              enterFrom="opacity-0 translate-y-4 sm:translate-y-2 sm:scale-95"
+              enterTo="opacity-100 translate-y-0 sm:scale-100"
               leave="ease-in duration-150"
-              leaveFrom="opacity-100 translate-y-0 scale-100"
-              leaveTo="opacity-0 translate-y-2 scale-95"
+              leaveFrom="opacity-100 translate-y-0 sm:scale-100"
+              leaveTo="opacity-0 translate-y-4 sm:translate-y-2 sm:scale-95"
             >
               <Dialog.Panel
                 className={cn(
-                  'w-full rounded-card border border-border bg-surface-raised shadow-elevation-4',
+                  'flex max-h-[92vh] w-full flex-col rounded-t-card border border-border bg-surface-raised shadow-elevation-4 sm:max-h-[85vh] sm:rounded-card',
                   sizes[size],
                   className
                 )}
               >
                 {(title || !hideClose) && (
-                  <div className="flex items-start justify-between gap-4 border-b border-border p-5">
-                    <div>
+                  <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border p-4 sm:p-5">
+                    <div className="min-w-0">
                       {title && (
                         <Dialog.Title className="font-display text-lg font-bold text-fg">
                           {title}
@@ -100,10 +102,12 @@ export const Modal: React.FC<ModalProps> = ({
                   </div>
                 )}
 
-                <div className="p-5">{children}</div>
+                <div className="flex-1 overflow-y-auto p-4 sm:p-5">{children}</div>
 
                 {footer && (
-                  <div className="flex justify-end gap-3 border-t border-border p-5">{footer}</div>
+                  <div className="flex shrink-0 flex-col-reverse gap-3 border-t border-border p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:flex-row sm:justify-end sm:p-5 sm:pb-5">
+                    {footer}
+                  </div>
                 )}
               </Dialog.Panel>
             </Transition.Child>

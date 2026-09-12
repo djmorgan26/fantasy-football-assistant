@@ -47,9 +47,9 @@ const TransactionBadge: React.FC<{ transaction: WaiverTransaction }> = ({ transa
         <Badge variant={getTypeVariant(transaction.transaction_type)} size="sm">
           {transaction.transaction_type}
         </Badge>
-        <span className="font-medium text-fg">{transaction.player_name}</span>
+        <span className="truncate font-medium text-fg">{transaction.player_name}</span>
       </div>
-      <div className="flex items-center space-x-2">
+      <div className="flex shrink-0 items-center space-x-2">
         {transaction.bid_amount > 0 && (
           <span className="text-fg-muted tabular">${transaction.bid_amount}</span>
         )}
@@ -89,16 +89,16 @@ export const WaiverBudgetCard: React.FC<WaiverBudgetCardProps> = ({
       className
     )}>
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">
-            {budget.team_name}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <CardTitle className="truncate">{budget.team_name}</CardTitle>
             {isUserTeam && (
-              <span className="ml-2 text-xs px-2 py-1 bg-brand/10 text-brand rounded-full">
+              <span className="mt-1 inline-block rounded-full bg-brand/10 px-2 py-0.5 text-xs text-brand">
                 Your Team
               </span>
             )}
-          </CardTitle>
-          <CurrencyDollarIcon className="h-5 w-5 text-fg-subtle" />
+          </div>
+          <CurrencyDollarIcon className="h-5 w-5 shrink-0 text-fg-subtle" />
         </div>
       </CardHeader>
 
@@ -119,7 +119,7 @@ export const WaiverBudgetCard: React.FC<WaiverBudgetCardProps> = ({
             label={`${remainingPercentage}% of budget remaining`}
           />
 
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-2 gap-3 text-sm sm:gap-4">
             <div className="flex items-center justify-between">
               <span className="text-fg-muted">Total:</span>
               <span className="font-medium text-fg tabular">${budget.total_budget}</span>

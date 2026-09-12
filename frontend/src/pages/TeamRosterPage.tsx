@@ -1,13 +1,13 @@
 import React from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useTeam, useTeamRoster } from '@/hooks/useTeams';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { PageContainer, PageHeader } from '@/components/layout/Page';
 import { getPositionColor } from '@/utils';
 import {
-  ArrowLeftIcon,
   UserIcon,
   StarIcon,
   TrophyIcon,
@@ -16,7 +16,6 @@ import {
 
 export const TeamRosterPage: React.FC = () => {
   const { leagueId, teamId } = useParams<{ leagueId: string; teamId: string }>();
-  const navigate = useNavigate();
 
   const {
     data: team,
@@ -32,7 +31,7 @@ export const TeamRosterPage: React.FC = () => {
 
   if (teamLoading || rosterLoading) {
     return (
-      <div className="container mx-auto max-w-6xl px-4 py-8">
+      <PageContainer>
         <Skeleton className="mb-8 h-16 w-64" />
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="space-y-3 lg:col-span-2">
@@ -41,13 +40,13 @@ export const TeamRosterPage: React.FC = () => {
           </div>
           <Skeleton className="h-64 w-full" />
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
   if (teamError || rosterError || !team) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <PageContainer>
         <Card>
           <EmptyState
             icon={UserIcon}
@@ -61,7 +60,7 @@ export const TeamRosterPage: React.FC = () => {
             }
           />
         </Card>
-      </div>
+      </PageContainer>
     );
   }
 
@@ -78,55 +77,46 @@ export const TeamRosterPage: React.FC = () => {
   const irPlayers = roster?.roster?.filter(player => player.lineup_slot_name === 'IR') || [];
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center mb-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate(`/leagues/${leagueId}`)}
-            className="mr-4"
-          >
-            <ArrowLeftIcon className="h-4 w-4 mr-1" />
-            Back to League
-          </Button>
-        </div>
-        
-        <div className="flex items-center space-x-4">
-          <div className="relative">
+    <PageContainer>
+      <PageHeader
+        backTo={`/leagues/${leagueId}`}
+        backLabel="Back to League"
+        title={team.name || `Team ${team.abbreviation}`}
+        media={
+          <div className="relative h-12 w-12 sm:h-16 sm:w-16">
             <img
               src={team.logo_url}
               alt={`${team.name || team.abbreviation} logo`}
-              className="w-16 h-16 rounded-full object-cover bg-surface-sunken"
+              className="h-full w-full rounded-full bg-surface-sunken object-cover"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.style.display = 'none';
               }}
             />
-            <div className="absolute inset-0 w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-xl">
+            <div className="absolute inset-0 flex items-center justify-center rounded-full bg-gradient-to-br from-brand to-primary-700 font-bold text-brand-fg sm:text-xl">
               {team.abbreviation || team.name?.charAt(0) || '?'}
             </div>
           </div>
-
-          <div>
-            <h1 className="text-3xl font-bold text-fg mb-2">
-              {team.name || `Team ${team.abbreviation}`}
-            </h1>
-            <div className="flex items-center space-x-4 text-sm text-fg-muted">
-              <span className="flex items-center">
-                <TrophyIcon className="h-4 w-4 mr-1" />
-                <span className="tabular">{team.wins}-{team.losses}{team.ties > 0 && `-${team.ties}`}</span>
+        }
+        subtitle={
+          <span className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <span className="flex items-center">
+              <TrophyIcon className="mr-1 h-4 w-4" />
+              <span className="tabular">
+                {team.wins}-{team.losses}
+                {team.ties > 0 && `-${team.ties}`}
               </span>
-              <span className="flex items-center">
-                <ChartBarIcon className="h-4 w-4 mr-1" />
-                <span className="tabular">{team.points_for.toFixed(1)}</span> PF
-              </span>
-              <span><span className="tabular">{team.points_against.toFixed(1)}</span> PA</span>
-            </div>
-          </div>
-        </div>
-      </div>
+            </span>
+            <span className="flex items-center">
+              <ChartBarIcon className="mr-1 h-4 w-4" />
+              <span className="tabular">{team.points_for.toFixed(1)}</span> PF
+            </span>
+            <span>
+              <span className="tabular">{team.points_against.toFixed(1)}</span> PA
+            </span>
+          </span>
+        }
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Starting Lineup */}
@@ -143,11 +133,11 @@ export const TeamRosterPage: React.FC = () => {
               <div className="space-y-3">
                 {startingRoster.map((player, index) => (
                   <div key={index} className="flex items-center p-3 border border-border rounded-lg hover:bg-surface-sunken transition-colors">
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-medium text-fg">{player.full_name}</h4>
-                          <div className="flex items-center space-x-2 mt-1">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h4 className="truncate font-medium text-fg">{player.full_name}</h4>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPositionColor(player.position_name)}`}>
                               {player.position_name}
                             </span>
@@ -156,7 +146,7 @@ export const TeamRosterPage: React.FC = () => {
                             </span>
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div className="shrink-0 text-right">
                           {player.stats?.projected && (
                             <div className="text-sm text-fg-muted">
                               Proj: <span className="tabular">{(player.stats.projected['0'] || 0).toFixed(1)}</span>
@@ -192,17 +182,17 @@ export const TeamRosterPage: React.FC = () => {
               <div className="space-y-3">
                 {benchPlayers.map((player, index) => (
                   <div key={index} className="flex items-center p-3 border border-border rounded-lg bg-surface-sunken">
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-medium text-fg">{player.full_name}</h4>
-                          <div className="flex items-center space-x-2 mt-1">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h4 className="truncate font-medium text-fg">{player.full_name}</h4>
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPositionColor(player.position_name)}`}>
                               {player.position_name}
                             </span>
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div className="shrink-0 text-right">
                           {player.stats?.projected && (
                             <div className="text-sm text-fg-muted">
                               Proj: <span className="tabular">{(player.stats.projected['0'] || 0).toFixed(1)}</span>
@@ -325,6 +315,6 @@ export const TeamRosterPage: React.FC = () => {
           </Card>
         </div>
       </div>
-    </div>
+    </PageContainer>
   );
 };

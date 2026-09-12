@@ -7,6 +7,8 @@ import {
   NewspaperIcon,
   FireIcon,
   ArrowPathIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 import api from '@/services/api';
@@ -62,12 +64,12 @@ export const WeeklyRecap: React.FC<WeeklyRecapProps> = ({
   return (
     <Card className={className}>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-gradient-to-br from-brand to-accent rounded-lg">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center space-x-3">
+            <div className="shrink-0 p-2 bg-gradient-to-br from-brand to-accent rounded-lg">
               <FireIcon className="h-6 w-6 text-brand-fg" />
             </div>
-            <div>
+            <div className="min-w-0">
               <CardTitle className="flex items-center space-x-2">
                 <NewspaperIcon className="h-5 w-5 text-fg-muted" />
                 <span>Weekly Roast Report</span>
@@ -90,14 +92,16 @@ export const WeeklyRecap: React.FC<WeeklyRecapProps> = ({
 
       <CardContent>
         {/* Week Selector */}
-        <div className="flex items-center justify-center space-x-2 mb-6">
+        <div className="mb-6 flex items-center justify-center gap-2">
           <Button
             variant="secondary"
             size="sm"
+            aria-label="Previous week"
             onClick={() => handleWeekChange(selectedWeek - 1)}
             disabled={selectedWeek <= 1 || isLoading}
           >
-            ← Previous
+            <ChevronLeftIcon className="h-4 w-4" />
+            <span className="hidden sm:inline">Previous</span>
           </Button>
           <Select
             value={String(selectedWeek)}
@@ -107,15 +111,17 @@ export const WeeklyRecap: React.FC<WeeklyRecapProps> = ({
               label: `Week ${i + 1}`,
             }))}
             disabled={isLoading}
-            className="w-32"
+            className="w-32 shrink-0"
           />
           <Button
             variant="secondary"
             size="sm"
+            aria-label="Next week"
             onClick={() => handleWeekChange(selectedWeek + 1)}
             disabled={selectedWeek >= currentWeek || isLoading}
           >
-            Next →
+            <span className="hidden sm:inline">Next</span>
+            <ChevronRightIcon className="h-4 w-4" />
           </Button>
         </div>
 
@@ -140,7 +146,7 @@ export const WeeklyRecap: React.FC<WeeklyRecapProps> = ({
           </div>
         ) : recap ? (
           <div className="prose prose-sm max-w-none">
-            <div className="bg-surface-sunken rounded-lg p-6 border border-border shadow-inner">
+            <div className="bg-surface-sunken rounded-lg p-4 sm:p-6 border border-border shadow-inner">
               <div className="text-fg leading-relaxed whitespace-pre-wrap">
                 {recap}
               </div>

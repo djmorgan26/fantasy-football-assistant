@@ -11,10 +11,10 @@ import { Select } from '@/components/ui/Select';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Progress } from '@/components/ui/Progress';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { PageContainer, PageHeader } from '@/components/layout/Page';
 import { getPositionColor } from '@/utils';
 import { RosterPlayer } from '@/types';
 import {
-  ArrowLeftIcon,
   ArrowTopRightOnSquareIcon,
   ArrowTrendingUpIcon,
   ClipboardDocumentListIcon,
@@ -103,11 +103,11 @@ const PlayerRow: React.FC<{
   return (
     <div
       className={`flex items-center rounded-lg border border-border transition-all hover:bg-surface-sunken hover:shadow-elevation-3 ${
-        compact ? 'gap-2 p-2' : 'gap-3 p-3'
+        compact ? 'gap-2 p-2' : 'gap-2 p-2.5 sm:gap-3 sm:p-3'
       } ${dimmed ? 'bg-surface-sunken/50' : 'bg-surface-raised'}`}
     >
       {/* Lineup slot rail */}
-      <div className={`shrink-0 text-center ${compact ? 'w-9' : 'w-12'}`}>
+      <div className={`shrink-0 text-center ${compact ? 'w-9' : 'w-9 sm:w-12'}`}>
         <span
           className={`inline-block w-full rounded-md px-1 py-1 text-xs font-semibold ${getPositionColor(
             slotLabel
@@ -117,8 +117,10 @@ const PlayerRow: React.FC<{
         </span>
       </div>
 
+      {/* The crest is the first thing to go on a narrow screen: it costs 48px
+          that the player's name needs more. */}
       {!compact && (
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand to-primary-700 text-xs font-bold text-brand-fg">
+        <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand to-primary-700 text-xs font-bold text-brand-fg sm:flex">
           {initials(player.full_name)}
         </div>
       )}
@@ -142,18 +144,18 @@ const PlayerRow: React.FC<{
           <span aria-hidden>•</span>
           <span>{player.pro_team_abbr || 'FA'}</span>
           {!compact && !!player.positional_ranking && (
-            <>
+            <span className="hidden items-center gap-1.5 sm:flex">
               <span aria-hidden>•</span>
               <span>
                 {player.position_name} #{player.positional_ranking}
               </span>
-            </>
+            </span>
           )}
           {!compact && !!player.percent_owned && (
-            <>
+            <span className="hidden items-center gap-1.5 md:flex">
               <span aria-hidden>•</span>
               <span className="tabular">{player.percent_owned.toFixed(0)}% rostered</span>
-            </>
+            </span>
           )}
         </div>
         {flag && (
@@ -175,8 +177,8 @@ const PlayerRow: React.FC<{
           </div>
         </div>
       ) : (
-        <div className="flex shrink-0 items-center gap-4 text-right">
-          <div className="w-12">
+        <div className="flex shrink-0 items-center gap-2.5 text-right sm:gap-4">
+          <div className="w-11 sm:w-12">
             <div
               className={`font-display text-base font-bold tabular ${
                 scored ? 'text-fg' : 'text-fg-subtle'
@@ -186,13 +188,13 @@ const PlayerRow: React.FC<{
             </div>
             <div className="text-[10px] uppercase tracking-wide text-fg-subtle">pts</div>
           </div>
-          <div className="w-12">
+          <div className="w-11 sm:w-12">
             <div className="font-display text-base font-bold tabular text-brand">
               {pts(player.projected_points)}
             </div>
             <div className="text-[10px] uppercase tracking-wide text-fg-subtle">proj</div>
           </div>
-          <div className="hidden w-14 sm:block">
+          <div className="hidden w-14 md:block">
             <div className="font-display text-base font-bold tabular text-fg-muted">
               {pts(player.season_points)}
             </div>
@@ -204,19 +206,22 @@ const PlayerRow: React.FC<{
   );
 };
 
-const StatTile: React.FC<{ label: string; value: string; hint?: string; accent?: boolean }> = ({
-  label,
-  value,
-  hint,
-  accent,
-}) => (
-  <div className="rounded-lg bg-surface-sunken p-4 text-center">
+const StatTile: React.FC<{
+  label: string;
+  value: string;
+  hint?: string;
+  accent?: boolean;
+  className?: string;
+}> = ({ label, value, hint, accent, className }) => (
+  <div className={`rounded-lg bg-surface-sunken p-3 text-center sm:p-4 ${className ?? ''}`}>
     <div
-      className={`font-display text-2xl font-bold tabular ${accent ? 'text-brand' : 'text-fg'}`}
+      className={`font-display text-xl font-bold tabular sm:text-2xl ${
+        accent ? 'text-brand' : 'text-fg'
+      }`}
     >
       {value}
     </div>
-    <div className="mt-1 text-sm text-fg-muted">{label}</div>
+    <div className="mt-1 text-xs text-fg-muted sm:text-sm">{label}</div>
     {hint && <div className="mt-0.5 text-xs text-fg-subtle">{hint}</div>}
   </div>
 );
@@ -298,7 +303,7 @@ export const MyRosterPage: React.FC = () => {
 
   if (!userTeam) {
     return (
-      <div className="container mx-auto max-w-6xl px-4 py-8">
+      <PageContainer>
         <Card>
           <EmptyState
             icon={ExclamationTriangleIcon}
@@ -311,7 +316,7 @@ export const MyRosterPage: React.FC = () => {
             }
           />
         </Card>
-      </div>
+      </PageContainer>
     );
   }
 
@@ -321,47 +326,27 @@ export const MyRosterPage: React.FC = () => {
   const sharePct = combined > 0 ? (totalWeekPoints / combined) * 100 : 50;
 
   return (
-    <div className="container mx-auto max-w-6xl px-4 py-8">
-      {/* Header */}
-      <div className="mb-6">
-        <Link
-          to={`/leagues/${leagueId}`}
-          className="mb-4 inline-flex items-center text-fg-muted transition-colors hover:text-fg"
-        >
-          <ArrowLeftIcon className="mr-1 h-4 w-4" />
-          Back to League
-        </Link>
-
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="flex items-center gap-3">
-            {userTeam.logo_url ? (
-              <img
-                src={userTeam.logo_url}
-                alt=""
-                className="h-12 w-12 rounded-full bg-surface-sunken object-cover"
-              />
-            ) : (
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-brand to-primary-700 text-sm font-bold text-brand-fg">
-                {initials(userTeam.name)}
-              </div>
-            )}
-            <div>
-              <h1 className="text-display-sm text-fg">My Roster</h1>
-              <p className="text-sm text-fg-muted">
-                {userTeam.name} • {league?.name}
-              </p>
+    <PageContainer>
+      <PageHeader
+        backTo={`/leagues/${leagueId}`}
+        backLabel="Back to League"
+        title="My Roster"
+        subtitle={`${userTeam.name} • ${league?.name}`}
+        media={
+          userTeam.logo_url ? (
+            <img
+              src={userTeam.logo_url}
+              alt=""
+              className="h-11 w-11 rounded-full bg-surface-sunken object-cover sm:h-12 sm:w-12"
+            />
+          ) : (
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-brand to-primary-700 text-sm font-bold text-brand-fg sm:h-12 sm:w-12">
+              {initials(userTeam.name)}
             </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {espnTeamUrl && (
-              <a href={espnTeamUrl} target="_blank" rel="noopener noreferrer">
-                <Button variant="secondary" size="sm">
-                  Set lineup on ESPN
-                  <ArrowTopRightOnSquareIcon className="ml-1.5 h-4 w-4" />
-                </Button>
-              </a>
-            )}
+          )
+        }
+        actions={
+          <>
             <Select
               value={String(week)}
               onChange={(v) => setSelectedWeek(parseInt(v, 10))}
@@ -371,30 +356,37 @@ export const MyRosterPage: React.FC = () => {
               }))}
               className="w-32"
             />
-          </div>
-        </div>
-      </div>
+            {espnTeamUrl && (
+              <a href={espnTeamUrl} target="_blank" rel="noopener noreferrer">
+                <Button variant="secondary" size="sm">
+                  Set lineup on ESPN
+                  <ArrowTopRightOnSquareIcon className="ml-1.5 h-4 w-4" />
+                </Button>
+              </a>
+            )}
+          </>
+        }
+      />
 
       {/* Scoreboard */}
       {opponent && (
         <Card className="mb-6">
           <CardContent>
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center justify-between gap-3 sm:gap-4">
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium text-fg">{userTeam.name}</div>
-                <div className="font-display text-3xl font-bold tabular text-brand">
+                <div className="font-display text-2xl font-bold tabular text-brand sm:text-3xl">
                   {pts(totalWeekPoints)}
                 </div>
-                <div className="text-xs text-fg-subtle">
-                  projected {pts(totals.projected)}
-                </div>
+                <div className="text-xs text-fg-subtle">projected {pts(totals.projected)}</div>
               </div>
-              <div className="shrink-0 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
-                Week {week}
+              <div className="shrink-0 text-center text-[0.625rem] font-semibold uppercase tracking-wide text-fg-subtle sm:text-xs">
+                Week <br className="sm:hidden" />
+                {week}
               </div>
               <div className="min-w-0 flex-1 text-right">
                 <div className="truncate text-sm font-medium text-fg">{opponent.teamName}</div>
-                <div className="font-display text-3xl font-bold tabular text-fg">
+                <div className="font-display text-2xl font-bold tabular text-fg sm:text-3xl">
                   {pts(opponentScore)}
                 </div>
                 <div className="text-xs text-fg-subtle">opponent</div>
@@ -415,7 +407,7 @@ export const MyRosterPage: React.FC = () => {
           <CardTitle>Team Stats</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2 sm:gap-4 md:grid-cols-5">
             <StatTile
               label="Record"
               value={`${userTeam.wins}-${userTeam.losses}${
@@ -430,7 +422,12 @@ export const MyRosterPage: React.FC = () => {
               accent
             />
             <StatTile label="Projected" value={pts(totals.projected)} hint="starters" />
-            <StatTile label="On Bench" value={pts(totals.benchActual)} hint="points not started" />
+            <StatTile
+              label="On Bench"
+              value={pts(totals.benchActual)}
+              hint="points not started"
+              className="col-span-2 md:col-span-1"
+            />
           </div>
         </CardContent>
       </Card>
@@ -567,6 +564,6 @@ export const MyRosterPage: React.FC = () => {
           )}
         </div>
       </div>
-    </div>
+    </PageContainer>
   );
 };

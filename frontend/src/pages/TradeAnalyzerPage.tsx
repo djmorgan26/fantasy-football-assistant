@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useLeague } from '@/hooks/useLeagues';
 import { useLeagueTeams } from '@/hooks/useTeams';
 import { useCurrentUser } from '@/hooks/useAuth';
@@ -21,8 +21,8 @@ import {
 } from '@/components/ui';
 import type { SelectOption } from '@/components/ui';
 import { Team, TradeAnalysisResponse } from '@/types';
+import { PageContainer, PageHeader } from '@/components/layout/Page';
 import {
-  ArrowLeftIcon,
   ArrowsRightLeftIcon,
   ExclamationTriangleIcon,
   CheckCircleIcon,
@@ -92,33 +92,17 @@ export const TradeAnalyzerPage: React.FC = () => {
   const isAnalyzing = analyzeTradeMutation.isLoading;
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center mb-4">
-          <Link
-            to={`/leagues/${leagueId}`}
-            className="flex items-center text-fg-muted transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
-          >
-            <ArrowLeftIcon className="h-4 w-4 mr-1" />
-            Back to League
-          </Link>
-        </div>
+    <PageContainer>
+      <PageHeader
+        backTo={`/leagues/${leagueId}`}
+        backLabel="Back to League"
+        title="Trade Analyzer"
+        subtitle={`Analyze potential trades between teams in ${league?.name ?? 'your league'}`}
+        media={<ArrowsRightLeftIcon className="h-8 w-8 text-brand" />}
+        mediaDesktopOnly
+      />
 
-        <div className="flex items-center">
-          <ArrowsRightLeftIcon className="h-8 w-8 text-brand mr-3" />
-          <div>
-            <h1 className="text-display-sm text-fg">
-              Trade Analyzer
-            </h1>
-            <p className="text-fg-muted">
-              Analyze potential trades between teams in {league?.name}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-8">
         {/* Team Selection */}
         <div className="space-y-6">
           <Card>
@@ -382,6 +366,6 @@ export const TradeAnalyzerPage: React.FC = () => {
           )}
         </div>
       </div>
-    </div>
+    </PageContainer>
   );
 };

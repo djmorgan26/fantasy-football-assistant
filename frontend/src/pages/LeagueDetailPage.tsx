@@ -22,7 +22,6 @@ import {
   UsersIcon,
   ChartBarIcon,
   CogIcon,
-  ArrowLeftIcon,
   ExclamationTriangleIcon,
   CalendarIcon,
   FireIcon,
@@ -30,6 +29,7 @@ import {
   BoltIcon,
   NewspaperIcon,
 } from '@heroicons/react/24/outline';
+import { PageContainer, PageHeader } from '@/components/layout/Page';
 import { formatDate } from '@/utils';
 
 export const LeagueDetailPage: React.FC = () => {
@@ -92,7 +92,7 @@ export const LeagueDetailPage: React.FC = () => {
 
   if (leagueLoading) {
     return (
-      <div className="container mx-auto max-w-6xl px-4 py-8">
+      <PageContainer>
         <div className="mb-8 space-y-3">
           <Skeleton className="h-9 w-2/3" />
           <Skeleton className="h-4 w-1/2" />
@@ -107,13 +107,13 @@ export const LeagueDetailPage: React.FC = () => {
             <SkeletonCard />
           </div>
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
   if (leagueError || !league) {
     return (
-      <div className="container mx-auto max-w-6xl px-4 py-8">
+      <PageContainer>
         <Card>
           <EmptyState
             icon={ExclamationTriangleIcon}
@@ -127,71 +127,58 @@ export const LeagueDetailPage: React.FC = () => {
             }
           />
         </Card>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center mb-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/dashboard')}
-            className="mr-4"
-          >
-            <ArrowLeftIcon className="h-4 w-4 mr-1" />
-            Back to Dashboard
-          </Button>
-        </div>
-        
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h1 className="text-display-sm text-fg mb-2">
-              {league.name}
-            </h1>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-fg-muted">
-              <span className="flex items-center">
-                <UsersIcon className="h-4 w-4 mr-1" />
-                {league.size} teams
-              </span>
-              <span className="flex items-center">
-                <CalendarIcon className="h-4 w-4 mr-1" />
-                {league.season_year} Season
-              </span>
-              <span className="flex items-center">
-                <FireIcon className="h-4 w-4 mr-1" />
-                Week {league.current_week}
-              </span>
-              <span className="flex items-center capitalize">
-                <ChartBarIcon className="h-4 w-4 mr-1" />
-                {league.scoring_type} scoring
-              </span>
-            </div>
-          </div>
-          
-          <div className="mt-4 lg:mt-0 flex space-x-3">
-            <Button 
-              variant="secondary" 
-              size="sm" 
+    <PageContainer>
+      <PageHeader
+        backTo="/dashboard"
+        backLabel="Back to Dashboard"
+        title={league.name}
+        subtitle={
+          <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span className="flex items-center">
+              <UsersIcon className="mr-1 h-4 w-4" />
+              {league.size} teams
+            </span>
+            <span className="flex items-center">
+              <CalendarIcon className="mr-1 h-4 w-4" />
+              {league.season_year} Season
+            </span>
+            <span className="flex items-center">
+              <FireIcon className="mr-1 h-4 w-4" />
+              Week {league.current_week}
+            </span>
+            <span className="flex items-center capitalize">
+              <ChartBarIcon className="mr-1 h-4 w-4" />
+              {league.scoring_type} scoring
+            </span>
+          </span>
+        }
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={handleSync}
               disabled={syncLeague.isLoading}
             >
-              <CogIcon className="h-4 w-4 mr-2" />
+              <CogIcon className="mr-2 h-4 w-4" />
               {syncLeague.isLoading ? 'Syncing...' : 'Sync Data'}
             </Button>
             <Button
-              variant="danger"
+              variant="secondary"
               size="sm"
-              onClick={() => setShowDisconnectModal(true)}
+              onClick={() => setShowTeamSelectionModal(true)}
             >
-              Disconnect League
+              <UsersIcon className="mr-2 h-4 w-4" />
+              {userTeam ? 'Change Team' : 'Select Team'}
             </Button>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* League Info */}
@@ -334,7 +321,7 @@ export const LeagueDetailPage: React.FC = () => {
                       className="block"
                     >
                       <div className="rounded-lg border border-border border-l-4 border-l-brand bg-surface-raised p-4 transition-all hover:bg-surface-sunken hover:shadow-elevation-3">
-                        <div className="flex items-center space-x-4">
+                        <div className="flex items-center gap-3 sm:gap-4">
                           {/* Team Logo */}
                           <div className="flex-shrink-0">
                             <img
@@ -353,15 +340,15 @@ export const LeagueDetailPage: React.FC = () => {
 
                           {/* Team Info */}
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <h4 className="font-semibold text-fg text-lg">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <h4 className="truncate font-semibold text-fg text-base sm:text-lg">
                                   {team.name || `Team ${team.abbreviation}`}
                                 </h4>
                                 <p className="text-sm text-fg-muted mb-1">
                                   {team.abbreviation}
                                 </p>
-                                <div className="flex items-center space-x-3 text-sm">
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                                   <span className="font-medium text-fg tabular">
                                     {team.wins}-{team.losses}
                                     {team.ties > 0 && `-${team.ties}`}
@@ -376,7 +363,7 @@ export const LeagueDetailPage: React.FC = () => {
                               </div>
 
                               {/* Record Badge */}
-                              <div className="text-right">
+                              <div className="shrink-0 text-right">
                                 <Badge
                                   size="sm"
                                   variant={
@@ -389,7 +376,7 @@ export const LeagueDetailPage: React.FC = () => {
                                 >
                                   {team.wins > team.losses ? 'Winning' : team.wins < team.losses ? 'Losing' : 'Tied'}
                                 </Badge>
-                                <div className="text-xs text-fg-muted mt-1">
+                                <div className="mt-1 hidden text-xs text-fg-muted sm:block">
                                   Click to view roster
                                 </div>
                               </div>
@@ -419,8 +406,9 @@ export const LeagueDetailPage: React.FC = () => {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* League Actions */}
-          <Card>
+          {/* League Actions — the mobile tab bar covers these destinations, so
+              this card is desktop-only rather than a second copy of the nav. */}
+          <Card className="hidden lg:block">
             <CardHeader>
               <CardTitle>Actions</CardTitle>
             </CardHeader>
@@ -476,33 +464,45 @@ export const LeagueDetailPage: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
+                <div className="flex flex-wrap justify-between gap-x-4 gap-y-0.5">
                   <span className="text-fg-muted">ESPN League ID:</span>
                   <span className="font-mono text-fg tabular">{league.espn_league_id}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-wrap justify-between gap-x-4 gap-y-0.5">
                   <span className="text-fg-muted">Your Team:</span>
                   <span className={userTeam ? "text-brand font-medium" : "text-fg-subtle"}>
                     {userTeam ? userTeam.name : 'Not selected'}
                   </span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-wrap justify-between gap-x-4 gap-y-0.5">
                   <span className="text-fg-muted">Connected:</span>
                   <span className="text-fg">{formatDate(league.created_at)}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-wrap justify-between gap-x-4 gap-y-0.5">
                   <span className="text-fg-muted">Last Synced:</span>
                   <span className="text-fg">
                     {league.last_synced ? formatDate(league.last_synced) : 'Never'}
                   </span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-wrap justify-between gap-x-4 gap-y-0.5">
                   <span className="text-fg-muted">Status:</span>
                   <span className="flex items-center text-fg">
                     <ShieldCheckIcon className="h-4 w-4 text-success-500 mr-1" />
                     {league.is_active ? 'Active' : 'Inactive'}
                   </span>
                 </div>
+              </div>
+
+              <div className="mt-5 border-t border-border pt-4">
+                <Button
+                  fullWidth
+                  variant="ghost"
+                  size="sm"
+                  className="text-error-600 hover:bg-error-50 dark:hover:bg-error-900/20"
+                  onClick={() => setShowDisconnectModal(true)}
+                >
+                  Disconnect League
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -557,6 +557,6 @@ export const LeagueDetailPage: React.FC = () => {
         teams={teams || []}
         leagueId={parseInt(leagueId || '0', 10)}
       />
-    </div>
+    </PageContainer>
   );
 };

@@ -54,7 +54,7 @@ export const MatchupCard: React.FC<MatchupCardProps> = ({
       className
     )}>
       <CardContent className="p-4">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
           <span className="text-sm font-medium text-fg-muted tabular">
             Week {matchup.week}
             {matchup.is_playoff && (
@@ -73,17 +73,17 @@ export const MatchupCard: React.FC<MatchupCardProps> = ({
         <div className="space-y-3">
           {/* Away Team */}
           <div className={cn(
-            'flex items-center justify-between p-3 rounded-lg border',
+            'flex items-center justify-between gap-3 p-3 rounded-lg border',
             getWinnerStyle(false)
           )}>
-            <div className="flex items-center space-x-3">
-              <div className="flex items-center space-x-2">
+            <div className="flex min-w-0 flex-1 items-center">
+              <div className="flex min-w-0 items-center space-x-2">
                 {awayFavorite && (
-                  <StarIcon className="h-4 w-4 text-warning-500" />
+                  <StarIcon className="h-4 w-4 shrink-0 text-warning-500" />
                 )}
-                <div className="flex flex-col">
+                <div className="flex min-w-0 flex-col">
                   <span className={cn(
-                    'font-medium text-sm text-fg',
+                    'truncate font-medium text-sm text-fg',
                     isUserAway && 'text-brand',
                     matchup.winner === 'AWAY' && 'font-bold'
                   )}>
@@ -95,7 +95,7 @@ export const MatchupCard: React.FC<MatchupCardProps> = ({
                 </div>
               </div>
             </div>
-            <div className="text-right">
+            <div className="shrink-0 text-right">
               <div className={cn(
                 'text-lg font-bold tabular text-fg',
                 isUserAway && 'text-brand',
@@ -116,17 +116,17 @@ export const MatchupCard: React.FC<MatchupCardProps> = ({
 
           {/* Home Team */}
           <div className={cn(
-            'flex items-center justify-between p-3 rounded-lg border',
+            'flex items-center justify-between gap-3 p-3 rounded-lg border',
             getWinnerStyle(true)
           )}>
-            <div className="flex items-center space-x-3">
-              <div className="flex items-center space-x-2">
+            <div className="flex min-w-0 flex-1 items-center">
+              <div className="flex min-w-0 items-center space-x-2">
                 {homeFavorite && (
-                  <StarIcon className="h-4 w-4 text-warning-500" />
+                  <StarIcon className="h-4 w-4 shrink-0 text-warning-500" />
                 )}
-                <div className="flex flex-col">
+                <div className="flex min-w-0 flex-col">
                   <span className={cn(
-                    'font-medium text-sm text-fg',
+                    'truncate font-medium text-sm text-fg',
                     isUserHome && 'text-brand',
                     matchup.winner === 'HOME' && 'font-bold'
                   )}>
@@ -138,7 +138,7 @@ export const MatchupCard: React.FC<MatchupCardProps> = ({
                 </div>
               </div>
             </div>
-            <div className="text-right">
+            <div className="shrink-0 text-right">
               <div className={cn(
                 'text-lg font-bold tabular text-fg',
                 isUserHome && 'text-brand',

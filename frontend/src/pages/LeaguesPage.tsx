@@ -16,6 +16,7 @@ import {
   ChartBarIcon,
   CogIcon,
 } from '@heroicons/react/24/outline';
+import { PageContainer, PageHeader } from '@/components/layout/Page';
 import { formatDate } from '@/utils';
 import { leaguesService } from '@/services/leagues';
 import toast from 'react-hot-toast';
@@ -53,19 +54,19 @@ export const LeaguesPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <PageContainer>
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
           <SkeletonCard />
           <SkeletonCard />
           <SkeletonCard />
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
   if (error) {
     return (
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
+      <PageContainer>
         <Card>
           <EmptyState
             icon={TrophyIcon}
@@ -75,37 +76,32 @@ export const LeaguesPage: React.FC = () => {
             action={<Button onClick={() => refetch()}>Try Again</Button>}
           />
         </Card>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-display-sm text-fg mb-2">Your Leagues</h1>
-            <p className="text-fg-muted">
-              Manage your fantasy football leagues across ESPN and Sleeper
-            </p>
-          </div>
-          <div className="mt-4 sm:mt-0 flex space-x-3">
-            <Link to="/leagues/connect">
-              <Button variant="secondary" size="sm">
-                <PlusIcon className="h-5 w-5 mr-2" />
+    <PageContainer>
+      <PageHeader
+        title="Your Leagues"
+        subtitle="Manage your fantasy football leagues across ESPN and Sleeper"
+        actions={
+          <>
+            <Link to="/leagues/connect" className="flex-1 sm:flex-none">
+              <Button variant="secondary" size="sm" fullWidth className="sm:w-auto">
+                <PlusIcon className="h-5 w-5" />
                 ESPN League
               </Button>
             </Link>
-            <Link to="/leagues/sleeper/connect">
-              <Button variant="primary" size="sm">
-                <PlusIcon className="h-5 w-5 mr-2" />
+            <Link to="/leagues/sleeper/connect" className="flex-1 sm:flex-none">
+              <Button variant="primary" size="sm" fullWidth className="sm:w-auto">
+                <PlusIcon className="h-5 w-5" />
                 Sleeper League
               </Button>
             </Link>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* Leagues Grid */}
       {!leagues || leagues.length === 0 ? (
@@ -125,16 +121,16 @@ export const LeaguesPage: React.FC = () => {
           />
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
           {leagues.map((league) => (
             <Card key={league.id} className="transition-shadow hover:shadow-elevation-3">
               <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg leading-tight mb-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <CardTitle className="text-base sm:text-lg leading-tight mb-2">
                       {league.name}
                     </CardTitle>
-                    <div className="flex items-center space-x-3 text-sm text-fg-muted">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg-muted">
                       <span className="flex items-center">
                         <UsersIcon className="h-4 w-4 mr-1" />
                         {league.size}
@@ -145,7 +141,7 @@ export const LeaguesPage: React.FC = () => {
                       </span>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-1.5">
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
                     <PlatformBadge platform={league.platform} size="sm" />
                     <Badge variant="secondary" size="sm" className="tabular">
                       {league.season_year}
@@ -194,7 +190,7 @@ export const LeaguesPage: React.FC = () => {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex space-x-2 pt-2">
+                  <div className="flex gap-2 pt-2">
                     <Link to={`/leagues/${league.id}`} className="flex-1">
                       <Button size="sm" fullWidth>
                         View League
@@ -217,7 +213,7 @@ export const LeaguesPage: React.FC = () => {
                   </div>
 
                   {/* Quick Actions */}
-                  <div className="flex space-x-1 pt-1">
+                  <div className="flex gap-1 pt-1">
                     <Link to={`/leagues/${league.id}/trades`} className="flex-1">
                       <Button size="sm" variant="ghost" fullWidth className="text-xs">
                         <ChartBarIcon className="h-3 w-3 mr-1" />
@@ -258,6 +254,6 @@ export const LeaguesPage: React.FC = () => {
           </Link>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 };

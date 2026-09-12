@@ -7,6 +7,7 @@ import { PlatformBadge } from '@/components/ui/PlatformBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonCard } from '@/components/ui/Skeleton';
 import { Link } from 'react-router-dom';
+import { PageContainer, PageHeader } from '@/components/layout/Page';
 import { PlusIcon, TrophyIcon, UsersIcon, CalendarDaysIcon } from '@heroicons/react/24/outline';
 import { formatDate } from '@/utils';
 
@@ -15,15 +16,11 @@ export const DashboardPage: React.FC = () => {
   const { data: leagues, isLoading, error } = useLeagues();
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-8">
-        <h1 className="text-display-sm text-fg">
-          Welcome back, {user?.full_name || user?.email}
-        </h1>
-        <p className="mt-2 text-fg-muted">
-          Manage your fantasy football leagues and get intelligent insights.
-        </p>
-      </div>
+    <PageContainer width="wide">
+      <PageHeader
+        title={`Welcome back, ${user?.full_name || user?.email}`}
+        subtitle="Manage your fantasy football leagues and get intelligent insights."
+      />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -68,10 +65,12 @@ export const DashboardPage: React.FC = () => {
             <div className="space-y-4">
               {leagues.map((league) => (
                 <Card key={league.id} className="transition-shadow hover:shadow-elevation-3">
-                  <CardContent className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="mb-1 flex items-center gap-2">
-                        <h3 className="font-display text-lg font-bold text-fg">{league.name}</h3>
+                  <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <h3 className="font-display text-base font-bold text-fg sm:text-lg">
+                          {league.name}
+                        </h3>
                         <PlatformBadge platform={league.platform || 'ESPN'} size="sm" />
                       </div>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-fg-muted">
@@ -89,8 +88,8 @@ export const DashboardPage: React.FC = () => {
                         Last synced: {league.last_synced ? formatDate(league.last_synced) : 'Never'}
                       </p>
                     </div>
-                    <Link to={`/leagues/${league.id}`} className="flex-shrink-0">
-                      <Button size="sm" variant="secondary">
+                    <Link to={`/leagues/${league.id}`} className="sm:flex-shrink-0">
+                      <Button size="sm" variant="secondary" fullWidth className="sm:w-auto">
                         View League
                       </Button>
                     </Link>
@@ -142,6 +141,6 @@ export const DashboardPage: React.FC = () => {
           )}
         </div>
       </div>
-    </div>
+    </PageContainer>
   );
 };

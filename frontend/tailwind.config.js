@@ -66,10 +66,12 @@ export default {
         sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
         display: ['Bricolage Grotesque', 'Plus Jakarta Sans', 'system-ui', 'sans-serif'],
       },
+      // Display sizes scale with the viewport so a long league name does not
+      // arrive on a phone at desktop size and wrap into four lines.
       fontSize: {
-        'display-lg': ['2.75rem', { lineHeight: '1.04', letterSpacing: '-0.02em', fontWeight: '800' }],
-        'display': ['2.125rem', { lineHeight: '1.08', letterSpacing: '-0.02em', fontWeight: '800' }],
-        'display-sm': ['1.625rem', { lineHeight: '1.12', letterSpacing: '-0.01em', fontWeight: '700' }],
+        'display-lg': ['clamp(2rem, 7vw, 2.75rem)', { lineHeight: '1.04', letterSpacing: '-0.02em', fontWeight: '800' }],
+        'display': ['clamp(1.75rem, 6vw, 2.125rem)', { lineHeight: '1.08', letterSpacing: '-0.02em', fontWeight: '800' }],
+        'display-sm': ['clamp(1.375rem, 5vw, 1.625rem)', { lineHeight: '1.15', letterSpacing: '-0.01em', fontWeight: '700' }],
       },
       borderRadius: {
         card: '0.875rem',  // 14px — standard card rounding

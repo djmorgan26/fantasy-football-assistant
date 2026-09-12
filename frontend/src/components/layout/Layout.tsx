@@ -8,6 +8,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { Header } from './Header';
 import { SidebarNav } from './SidebarNav';
+import { MobileTabBar } from './MobileTabBar';
 import { AppToaster } from '@/components/ui/AppToaster';
 import { cn } from '@/utils';
 
@@ -117,7 +118,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             leaveFrom="translate-x-0"
             leaveTo="-translate-x-full"
           >
-            <Dialog.Panel className="fixed inset-y-0 left-0 flex w-72 flex-col bg-surface-raised shadow-elevation-4">
+            <Dialog.Panel className="fixed inset-y-0 left-0 flex w-[min(18rem,85vw)] flex-col bg-surface-raised pb-safe shadow-elevation-4">
               <div className="flex h-16 items-center justify-between border-b border-border px-5">
                 <Brand />
                 <button
@@ -144,7 +145,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           collapsed ? 'lg:pl-[4.5rem]' : 'lg:pl-64'
         )}
       >
-        <Header onMenuToggle={() => setDrawerOpen(true)} />
+        <Header />
         <main id="main" className="flex-1">
           {children || <Outlet />}
         </main>
@@ -152,7 +153,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           Fantasy Football Assistant is an independent project, not affiliated with or endorsed by
           ESPN or Sleeper. Platform names identify league connections only.
         </footer>
+        {/* Clears the fixed bottom bar on phones; the bar is hidden from lg: up. */}
+        <div className="pb-tabbar lg:hidden" aria-hidden />
       </div>
+
+      <MobileTabBar leagueId={leagueId} onMore={() => setDrawerOpen(true)} />
 
       <AppToaster position="top-right" />
     </div>
@@ -161,8 +166,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
 export const AuthLayout: React.FC<LayoutProps> = ({ children }) => {
   return (
-    <div className="flex min-h-screen flex-col justify-center bg-surface py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+    <div className="flex min-h-screen flex-col justify-center bg-surface px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
+      <div className="mx-auto w-full max-w-md">
         <div className="flex justify-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-brand">
             <span className="text-xl font-bold text-brand-fg">FF</span>
@@ -173,7 +178,7 @@ export const AuthLayout: React.FC<LayoutProps> = ({ children }) => {
         </h2>
       </div>
 
-      <div className="mt-8">{children || <Outlet />}</div>
+      <div className="mt-8 w-full">{children || <Outlet />}</div>
 
       <AppToaster position="top-center" />
     </div>

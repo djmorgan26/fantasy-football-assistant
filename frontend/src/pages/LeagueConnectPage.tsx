@@ -17,6 +17,7 @@ import {
   CheckCircleIcon
 } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
+import { PageContainer, PageHeader } from '@/components/layout/Page';
 
 const leagueConnectionSchema = z.object({
   league_id: z
@@ -95,16 +96,12 @@ export const LeagueConnectPage: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-2xl">
-      <div className="mb-8">
-        <PlatformBadge platform="espn" size="md" className="mb-3" />
-        <h1 className="text-display-sm text-fg mb-2">
-          Connect Your ESPN League
-        </h1>
-        <p className="text-fg-muted">
-          Connect your ESPN Fantasy Football league to get intelligent insights and analysis.
-        </p>
-      </div>
+    <PageContainer width="narrow">
+      <PlatformBadge platform="espn" size="md" className="mb-3" />
+      <PageHeader
+        title="Connect Your ESPN League"
+        subtitle="Connect your ESPN Fantasy Football league to get intelligent insights and analysis."
+      />
 
       <div className="space-y-6">
         {/* Instructions Card */}
@@ -267,7 +264,7 @@ export const LeagueConnectPage: React.FC = () => {
               </p>
               <p>
                 <strong className="text-fg">Example URL:</strong>{' '}
-                <code className="text-xs bg-surface-sunken px-1 py-0.5 rounded">
+                <code className="break-all rounded bg-surface-sunken px-1 py-0.5 text-xs">
                   https://fantasy.espn.com/football/team?leagueId=1234567&teamId=1
                 </code>
               </p>
@@ -275,6 +272,6 @@ export const LeagueConnectPage: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PageContainer>
   );
 };

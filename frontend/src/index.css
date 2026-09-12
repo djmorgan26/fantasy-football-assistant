@@ -61,10 +61,29 @@
 
   html {
     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    /* Stop iOS from inflating text when the phone is rotated. */
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
     @apply antialiased bg-surface text-fg;
+    /* A stray wide child should never let the whole page slide sideways. */
+    overflow-x: hidden;
+    /* Taps shouldn't flash a grey box on Android/iOS. */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /*
+   * iOS zooms the page whenever a focused field is under 16px. Ship 16px on
+   * phones and drop to the design's 14px from the small breakpoint up, where
+   * there is no zoom behaviour to trigger.
+   */
+  @media (max-width: 639px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
   }
 
   /* Headlines default to the display face */
@@ -85,6 +104,30 @@
 
   .container-narrow { @apply max-w-4xl mx-auto; }
   .container-wide { @apply max-w-7xl mx-auto; }
+
+  /* Horizontal rails (tab strips, chip rows) that scroll without a visible bar. */
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+
+  /* Momentum scrolling that snaps back inside the rail, not the page. */
+  .rail {
+    @apply flex overflow-x-auto scrollbar-none;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Home-indicator / notch clearance for anything pinned to a screen edge. */
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+  .px-safe {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  /* Height of the mobile tab bar, so content can clear it. */
+  .pb-tabbar { padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px)); }
 
   /* Entrance animations */
   .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }

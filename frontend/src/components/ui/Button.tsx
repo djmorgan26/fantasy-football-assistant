@@ -19,7 +19,7 @@ export const Button: React.FC<ButtonProps> = ({
   ...props
 }) => {
   const baseClasses =
-    'inline-flex items-center justify-center gap-2 font-semibold rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-50 disabled:pointer-events-none';
+    'inline-flex items-center justify-center gap-2 font-semibold rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-50 disabled:pointer-events-none select-none touch-manipulation';
 
   const variants = {
     primary: 'bg-brand text-brand-fg hover:bg-brand/90',
@@ -30,10 +30,11 @@ export const Button: React.FC<ButtonProps> = ({
     outline: 'border border-border-strong text-fg hover:bg-surface-sunken',
   };
 
+  // Phones get a comfortable thumb target; desktop keeps the tighter rhythm.
   const sizes = {
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-4 py-2 text-base',
-    lg: 'px-6 py-3 text-lg',
+    sm: 'min-h-[2.25rem] px-3 py-1.5 text-sm',
+    md: 'min-h-[2.75rem] sm:min-h-[2.5rem] px-4 py-2 text-base',
+    lg: 'min-h-[3rem] px-6 py-3 text-base sm:text-lg',
   };
 
   return (

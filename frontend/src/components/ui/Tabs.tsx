@@ -42,9 +42,11 @@ export const Tabs: React.FC<TabsProps> = ({
       role="tablist"
       aria-label={ariaLabel}
       className={cn(
+        // A narrow screen can't fit four tabs, so the strip scrolls sideways
+        // instead of clipping the ones that don't fit.
         variant === 'underline'
-          ? 'flex gap-1 border-b border-border'
-          : 'inline-flex gap-1 rounded-lg bg-surface-sunken p-1',
+          ? 'rail gap-1 border-b border-border'
+          : 'rail gap-1 rounded-lg bg-surface-sunken p-1 sm:inline-flex',
         className
       )}
     >
@@ -60,16 +62,16 @@ export const Tabs: React.FC<TabsProps> = ({
             onClick={() => onChange(tab.key)}
             onKeyDown={(e) => handleKeyDown(e, i)}
             className={cn(
-              'inline-flex items-center gap-2 whitespace-nowrap text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'inline-flex shrink-0 items-center gap-2 whitespace-nowrap text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               variant === 'underline'
                 ? cn(
-                    '-mb-px border-b-2 px-4 py-2.5',
+                    '-mb-px border-b-2 px-3 py-3 sm:px-4 sm:py-2.5',
                     active
                       ? 'border-brand text-brand'
                       : 'border-transparent text-fg-muted hover:border-border-strong hover:text-fg'
                   )
                 : cn(
-                    'rounded-md px-3 py-1.5',
+                    'rounded-md px-3 py-2 sm:py-1.5',
                     active
                       ? 'bg-surface-raised text-fg shadow-elevation-1'
                       : 'text-fg-muted hover:text-fg'

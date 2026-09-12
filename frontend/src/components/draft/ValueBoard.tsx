@@ -60,13 +60,13 @@ export const ValueBoard: React.FC<ValueBoardProps> = ({ leagueId }) => {
     <div className="space-y-4">
       {/* Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="flex flex-wrap gap-2">
+        <div className="rail gap-2 sm:flex-wrap sm:overflow-visible">
           {POSITIONS.map((pos) => (
             <button
               key={pos}
               onClick={() => setPosition(pos)}
               className={cn(
-                'px-3 py-1.5 rounded-full text-sm font-medium transition-colors',
+                'shrink-0 rounded-full px-3.5 py-2 text-sm font-medium transition-colors sm:py-1.5',
                 position === pos
                   ? 'bg-brand text-brand-fg'
                   : 'bg-surface-sunken text-fg-muted hover:bg-border'
@@ -82,7 +82,7 @@ export const ValueBoard: React.FC<ValueBoardProps> = ({ leagueId }) => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search players..."
-            className="w-full pl-9 pr-3 py-2 bg-surface-raised border border-border rounded-md text-sm text-fg placeholder:text-fg-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="min-h-[2.75rem] w-full rounded-md border border-border bg-surface-raised py-2.5 pl-9 pr-3 text-fg placeholder:text-fg-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-0 sm:py-2 sm:text-sm"
           />
         </div>
       </div>
@@ -101,21 +101,21 @@ export const ValueBoard: React.FC<ValueBoardProps> = ({ leagueId }) => {
           <table className="min-w-full text-sm">
             <thead className="bg-surface-sunken text-fg-muted uppercase text-xs tracking-wide">
               <tr>
-                <th className="px-4 py-3 text-left">Rank</th>
-                <th className="px-4 py-3 text-left">Player</th>
-                <th className="px-4 py-3 text-left">Pos</th>
-                <th className="px-4 py-3 text-left">Team</th>
-                <th className="px-4 py-3 text-right">Proj</th>
-                <th className="px-4 py-3 text-right">VBD</th>
-                <th className="px-4 py-3 text-center">Tier</th>
-                <th className="px-4 py-3 text-right">ADP</th>
+                <th className="px-2 py-3 text-left sm:px-4">Rank</th>
+                <th className="px-2 py-3 text-left sm:px-4">Player</th>
+                <th className="px-2 py-3 text-left sm:px-4">Pos</th>
+                <th className="hidden px-4 py-3 text-left md:table-cell">Team</th>
+                <th className="px-2 py-3 text-right sm:px-4">Proj</th>
+                <th className="px-2 py-3 text-right sm:px-4">VBD</th>
+                <th className="hidden px-4 py-3 text-center sm:table-cell">Tier</th>
+                <th className="hidden px-4 py-3 text-right sm:table-cell">ADP</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {filtered.map((p) => (
                 <tr key={p.player_id} className="hover:bg-surface-sunken">
-                  <td className="px-4 py-2 text-fg-muted tabular">{p.overall_rank}</td>
-                  <td className="px-4 py-2 font-medium text-fg">
+                  <td className="px-2 py-2.5 text-fg-muted tabular sm:px-4 sm:py-2">{p.overall_rank}</td>
+                  <td className="px-2 py-2.5 font-medium text-fg sm:px-4 sm:py-2">
                     {p.name}
                     {p.injury_status && (
                       <Badge variant="error" size="sm" className="ml-2">
@@ -123,7 +123,7 @@ export const ValueBoard: React.FC<ValueBoardProps> = ({ leagueId }) => {
                       </Badge>
                     )}
                   </td>
-                  <td className="px-4 py-2">
+                  <td className="px-2 py-2.5 sm:px-4 sm:py-2">
                     <span
                       className={cn(
                         'inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold',
@@ -134,20 +134,22 @@ export const ValueBoard: React.FC<ValueBoardProps> = ({ leagueId }) => {
                       {p.position_rank ? <span className="ml-0.5">{p.position_rank}</span> : null}
                     </span>
                   </td>
-                  <td className="px-4 py-2 text-fg-muted">{p.team || '—'}</td>
-                  <td className="px-4 py-2 text-right tabular text-fg">
+                  <td className="hidden px-4 py-2 text-fg-muted md:table-cell">{p.team || '—'}</td>
+                  <td className="px-2 py-2.5 text-right tabular text-fg sm:px-4 sm:py-2">
                     {p.projected_points.toFixed(1)}
                   </td>
                   <td
                     className={cn(
-                      'px-4 py-2 text-right tabular font-semibold',
+                      'px-2 py-2.5 text-right tabular font-semibold sm:px-4 sm:py-2',
                       p.vbd > 0 ? 'text-success-600' : 'text-fg-subtle'
                     )}
                   >
                     {p.vbd > 0 ? `+${p.vbd.toFixed(1)}` : p.vbd.toFixed(1)}
                   </td>
-                  <td className="px-4 py-2 text-center text-fg-muted">{p.tier ?? '—'}</td>
-                  <td className="px-4 py-2 text-right text-fg-muted tabular">
+                  <td className="hidden px-4 py-2 text-center text-fg-muted sm:table-cell">
+                    {p.tier ?? '—'}
+                  </td>
+                  <td className="hidden px-4 py-2 text-right text-fg-muted tabular sm:table-cell">
                     {p.adp ?? '—'}
                   </td>
                 </tr>
