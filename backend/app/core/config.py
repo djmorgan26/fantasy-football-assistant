@@ -70,9 +70,11 @@ class Settings(BaseSettings):
 
     # LLM Integration
     groq_api_key: str = ""
-    # NOTE: llama-3.1-70b-versatile and mixtral-8x7b-32768 were decommissioned by Groq.
-    # llama-3.3-70b-versatile is the current best free balance of speed and quality.
-    llm_model: str = "llama-3.3-70b-versatile"
+    # NOTE: Groq retires models regularly. llama-3.1-70b-versatile, mixtral-8x7b-32768
+    # and llama-3.3-70b-versatile have all been decommissioned; a request for a retired
+    # model comes back as a 404 model_not_found. Verify against GET /openai/v1/models
+    # before changing this.
+    llm_model: str = "openai/gpt-oss-120b"
 
     @property
     def effective_database_url(self) -> str:
