@@ -54,36 +54,56 @@ def espn_league_payload():
 
 
 def espn_roster_payload():
-    def player(pid, name, pos_id, slot, projected, actual):
+    # defaultPositionId and lineupSlotId are DIFFERENT id spaces. A QB is
+    # position 1 but slot 0; a WR is position 3, while slot 3 means the RB/WR
+    # flex. These fixtures use the real ESPN ids for both.
+    def player(pid, name, pos_id, slot, projected, actual, injury="ACTIVE",
+               owned=50.0, season_total=0.0):
         return {
             "lineupSlotId": slot,
+            "injuryStatus": "NORMAL",
+            "acquisitionType": "DRAFT",
             "playerPoolEntry": {
+                "id": pid,
+                "ratings": {"0": {"positionalRanking": 7, "totalRanking": 21}},
                 "player": {
                     "id": pid,
                     "fullName": name,
+                    "firstName": name.split()[0],
+                    "lastName": name.split()[-1],
                     "defaultPositionId": pos_id,
                     "proTeamId": 2,
+                    "injured": injury not in ("ACTIVE", "NORMAL"),
+                    "injuryStatus": injury,
+                    "ownership": {"percentOwned": owned, "percentStarted": owned - 5,
+                                  "averageDraftPosition": 42.4},
                     "eligibleSlots": [slot, 20],
                     "stats": [
                         {"scoringPeriodId": 14, "statSourceId": 0,
                          "appliedTotal": actual, "stats": {"0": 25}},
                         {"scoringPeriodId": 14, "statSourceId": 1,
                          "appliedTotal": projected, "stats": {"0": 30}},
+                        {"scoringPeriodId": 0, "statSourceId": 0, "seasonId": 2026,
+                         "appliedTotal": season_total, "stats": {}},
+                        # Last season's total rides along in the same list.
+                        {"scoringPeriodId": 0, "statSourceId": 0, "seasonId": 2025,
+                         "appliedTotal": 999.9, "stats": {}},
                     ],
-                }
+                },
             },
         }
 
     return {
         "scoringPeriodId": 14,
+        "seasonId": 2026,
         "teams": [
             {
                 "id": 3,
                 "roster": {
                     "entries": [
-                        player(101, "Test Quarterback", 0, 0, 22.5, 18.1),
+                        player(101, "Test Quarterback", 1, 0, 22.5, 18.1, season_total=210.5),
                         player(102, "Test Runningback", 2, 2, 15.0, 21.4),
-                        player(103, "Bench Guy", 4, 20, 9.0, 4.2),
+                        player(103, "Bench Guy", 3, 20, 9.0, 4.2, injury="OUT", owned=12.0),
                     ]
                 },
             }
@@ -130,6 +150,47 @@ class TestESPNServiceReal:
         assert qb["applied_points"] == 18.1
         assert qb["position_name"] == "QB"
         assert players[2]["lineup_slot_name"] == "BENCH"
+
+    @respx.mock
+    async def test_roster_separates_position_from_lineup_slot(self):
+        # Slot id 3 is the RB/WR flex while position id 3 is a plain WR. Reading
+        # a defaultPositionId through the slot map is what labelled every WR
+        # "RB/WR" on the roster page.
+        respx.get(ESPN_URL).mock(
+            return_value=httpx.Response(200, json=espn_roster_payload())
+        )
+        players = (await ESPNService().get_team_roster("1725275280", 3, week=14))["roster"]
+        wr = next(p for p in players if p["full_name"] == "Bench Guy")
+        assert wr["position_name"] == "WR"
+        assert wr["lineup_slot_name"] == "BENCH"
+        assert wr["is_starter"] is False
+
+    @respx.mock
+    async def test_roster_carries_status_ownership_and_season_totals(self):
+        respx.get(ESPN_URL).mock(
+            return_value=httpx.Response(200, json=espn_roster_payload())
+        )
+        players = (await ESPNService().get_team_roster("1725275280", 3, week=14))["roster"]
+        qb = next(p for p in players if p["full_name"] == "Test Quarterback")
+        assert qb["pro_team_abbr"] == "BUF"
+        assert qb["injury_status"] == "ACTIVE"  # "NORMAL" is reported as ACTIVE
+        assert qb["percent_owned"] == 50.0
+        assert qb["positional_ranking"] == 7
+        assert qb["is_starter"] is True
+        # The 2025 row in the same stats list must not leak into 2026's total.
+        assert qb["season_points"] == 210.5
+
+        hurt = next(p for p in players if p["full_name"] == "Bench Guy")
+        assert hurt["injury_status"] == "OUT"
+        assert hurt["is_injured"] is True
+
+    @respx.mock
+    async def test_roster_is_ordered_like_a_lineup_card(self):
+        respx.get(ESPN_URL).mock(
+            return_value=httpx.Response(200, json=espn_roster_payload())
+        )
+        players = (await ESPNService().get_team_roster("1725275280", 3, week=14))["roster"]
+        assert [p["lineup_slot_name"] for p in players] == ["QB", "RB", "BENCH"]
 
     @respx.mock
     async def test_401_raises_authentication_error(self):

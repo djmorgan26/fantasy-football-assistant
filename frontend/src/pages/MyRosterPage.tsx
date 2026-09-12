@@ -1,70 +1,266 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useLeague } from '@/hooks/useLeagues';
 import { useLeagueTeams, useTeamRoster } from '@/hooks/useTeams';
+import { useCurrentMatchup } from '@/hooks/useMatchups';
 import { useCurrentUser } from '@/hooks/useAuth';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { Progress } from '@/components/ui/Progress';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { getPositionColor } from '@/utils';
+import { RosterPlayer } from '@/types';
 import {
   ArrowLeftIcon,
-  TrophyIcon,
-  UserIcon,
-  FireIcon,
-  ChartBarIcon,
+  ArrowTopRightOnSquareIcon,
+  ArrowTrendingUpIcon,
+  ClipboardDocumentListIcon,
   ExclamationTriangleIcon,
+  QueueListIcon,
+  ShieldExclamationIcon,
 } from '@heroicons/react/24/outline';
 
+/** Statuses that mean a player will not or may not take the field. */
+const UNAVAILABLE = ['OUT', 'INJURY_RESERVE', 'IR', 'SUSPENSION'];
+const DOUBTFUL = ['DOUBTFUL', 'QUESTIONABLE'];
+
+/** Short, readable label for an ESPN injury status. */
+const injuryLabel = (status?: string) => {
+  switch (status) {
+    case 'INJURY_RESERVE':
+      return 'IR';
+    case 'QUESTIONABLE':
+      return 'Q';
+    case 'DOUBTFUL':
+      return 'D';
+    case 'OUT':
+      return 'OUT';
+    case 'SUSPENSION':
+      return 'SUSP';
+    case 'PROBABLE':
+      return 'P';
+    default:
+      return null;
+  }
+};
+
+const injuryTone = (status?: string): 'error' | 'warning' | 'default' => {
+  if (!status) return 'default';
+  if (UNAVAILABLE.includes(status)) return 'error';
+  if (DOUBTFUL.includes(status)) return 'warning';
+  return 'default';
+};
+
+const initials = (name: string) =>
+  name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+
+const pts = (n?: number | null) => (n ?? 0).toFixed(1);
+
+/**
+ * One player line. Used for starters, bench and IR so a player reads the same
+ * everywhere: who they are on the left, what they are worth on the right.
+ */
+const PlayerRow: React.FC<{
+  player: RosterPlayer;
+  slotLabel: string;
+  dimmed?: boolean;
+  flag?: string;
+}> = ({ player, slotLabel, dimmed, flag }) => {
+  const status = player.injury_status;
+  const label = injuryLabel(status);
+  const tone = injuryTone(status);
+  const scored = (player.applied_points ?? 0) > 0;
+
+  return (
+    <div
+      className={`flex items-center gap-3 rounded-lg border border-border p-3 transition-all hover:bg-surface-sunken hover:shadow-elevation-3 ${
+        dimmed ? 'bg-surface-sunken/50' : 'bg-surface-raised'
+      }`}
+    >
+      {/* Lineup slot rail */}
+      <div className="w-12 shrink-0 text-center">
+        <span
+          className={`inline-block w-full rounded-md px-1 py-1 text-xs font-semibold ${getPositionColor(
+            slotLabel
+          )}`}
+        >
+          {slotLabel}
+        </span>
+      </div>
+
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand to-primary-700 text-xs font-bold text-brand-fg">
+        {initials(player.full_name)}
+      </div>
+
+      {/* Identity */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="truncate font-semibold text-fg">{player.full_name}</span>
+          {label && (
+            <Badge variant={tone === 'default' ? 'secondary' : tone} size="sm">
+              {label}
+            </Badge>
+          )}
+        </div>
+        <div className="mt-0.5 flex items-center gap-2 text-xs text-fg-muted">
+          <span className="font-medium">{player.position_name}</span>
+          <span aria-hidden>•</span>
+          <span>{player.pro_team_abbr || 'FA'}</span>
+          {!!player.positional_ranking && (
+            <>
+              <span aria-hidden>•</span>
+              <span>
+                {player.position_name} #{player.positional_ranking}
+              </span>
+            </>
+          )}
+          {!!player.percent_owned && (
+            <>
+              <span aria-hidden>•</span>
+              <span className="tabular">{player.percent_owned.toFixed(0)}% rostered</span>
+            </>
+          )}
+        </div>
+        {flag && (
+          <div className="mt-1 flex items-center gap-1 text-xs font-medium text-warning-700 dark:text-warning-400">
+            <ArrowTrendingUpIcon className="h-3 w-3" />
+            {flag}
+          </div>
+        )}
+      </div>
+
+      {/* Numbers */}
+      <div className="flex shrink-0 items-center gap-4 text-right">
+        <div className="w-12">
+          <div
+            className={`font-display text-base font-bold tabular ${
+              scored ? 'text-fg' : 'text-fg-subtle'
+            }`}
+          >
+            {pts(player.applied_points)}
+          </div>
+          <div className="text-[10px] uppercase tracking-wide text-fg-subtle">pts</div>
+        </div>
+        <div className="w-12">
+          <div className="font-display text-base font-bold tabular text-brand">
+            {pts(player.projected_points)}
+          </div>
+          <div className="text-[10px] uppercase tracking-wide text-fg-subtle">proj</div>
+        </div>
+        <div className="hidden w-14 sm:block">
+          <div className="font-display text-base font-bold tabular text-fg-muted">
+            {pts(player.season_points)}
+          </div>
+          <div className="text-[10px] uppercase tracking-wide text-fg-subtle">season</div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const StatTile: React.FC<{ label: string; value: string; hint?: string; accent?: boolean }> = ({
+  label,
+  value,
+  hint,
+  accent,
+}) => (
+  <div className="rounded-lg bg-surface-sunken p-4 text-center">
+    <div
+      className={`font-display text-2xl font-bold tabular ${accent ? 'text-brand' : 'text-fg'}`}
+    >
+      {value}
+    </div>
+    <div className="mt-1 text-sm text-fg-muted">{label}</div>
+    {hint && <div className="mt-0.5 text-xs text-fg-subtle">{hint}</div>}
+  </div>
+);
 
 export const MyRosterPage: React.FC = () => {
   const { leagueId } = useParams<{ leagueId: string }>();
-  const { data: league } = useLeague(parseInt(leagueId || '0', 10));
-  const { data: teams } = useLeagueTeams(parseInt(leagueId || '0', 10));
+  const numericLeagueId = parseInt(leagueId || '0', 10);
+  const { data: league } = useLeague(numericLeagueId);
+  const { data: teams } = useLeagueTeams(numericLeagueId);
   const { data: currentUser } = useCurrentUser();
-  
-  const [selectedWeek, setSelectedWeek] = useState(league?.current_week || 1);
 
-  const userTeam = teams?.find(team => team.owner_user_id === currentUser?.id);
-  
-  // Fetch roster data for the user's team
-  const { data: rosterData, isLoading: rosterLoading } = useTeamRoster(
-    userTeam?.id || 0, 
-    selectedWeek
+  const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
+  const week = selectedWeek ?? league?.current_week ?? 1;
+
+  const userTeam = teams?.find((team) => team.owner_user_id === currentUser?.id);
+
+  const { data: rosterData, isLoading: rosterLoading } = useTeamRoster(userTeam?.id || 0, week);
+  // The matchups endpoint reports our own database team ids, not ESPN's, so the
+  // lookup uses userTeam.id. espn_team_id is only for links back to ESPN.
+  const { opponent, myScore } = useCurrentMatchup(numericLeagueId, userTeam?.id || 0, week);
+
+  const players: RosterPlayer[] = rosterData?.roster || [];
+
+  const { starters, bench, injuredReserve, startCandidates, totals } = useMemo(() => {
+    const starters = players.filter((p) => p.is_starter);
+    const bench = players.filter((p) => !p.is_starter && !p.on_injured_reserve);
+    const injuredReserve = players.filter((p) => p.on_injured_reserve);
+
+    // A bench player is worth flagging when they out-project the weakest
+    // starter they could actually replace: same position, or the flex.
+    const flexible = ['RB', 'WR', 'TE'];
+    const startCandidates = new Map<number, string>();
+    bench.forEach((b) => {
+      const replaceable = starters.filter(
+        (s) =>
+          s.position_name === b.position_name ||
+          (s.lineup_slot_name === 'FLEX' && flexible.includes(b.position_name))
+      );
+      if (!replaceable.length) return;
+      const weakest = replaceable.reduce((low, s) =>
+        (s.projected_points ?? 0) < (low.projected_points ?? 0) ? s : low
+      );
+      const gain = (b.projected_points ?? 0) - (weakest.projected_points ?? 0);
+      // Ignore a player who cannot play and trivial differences.
+      if (gain > 0.5 && !UNAVAILABLE.includes(b.injury_status || '')) {
+        startCandidates.set(
+          b.player_id,
+          `+${gain.toFixed(1)} proj over ${weakest.full_name}`
+        );
+      }
+    });
+
+    const sum = (list: RosterPlayer[], key: 'applied_points' | 'projected_points') =>
+      list.reduce((acc, p) => acc + (p[key] ?? 0), 0);
+
+    return {
+      starters,
+      bench,
+      injuredReserve,
+      startCandidates,
+      totals: {
+        actual: sum(starters, 'applied_points'),
+        projected: sum(starters, 'projected_points'),
+        benchActual: sum(bench, 'applied_points'),
+      },
+    };
+  }, [players]);
+
+  // Starters who cannot play, or might not. The single most useful thing this
+  // page can tell you before kickoff.
+  const lineupAlerts = starters.filter((p) =>
+    [...UNAVAILABLE, ...DOUBTFUL].includes(p.injury_status || '')
   );
 
-  // Process roster data
-  const rosterPlayers = rosterData?.roster || [];
-  
-  const starterPlayers = rosterPlayers.filter(player => 
-    player.lineup_slot_name !== 'Bench'
-  );
-  const benchPlayers = rosterPlayers.filter(player => 
-    player.lineup_slot_name === 'Bench'
-  );
-  
-  const totalPoints = rosterPlayers.reduce((sum, player) => {
-    const stats = player.stats?.actual || {};
-    return sum + (stats['0'] || 0);
-  }, 0);
-  
-  const projectedPoints = rosterPlayers.reduce((sum, player) => {
-    const stats = player.stats?.projected || {};
-    return sum + (stats['0'] || 0);
-  }, 0);
-
-  const getLineupSlotColor = (slot: string) => {
-    return slot === 'BENCH'
-      ? 'text-fg-muted bg-surface-sunken'
-      : 'text-brand bg-brand/10';
-  };
+  const espnTeamUrl =
+    league?.espn_league_id && userTeam?.espn_team_id
+      ? `https://fantasy.espn.com/football/team?leagueId=${league.espn_league_id}&teamId=${userTeam.espn_team_id}&seasonId=${league.season_year}`
+      : null;
 
   if (!userTeam) {
     return (
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
+      <div className="container mx-auto max-w-6xl px-4 py-8">
         <Card>
           <EmptyState
             icon={ExclamationTriangleIcon}
@@ -81,198 +277,255 @@ export const MyRosterPage: React.FC = () => {
     );
   }
 
-  return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center mb-4">
-          <Link
-            to={`/leagues/${leagueId}`}
-            className="flex items-center text-fg-muted hover:text-fg transition-colors"
-          >
-            <ArrowLeftIcon className="h-4 w-4 mr-1" />
-            Back to League
-          </Link>
-        </div>
+  const totalWeekPoints = myScore ?? totals.actual;
+  const opponentScore = opponent?.score ?? 0;
+  const combined = totalWeekPoints + opponentScore;
+  const sharePct = combined > 0 ? (totalWeekPoints / combined) * 100 : 50;
 
-        <div className="flex items-center justify-between">
-          <div className="flex items-center">
-            <TrophyIcon className="h-8 w-8 text-brand mr-3" />
+  return (
+    <div className="container mx-auto max-w-6xl px-4 py-8">
+      {/* Header */}
+      <div className="mb-6">
+        <Link
+          to={`/leagues/${leagueId}`}
+          className="mb-4 inline-flex items-center text-fg-muted transition-colors hover:text-fg"
+        >
+          <ArrowLeftIcon className="mr-1 h-4 w-4" />
+          Back to League
+        </Link>
+
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex items-center gap-3">
+            {userTeam.logo_url ? (
+              <img
+                src={userTeam.logo_url}
+                alt=""
+                className="h-12 w-12 rounded-full bg-surface-sunken object-cover"
+              />
+            ) : (
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-brand to-primary-700 text-sm font-bold text-brand-fg">
+                {initials(userTeam.name)}
+              </div>
+            )}
             <div>
-              <h1 className="text-3xl font-bold text-fg">
-                My Roster
-              </h1>
-              <p className="text-fg-muted">
+              <h1 className="text-display-sm text-fg">My Roster</h1>
+              <p className="text-sm text-fg-muted">
                 {userTeam.name} • {league?.name}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center gap-2">
+            {espnTeamUrl && (
+              <a href={espnTeamUrl} target="_blank" rel="noopener noreferrer">
+                <Button variant="secondary" size="sm">
+                  Set lineup on ESPN
+                  <ArrowTopRightOnSquareIcon className="ml-1.5 h-4 w-4" />
+                </Button>
+              </a>
+            )}
             <Select
-              value={String(selectedWeek)}
+              value={String(week)}
               onChange={(v) => setSelectedWeek(parseInt(v, 10))}
-              options={Array.from({ length: 17 }, (_, i) => ({
+              options={Array.from({ length: 18 }, (_, i) => ({
                 value: String(i + 1),
                 label: `Week ${i + 1}`,
               }))}
+              className="w-32"
             />
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Roster Stats */}
-        <div className="lg:col-span-3">
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>Team Stats</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                  <div className="font-display text-2xl font-bold text-blue-600 dark:text-blue-400 tabular">{userTeam.wins}-{userTeam.losses}</div>
-                  <div className="text-sm text-blue-800 dark:text-blue-300">Record</div>
+      {/* Scoreboard */}
+      {opponent && (
+        <Card className="mb-6">
+          <CardContent>
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium text-fg">{userTeam.name}</div>
+                <div className="font-display text-3xl font-bold tabular text-brand">
+                  {pts(totalWeekPoints)}
                 </div>
-                <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                  <div className="font-display text-2xl font-bold text-green-600 dark:text-green-400 tabular">{userTeam.points_for.toFixed(1)}</div>
-                  <div className="text-sm text-green-800 dark:text-green-300">Points For</div>
-                </div>
-                <div className="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                  <div className="font-display text-2xl font-bold text-purple-600 dark:text-purple-400 tabular">{totalPoints.toFixed(1)}</div>
-                  <div className="text-sm text-purple-800 dark:text-purple-300">Season Points</div>
-                </div>
-                <div className="text-center p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                  <div className="font-display text-2xl font-bold text-orange-600 dark:text-orange-400 tabular">{projectedPoints.toFixed(1)}</div>
-                  <div className="text-sm text-orange-800 dark:text-orange-300">Week {selectedWeek} Proj</div>
+                <div className="text-xs text-fg-subtle">
+                  projected {pts(totals.projected)}
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+              <div className="shrink-0 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
+                Week {week}
+              </div>
+              <div className="min-w-0 flex-1 text-right">
+                <div className="truncate text-sm font-medium text-fg">{opponent.teamName}</div>
+                <div className="font-display text-3xl font-bold tabular text-fg">
+                  {pts(opponentScore)}
+                </div>
+                <div className="text-xs text-fg-subtle">opponent</div>
+              </div>
+            </div>
+            <Progress
+              value={sharePct}
+              className="mt-4"
+              label={`${userTeam.name} share of points scored`}
+            />
+          </CardContent>
+        </Card>
+      )}
 
-        {/* Starting Lineup */}
+      {/* Team stats */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Team Stats</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+            <StatTile
+              label="Record"
+              value={`${userTeam.wins}-${userTeam.losses}${
+                userTeam.ties ? `-${userTeam.ties}` : ''
+              }`}
+            />
+            <StatTile label="Points For" value={userTeam.points_for.toFixed(1)} hint="season" />
+            <StatTile
+              label={`Week ${week} Points`}
+              value={pts(totals.actual)}
+              hint="starters"
+              accent
+            />
+            <StatTile label="Projected" value={pts(totals.projected)} hint="starters" />
+            <StatTile label="On Bench" value={pts(totals.benchActual)} hint="points not started" />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Lineup alerts */}
+      {!rosterLoading && lineupAlerts.length > 0 && (
+        <Card className="mb-6 border-warning-300 dark:border-warning-700">
+          <CardContent>
+            <div className="flex gap-3">
+              <ShieldExclamationIcon className="h-5 w-5 shrink-0 text-warning-600" />
+              <div>
+                <h3 className="font-semibold text-fg">
+                  {lineupAlerts.length === 1
+                    ? '1 starter needs attention'
+                    : `${lineupAlerts.length} starters need attention`}
+                </h3>
+                <ul className="mt-1 space-y-0.5 text-sm text-fg-muted">
+                  {lineupAlerts.map((p) => (
+                    <li key={p.player_id}>
+                      <span className="font-medium text-fg">{p.full_name}</span> is{' '}
+                      {(p.injury_status || '').replace('_', ' ').toLowerCase()} in your{' '}
+                      {p.lineup_slot_name} slot
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Starting lineup */}
         <div className="lg:col-span-2">
-          <Card>
+          <Card data-testid="starters-panel">
             <CardHeader>
-              <CardTitle className="flex items-center">
-                <UserIcon className="h-5 w-5 mr-2" />
-                Starting Lineup
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center">
+                  <ClipboardDocumentListIcon className="mr-2 h-5 w-5" />
+                  Starting Lineup
+                </CardTitle>
+                <span className="text-sm text-fg-muted">
+                  {starters.length} {starters.length === 1 ? 'starter' : 'starters'}
+                </span>
+              </div>
             </CardHeader>
             <CardContent>
               {rosterLoading ? (
-                <div className="flex justify-center py-8">
-                  <LoadingSpinner size="sm" />
-                </div>
-              ) : (
                 <div className="space-y-3">
-                  {starterPlayers.map((player) => (
-                  <div
-                    key={player.player_id}
-                    className="p-4 border border-border rounded-lg hover:shadow-elevation-3 transition-shadow"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        {/* Player Avatar */}
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                          {player.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                        </div>
-
-                        {/* Player Info */}
-                        <div>
-                          <div className="flex items-center space-x-2 mb-1">
-                            <h4 className="font-semibold text-fg">{player.full_name}</h4>
-                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPositionColor(player.position_name)}`}>
-                              {player.position_name}
-                            </span>
-                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${getLineupSlotColor(player.lineup_slot_name)}`}>
-                              {player.lineup_slot_name}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center space-x-3 text-sm text-fg-muted">
-                            <span>{player.pro_team_id}</span>
-                            <span className="flex items-center">
-                              <TrophyIcon className="h-3 w-3 mr-1" />
-                              <span className="tabular">{(player.stats?.actual?.['0'] || 0).toFixed(1)}</span>
-                            </span>
-                            <span className="flex items-center">
-                              <FireIcon className="h-3 w-3 mr-1" />
-                              <span className="tabular">{(player.stats?.projected?.['0'] || 0).toFixed(1)}</span>
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        <Badge variant="success" size="sm">Active</Badge>
-                      </div>
-                    </div>
-                    </div>
+                  {Array.from({ length: 9 }).map((_, i) => (
+                    <Skeleton key={i} className="h-16 w-full rounded-lg" />
                   ))}
                 </div>
+              ) : starters.length ? (
+                <div className="space-y-2">
+                  {starters.map((player) => (
+                    <PlayerRow
+                      key={player.player_id}
+                      player={player}
+                      slotLabel={player.lineup_slot_name}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  icon={QueueListIcon}
+                  title="No lineup for this week"
+                  description="ESPN has no roster data for the week you selected."
+                />
               )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Bench */}
-        <div>
-          <Card>
+        {/* Bench and IR */}
+        <div className="space-y-6">
+          <Card data-testid="bench-panel">
             <CardHeader>
-              <CardTitle className="flex items-center">
-                <ChartBarIcon className="h-5 w-5 mr-2" />
-                Bench
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center">
+                  <QueueListIcon className="mr-2 h-5 w-5" />
+                  Bench
+                </CardTitle>
+                <span className="text-sm text-fg-muted">{bench.length}</span>
+              </div>
             </CardHeader>
             <CardContent>
               {rosterLoading ? (
-                <div className="flex justify-center py-8">
-                  <LoadingSpinner size="sm" />
-                </div>
-              ) : (
                 <div className="space-y-3">
-                  {benchPlayers.map((player) => (
-                  <div
-                    key={player.player_id}
-                    className="p-3 border border-border rounded-lg hover:shadow-elevation-3 transition-shadow bg-surface-sunken"
-                  >
-                    <div className="flex items-center space-x-3">
-                      {/* Player Avatar */}
-                      <div className="w-8 h-8 bg-gradient-to-br from-gray-400 to-gray-600 rounded-full flex items-center justify-center text-white font-bold text-xs">
-                        {player.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                      </div>
-
-                      {/* Player Info */}
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <h5 className="font-medium text-fg text-sm">{player.full_name}</h5>
-                          <span className={`px-1.5 py-0.5 text-xs font-medium rounded-full ${getPositionColor(player.position_name)}`}>
-                            {player.position_name}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center space-x-2 text-xs text-fg-muted">
-                          <span>{player.pro_team_id}</span>
-                          <span className="tabular">{(player.stats?.actual?.['0'] || 0).toFixed(1)} pts</span>
-                        </div>
-                      </div>
-                    </div>
-                    </div>
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Skeleton key={i} className="h-16 w-full rounded-lg" />
                   ))}
                 </div>
-              )}
-              
-              {!rosterLoading && (
-                <div className="mt-4 pt-3 border-t border-border">
-                  <Button fullWidth variant="secondary" size="sm">
-                    Manage Lineup
-                  </Button>
+              ) : bench.length ? (
+                <div className="space-y-2">
+                  {bench.map((player) => (
+                    <PlayerRow
+                      key={player.player_id}
+                      player={player}
+                      slotLabel={player.position_name}
+                      dimmed
+                      flag={startCandidates.get(player.player_id)}
+                    />
+                  ))}
                 </div>
+              ) : (
+                <p className="py-4 text-center text-sm text-fg-muted">Nobody on the bench.</p>
               )}
             </CardContent>
           </Card>
+
+          {injuredReserve.length > 0 && (
+            <Card data-testid="ir-panel">
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <ShieldExclamationIcon className="mr-2 h-5 w-5" />
+                  Injured Reserve
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {injuredReserve.map((player) => (
+                    <PlayerRow
+                      key={player.player_id}
+                      player={player}
+                      slotLabel="IR"
+                      dimmed
+                    />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

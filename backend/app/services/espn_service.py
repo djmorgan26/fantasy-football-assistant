@@ -32,7 +32,7 @@ class ESPNService:
         self.rate_limit_requests = settings.espn_rate_limit_requests
         self.rate_limit_window = settings.espn_rate_limit_window
         
-        # Position mappings
+        # Lineup slot ids: which spot on the roster a player occupies.
         self.position_map = {
             0: "QB", 1: "TQB", 2: "RB", 3: "RB/WR", 4: "WR",
             5: "WR/TE", 6: "TE", 16: "D/ST", 17: "K", 20: "BENCH",
@@ -44,6 +44,16 @@ class ESPNService:
             0: "QB", 2: "RB", 4: "WR", 6: "TE", 16: "D/ST",
             17: "K", 20: "BENCH", 21: "IR", 23: "FLEX"
         }
+
+        # defaultPositionId ids: what a player actually is. A DIFFERENT id space
+        # from the slots above, and mixing them is why a WR used to show as
+        # "RB/WR" (slot 3) on the roster page.
+        self.player_position_map = {
+            1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "D/ST"
+        }
+
+        # The order a lineup is read in, so a roster lists like a lineup card.
+        self.slot_display_order = [0, 2, 4, 6, 23, 16, 17, 20, 21]
 
     async def _make_request(
         self,
@@ -314,29 +324,67 @@ class ESPNService:
             roster = []
             roster_entries = team_data.get("roster", {}).get("entries", [])
             
+            scoring_period = week or data.get("scoringPeriodId", 1)
+            season = data.get("seasonId") or self.season_year
+
             for entry in roster_entries:
-                player = entry.get("playerPoolEntry", {}).get("player", {})
+                pool_entry = entry.get("playerPoolEntry", {})
+                player = pool_entry.get("player", {})
+                ownership = player.get("ownership") or {}
+                # ratings is keyed by scoring-period string; "0" is the season view.
+                rating = (pool_entry.get("ratings") or {}).get("0") or {}
+                slot_id = entry.get("lineupSlotId")
+
                 roster.append({
                     "player_id": player.get("id"),
                     "full_name": player.get("fullName", ""),
+                    "first_name": player.get("firstName", ""),
+                    "last_name": player.get("lastName", ""),
                     "position_id": player.get("defaultPositionId"),
-                    "position_name": self.position_map.get(player.get("defaultPositionId"), "UNKNOWN"),
-                    "lineup_slot_id": entry.get("lineupSlotId"),
-                    "lineup_slot_name": self.lineup_slots.get(entry.get("lineupSlotId"), "UNKNOWN"),
+                    "position_name": self.player_position_map.get(
+                        player.get("defaultPositionId"), "UNKNOWN"
+                    ),
+                    "lineup_slot_id": slot_id,
+                    "lineup_slot_name": self.lineup_slots.get(slot_id, "UNKNOWN"),
+                    "is_starter": slot_id not in (20, 21),
+                    "on_injured_reserve": slot_id == 21,
                     "pro_team_id": player.get("proTeamId"),
+                    "pro_team_abbr": self._get_pro_team_abbr(player.get("proTeamId")),
                     "eligible_slots": player.get("eligibleSlots", []),
+                    "eligible_slot_names": [
+                        self.lineup_slots[s]
+                        for s in player.get("eligibleSlots", [])
+                        if s in self.lineup_slots and s not in (20, 21)
+                    ],
+                    # ESPN reports a status in two places. The player's is the
+                    # real one (ACTIVE / QUESTIONABLE / OUT / INJURY_RESERVE);
+                    # the roster entry's is almost always the literal "NORMAL".
+                    "injury_status": self._normalize_injury_status(
+                        player.get("injuryStatus") or entry.get("injuryStatus")
+                    ),
+                    "is_injured": bool(player.get("injured")),
+                    "acquisition_type": entry.get("acquisitionType"),
+                    "percent_owned": round(float(ownership.get("percentOwned") or 0.0), 1),
+                    "percent_started": round(float(ownership.get("percentStarted") or 0.0), 1),
+                    "average_draft_position": round(
+                        float(ownership.get("averageDraftPosition") or 0.0), 1
+                    ),
+                    "positional_ranking": rating.get("positionalRanking"),
+                    "total_ranking": rating.get("totalRanking"),
                     "stats": self._extract_player_stats(player, week),
                     # Fantasy-point totals (appliedTotal), not raw stat dicts.
                     "projected_points": self._get_projected_points(player, week),
-                    "applied_points": self._get_applied_points(
-                        player, week or data.get("scoringPeriodId", 1)
-                    ),
+                    "applied_points": self._get_applied_points(player, scoring_period),
+                    "season_points": self._get_season_total(player, season, source=0),
+                    "season_projected_points": self._get_season_total(player, season, source=1),
                 })
-            
+
+            roster.sort(key=self._roster_sort_key)
+
             return {
                 "team_id": team_id,
                 "roster": roster,
-                "week": week or data.get("scoringPeriodId", 1)
+                "week": scoring_period
             }
         except Exception as e:
             logger.error("Failed to get team roster", 
@@ -731,6 +779,45 @@ class ESPNService:
         
         return 0.0
     
+    @staticmethod
+    def _normalize_injury_status(raw: Optional[str]) -> str:
+        """ESPN says "NORMAL" for a healthy player and for anything with no
+        status at all (a D/ST). Both mean available, so report one word for it."""
+        if not raw or raw == "NORMAL":
+            return "ACTIVE"
+        return raw
+
+    def _roster_sort_key(self, player: Dict[str, Any]):
+        """Lineup-card order: starters by slot, then bench, then IR.
+
+        Within a slot the higher projection comes first, so the player actually
+        carrying the week leads the group.
+        """
+        slot = player.get("lineup_slot_id")
+        try:
+            slot_rank = self.slot_display_order.index(slot)
+        except ValueError:
+            slot_rank = len(self.slot_display_order)
+        return (slot_rank, -float(player.get("projected_points") or 0.0))
+
+    def _get_season_total(
+        self, player_data: Dict[str, Any], season: int, source: int = 0
+    ) -> float:
+        """Season-to-date fantasy points (source 0) or season projection (source 1).
+
+        Season rows use scoringPeriodId 0, and ESPN ships last season's rows in
+        the same list, so the seasonId has to be checked or you get last year's
+        total sitting in this year's column.
+        """
+        for stat_entry in player_data.get("stats", []):
+            if (
+                stat_entry.get("scoringPeriodId") == 0
+                and stat_entry.get("statSourceId") == source
+                and stat_entry.get("seasonId") == season
+            ):
+                return round(float(stat_entry.get("appliedTotal", 0.0) or 0.0), 2)
+        return 0.0
+
     def _get_applied_points(self, player_data: Dict[str, Any], week: int, source: int = 0) -> float:
         """
         Actual (source=0) or projected (source=1) applied fantasy points for a

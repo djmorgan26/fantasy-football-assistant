@@ -113,12 +113,34 @@ export interface RosterResponse {
 export interface RosterPlayer {
   player_id: number;
   full_name: string;
+  first_name?: string;
+  last_name?: string;
+  /** ESPN defaultPositionId. A different id space from lineup_slot_id. */
   position_id: number;
   position_name: string;
   lineup_slot_id: number;
   lineup_slot_name: string;
+  is_starter?: boolean;
+  on_injured_reserve?: boolean;
   pro_team_id?: number;
+  pro_team_abbr?: string;
   eligible_slots: number[];
+  eligible_slot_names?: string[];
+  /** ACTIVE | QUESTIONABLE | DOUBTFUL | OUT | INJURY_RESERVE | SUSPENSION */
+  injury_status?: string;
+  is_injured?: boolean;
+  acquisition_type?: string;
+  percent_owned?: number;
+  percent_started?: number;
+  average_draft_position?: number;
+  positional_ranking?: number | null;
+  total_ranking?: number | null;
+  /** Fantasy points scored in the selected week. */
+  applied_points?: number;
+  /** Fantasy points projected for the selected week. */
+  projected_points?: number;
+  season_points?: number;
+  season_projected_points?: number;
   stats?: PlayerStats;
 }
 

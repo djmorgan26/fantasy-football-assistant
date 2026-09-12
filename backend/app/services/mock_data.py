@@ -395,18 +395,37 @@ def espn_team_roster(team_id: int, week: Optional[int]) -> Dict[str, Any]:
     for pid in starters + bench:
         meta = _PLAYERS[pid]
         is_bench = pid in bench
+        week_points = _player_week_points(pid, wk)
         roster.append({
             "player_id": pid,
             "full_name": meta["full_name"],
+            "first_name": meta["first_name"],
+            "last_name": meta["last_name"],
             "position_id": 0,
             "position_name": meta["position"],
             "lineup_slot_id": 20 if is_bench else 0,
             "lineup_slot_name": "BENCH" if is_bench else meta["position"],
+            "is_starter": not is_bench,
+            "on_injured_reserve": False,
             "pro_team_id": 0,
+            "pro_team_abbr": meta.get("pro_team_abbr", "FA"),
             "eligible_slots": [],
+            "eligible_slot_names": [meta["position"]],
+            "injury_status": "ACTIVE",
+            "is_injured": False,
+            "acquisition_type": "DRAFT",
+            "percent_owned": 0.0,
+            "percent_started": 0.0,
+            "average_draft_position": 0.0,
+            "positional_ranking": None,
+            "total_ranking": None,
             "stats": {"actual": {}, "projected": {}},
-            "applied_points": _player_week_points(pid, wk),
-            "projected_points": _player_week_points(pid, wk),
+            "applied_points": week_points,
+            "projected_points": week_points,
+            "season_points": round(
+                sum(_player_week_points(pid, w) for w in range(1, wk + 1)), 2
+            ),
+            "season_projected_points": 0.0,
         })
     return {"team_id": team_id, "roster": roster, "week": wk}
 
