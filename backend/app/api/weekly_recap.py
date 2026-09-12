@@ -72,38 +72,62 @@ async def get_sleeper_weekly_data(league: League, week: int) -> Dict[str, Any]:
         raise
 
 
-def build_recap_prompt(league_name: str, week: int, weekly_data: Dict[str, Any]) -> str:
-    """Build a prompt for generating a hilarious, brutal weekly recap"""
+def build_recap_lines(week: int, weekly_data: Dict[str, Any]) -> List[str]:
+    """One factual line per matchup, built only from what the platform returned.
+
+    Returns an empty list when no matchup could be resolved. Callers must treat
+    that as "no recap is possible" rather than prompting anyway: an LLM handed a
+    heading with no rows under it will happily invent teams and scores.
+    """
 
     platform = weekly_data.get("platform", "Unknown")
-
-    # Build matchup summary
-    matchup_text = "MATCHUP RESULTS:\n"
+    lines: List[str] = []
 
     if platform == "ESPN":
         matchups = weekly_data.get("matchups", [])
         teams_dict = {team["id"]: team for team in weekly_data.get("teams", [])}
 
+        def describe(team_id, score, projected):
+            """'Name (12.3 pts, 4-1, projected 118.4)' from the team row we hold."""
+            team = teams_dict.get(team_id)
+            if not team:
+                return None
+            parts = [f"{float(score or 0):.1f} pts"]
+            record = f"{team.get('wins', 0)}-{team.get('losses', 0)}"
+            if team.get("ties"):
+                record += f"-{team['ties']}"
+            parts.append(record)
+            if projected:
+                parts.append(f"projected {float(projected):.1f}")
+            return f"{team.get('name', 'Unknown')} ({', '.join(parts)})"
+
         for matchup in matchups:
-            home = matchup.get("home", {})
-            away = matchup.get("away")
+            home = describe(
+                matchup.get("home_team_id"),
+                matchup.get("home_score"),
+                matchup.get("home_projected_score"),
+            )
+            away = describe(
+                matchup.get("away_team_id"),
+                matchup.get("away_score"),
+                matchup.get("away_projected_score"),
+            )
+            # A bye week has no opponent, and an unknown team id means we cannot
+            # name it honestly. Skip both rather than write "Unknown" into the prompt.
+            if not home or not away:
+                continue
 
-            home_team = teams_dict.get(home.get("team_id"))
-            home_name = home_team.get("name", "Unknown") if home_team else "Unknown"
-            home_score = home.get("total_points", 0)
-
-            if away:
-                away_team = teams_dict.get(away.get("team_id"))
-                away_name = away_team.get("name", "Unknown") if away_team else "Unknown"
-                away_score = away.get("total_points", 0)
-
-                winner = home_name if home_score > away_score else away_name
-                loser = away_name if home_score > away_score else home_name
-                winner_score = max(home_score, away_score)
-                loser_score = min(home_score, away_score)
-                margin = abs(home_score - away_score)
-
-                matchup_text += f"- {winner} ({winner_score:.1f}) DESTROYED {loser} ({loser_score:.1f}) by {margin:.1f} points\n"
+            home_score = float(matchup.get("home_score") or 0)
+            away_score = float(matchup.get("away_score") or 0)
+            margin = abs(home_score - away_score)
+            if matchup.get("winner", "UNDECIDED") in (None, "UNDECIDED"):
+                status_text = f"IN PROGRESS, {margin:.1f} apart so far"
+            elif margin == 0:
+                status_text = "TIED"
+            else:
+                status_text = f"final, won by {margin:.1f}"
+            playoff = " [playoff]" if matchup.get("is_playoff") else ""
+            lines.append(f"- {home} vs {away} ({status_text}){playoff}")
 
     elif platform == "Sleeper":
         matchups = weekly_data.get("matchups", [])
@@ -127,30 +151,51 @@ def build_recap_prompt(league_name: str, week: int, weekly_data: Dict[str, Any])
             roster_owners[roster_id] = user.get("display_name", f"Team {roster_id}") if user else f"Team {roster_id}"
 
         for matchup_id, teams in matchup_groups.items():
-            if len(teams) == 2:
-                team1, team2 = teams[0], teams[1]
-                name1 = roster_owners.get(team1.get("roster_id"), "Unknown")
-                name2 = roster_owners.get(team2.get("roster_id"), "Unknown")
-                score1 = team1.get("points", 0)
-                score2 = team2.get("points", 0)
+            if len(teams) != 2:
+                continue
+            team1, team2 = teams[0], teams[1]
+            name1 = roster_owners.get(team1.get("roster_id"))
+            name2 = roster_owners.get(team2.get("roster_id"))
+            if not name1 or not name2:
+                continue
+            score1 = float(team1.get("points") or 0)
+            score2 = float(team2.get("points") or 0)
+            margin = abs(score1 - score2)
+            status_text = "TIED" if margin == 0 else f"won by {margin:.1f}"
+            lines.append(
+                f"- {name1} ({score1:.1f} pts) vs {name2} ({score2:.1f} pts) ({status_text})"
+            )
 
-                winner = name1 if score1 > score2 else name2
-                loser = name2 if score1 > score2 else name1
-                winner_score = max(score1, score2)
-                loser_score = min(score1, score2)
-                margin = abs(score1 - score2)
+    return lines
 
-                matchup_text += f"- {winner} ({winner_score:.1f}) CRUSHED {loser} ({loser_score:.1f}) by {margin:.1f} points\n"
+
+def build_recap_prompt(league_name: str, week: int, lines: List[str]) -> str:
+    """Build a prompt for a weekly recap that stays inside the supplied facts."""
+
+    matchup_text = "MATCHUP RESULTS (the complete and only record of this week):\n" + "\n".join(lines)
 
     prompt = f"""You are a brutally honest, hilarious fantasy football analyst writing the weekly recap for "{league_name}" Week {week}.
 
 {matchup_text}
 
+FACTUAL RULES - these override every style instruction below:
+- The list above is everything you know about this week. It is complete.
+- Use ONLY those team names, spelled exactly as written. Never invent a team, a
+  manager, or an owner's name.
+- Every score, margin and record you state must appear verbatim above. Do not
+  compute standings, streaks or season totals that are not written there.
+- You have NO player-level data. Never name a quarterback, running back, kicker
+  or any other player, and never describe what a player did. Roast the managers
+  and the scores instead.
+- A matchup marked IN PROGRESS is still being played. Talk about it as unfinished
+  and never declare a winner or a final margin for it.
+- If something is not in the list, it did not happen. Leave it out.
+
 Write an entertaining 3-4 paragraph weekly recap that:
 
-1. **ROASTS THE LOSERS** - Be creative and funny when describing bad performances. Call out low scores, terrible decisions, and embarrassing losses.
+1. **ROASTS THE LOSERS** - Be creative and funny about low scores and lopsided results.
 2. **CELEBRATES THE WINNERS** - Give credit where it's due, but with playful jabs
-3. **HIGHLIGHTS THE DRAMA** - Focus on the biggest blowouts, closest games, and shocking upsets
+3. **HIGHLIGHTS THE DRAMA** - Focus on the biggest blowouts and the closest games
 4. **BE BRUTAL BUT FUNNY** - Channel your inner roast comedian. Make it hurt, but make it entertaining
 5. **USE CREATIVE LANGUAGE** - Sports metaphors, pop culture references, over-the-top descriptions
 
@@ -158,11 +203,12 @@ Guidelines:
 - Keep it around 200-300 words
 - Be mean to underperformers (they deserve it)
 - Celebrate dominance
-- Make specific references to actual scores and matchups
+- Make specific references to the actual scores and matchups listed above
 - End with a spicy prediction or call-out for next week
 - NO generic corporate speak - this is for the league, make it personal and funny
 
-Write the recap in a fun, engaging style. This should be the kind of recap that makes people laugh at themselves."""
+Invention is the one unforgivable sin here: these are real people who will check
+the numbers. Be funny about what actually happened."""
 
     return prompt
 
@@ -216,6 +262,21 @@ async def get_weekly_recap(
                 detail=f"Unsupported platform: {league.platform}"
             )
 
+        # No resolvable matchups means there is nothing to write about. Prompting
+        # anyway is what produced recaps about teams that do not exist.
+        lines = build_recap_lines(week, weekly_data)
+        if not lines:
+            logger.info("No matchup data for recap", league_id=league_id, week=week)
+            return {
+                "recap": (
+                    f"No matchup data for Week {week} yet. Once the week's games are "
+                    f"on the board, the roast writes itself."
+                ),
+                "week": week,
+                "league_name": league.name,
+                "generated_at": None
+            }
+
         # Check if LLM is available
         if not llm_service.is_available():
             return {
@@ -226,31 +287,29 @@ async def get_weekly_recap(
             }
 
         # Generate recap with LLM
-        prompt = build_recap_prompt(league.name, week, weekly_data)
+        prompt = build_recap_prompt(league.name, week, lines)
 
-        response = llm_service.client.chat.completions.create(
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a witty, brutally honest fantasy football analyst who writes hilarious weekly recaps. You're not afraid to roast bad performances and celebrate dominance. Keep it fun and entertaining."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            model=llm_service.model,
+        recap_text = llm_service.complete(
+            system=(
+                "You are a witty, brutally honest fantasy football analyst who writes "
+                "hilarious weekly recaps. You roast bad performances and celebrate "
+                "dominance. You work strictly from the matchup data you are given: you "
+                "never invent teams, managers, players or scores, and you never mention "
+                "an individual player, because you are never given player data."
+            ),
+            prompt=prompt,
             temperature=0.8,  # Higher temperature for more creative/funny responses
-            max_tokens=800
+            # A recap runs 250-350 words, but the default model reasons first and that
+            # reasoning comes out of the same budget: at 800 the recap ended mid-sentence.
+            max_tokens=2000,
+            purpose="weekly_recap",
         )
-
-        recap_text = response.choices[0].message.content
 
         logger.info(
             "Weekly recap generated",
             league_id=league_id,
             week=week,
-            tokens=response.usage.total_tokens
+            matchups=len(lines),
         )
 
         return {
