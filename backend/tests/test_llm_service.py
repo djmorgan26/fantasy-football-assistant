@@ -16,17 +16,27 @@ pytestmark = pytest.mark.unit
 
 
 class FakeGroqClient:
-    """Minimal stand-in for groq.Groq supporting chat.completions.create."""
+    """Minimal stand-in for groq.Groq supporting chat.completions.create.
 
-    def __init__(self, content: str):
+    Mirrors the real response shape, finish_reason and usage included, because
+    the service inspects both to catch answers cut off by the token ceiling.
+    """
+
+    def __init__(self, content: str, finish_reason: str = "stop"):
         self._content = content
+        self._finish_reason = finish_reason
         self.last_kwargs = None
 
         def create(**kwargs):
             self.last_kwargs = kwargs
             return SimpleNamespace(
-                choices=[SimpleNamespace(message=SimpleNamespace(content=self._content))],
-                usage=SimpleNamespace(total_tokens=123),
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(content=self._content),
+                        finish_reason=self._finish_reason,
+                    )
+                ],
+                usage=SimpleNamespace(total_tokens=123, completion_tokens=99),
             )
 
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=create))
@@ -141,3 +151,77 @@ class TestLineupOptimization:
         service.client = FakeGroqClient(json.dumps(payload))
         result = await service.analyze_lineup_optimization([], {}, {}, {})
         assert result["projected_impact"] == 5.5
+
+
+class TestRecapGrounding:
+    """The recap prompt must carry real matchups, or no prompt at all.
+
+    A prompt whose "MATCHUP RESULTS" heading has no rows under it is what made
+    the model invent teams and scores that were never in the league.
+    """
+
+    TEAMS = [
+        {"id": 6, "name": "Followed by David Morgan", "wins": 1, "losses": 0, "ties": 0},
+        {"id": 11, "name": "Mind Goblins", "wins": 0, "losses": 1, "ties": 0},
+    ]
+
+    def _matchup(self, **overrides):
+        base = {
+            "home_team_id": 6,
+            "away_team_id": 11,
+            "home_score": 101.5,
+            "away_score": 88.25,
+            "home_projected_score": 99.0,
+            "away_projected_score": 104.0,
+            "is_playoff": False,
+            "winner": "HOME",
+        }
+        base.update(overrides)
+        return base
+
+    def _lines(self, matchups):
+        from app.api.weekly_recap import build_recap_lines
+
+        return build_recap_lines(
+            1, {"platform": "ESPN", "matchups": matchups, "teams": self.TEAMS}
+        )
+
+    def test_reads_the_shape_get_matchups_returns(self):
+        lines = self._lines([self._matchup()])
+        assert len(lines) == 1
+        assert "Followed by David Morgan (101.5 pts, 1-0, projected 99.0)" in lines[0]
+        assert "Mind Goblins (88.2 pts, 0-1, projected 104.0)" in lines[0]
+        assert "final, won by 13.2" in lines[0]
+
+    def test_unfinished_game_is_marked_in_progress(self):
+        lines = self._lines([self._matchup(winner="UNDECIDED", home_score=14.8, away_score=32.4)])
+        assert "IN PROGRESS, 17.6 apart so far" in lines[0]
+        assert "final" not in lines[0]
+
+    def test_no_matchups_yields_no_lines(self):
+        assert self._lines([]) == []
+
+    def test_unknown_team_is_skipped_rather_than_named_unknown(self):
+        lines = self._lines([self._matchup(away_team_id=999)])
+        assert lines == []
+
+    def test_prompt_carries_every_line_and_forbids_invention(self):
+        from app.api.weekly_recap import build_recap_prompt
+
+        lines = self._lines([self._matchup()])
+        prompt = build_recap_prompt("AEPI 2022", 1, lines)
+        assert lines[0] in prompt
+        assert "Never invent a team" in prompt
+        assert "NO player-level data" in prompt
+
+
+class TestTruncationIsLoud:
+    async def test_response_cut_off_by_token_ceiling_is_logged(self, service, caplog):
+        service.client = FakeGroqClient('{"suggestions": []}', finish_reason="length")
+        await service.generate_strategic_suggestions([{"name": "A"}], {}, [])
+        assert "token ceiling" in caplog.text
+
+    async def test_empty_content_falls_back_instead_of_crashing(self, service):
+        service.client = FakeGroqClient("")
+        result = await service.analyze_trade([{"name": "A"}], [{"name": "B"}], [], [], {})
+        assert result["overall_verdict"] == "manual_review"

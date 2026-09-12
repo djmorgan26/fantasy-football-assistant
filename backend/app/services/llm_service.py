@@ -11,6 +11,10 @@ import json
 logger = structlog.get_logger()
 
 
+class LLMEmptyResponse(RuntimeError):
+    """The model returned no usable text (usually the whole budget went to reasoning)."""
+
+
 class LLMService:
     """Service for interacting with LLM via GROQ API"""
 
@@ -25,6 +29,66 @@ class LLMService:
     def is_available(self) -> bool:
         """Check if LLM service is available"""
         return self.client is not None
+
+    def complete(
+        self,
+        *,
+        system: str,
+        prompt: str,
+        temperature: float,
+        max_tokens: int,
+        purpose: str,
+        json_mode: bool = False,
+    ) -> str:
+        """One way in and out of the model, so no call can fail quietly.
+
+        Token budgets here have to be generous: the default Groq model reasons
+        before it answers, and that reasoning is billed against max_tokens. Too
+        small a budget does not shorten the answer, it truncates it mid-sentence,
+        and in JSON mode that truncation used to surface as a canned fallback
+        with nothing in the logs to say why.
+        """
+        kwargs = {"response_format": {"type": "json_object"}} if json_mode else {}
+        response = self.client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ],
+            model=self.model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            **kwargs,
+        )
+
+        choice = response.choices[0]
+        content = choice.message.content or ""
+
+        if choice.finish_reason == "length":
+            logger.warning(
+                "LLM response hit the token ceiling and was cut off",
+                purpose=purpose,
+                model=self.model,
+                max_tokens=max_tokens,
+                completion_tokens=response.usage.completion_tokens,
+            )
+        if not content.strip():
+            raise LLMEmptyResponse(
+                f"{self.model} returned no content for {purpose} "
+                f"(finish_reason={choice.finish_reason}, "
+                f"completion_tokens={response.usage.completion_tokens})"
+            )
+
+        logger.info(
+            "LLM call completed",
+            purpose=purpose,
+            model=self.model,
+            tokens_used=response.usage.total_tokens,
+        )
+        return content
+
+    def complete_json(self, **kwargs) -> Dict[str, Any]:
+        """complete() for the JSON endpoints, with the parse in the same place."""
+        return json.loads(self.complete(json_mode=True, **kwargs))
 
     async def analyze_trade(
         self,
@@ -55,25 +119,20 @@ class LLMService:
                 give_players, receive_players, user_roster, opponent_roster, league_settings
             )
 
-            response = self.client.chat.completions.create(
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert fantasy football analyst. Provide detailed, actionable trade analysis in JSON format. Consider player performance, matchups, injury risk, playoff schedules, and team needs."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                model=self.model,
+            result = self.complete_json(
+                system=(
+                    "You are an expert fantasy football analyst. Provide detailed, actionable "
+                    "trade analysis in JSON format. Reason only from the roster and scoring data "
+                    "in the prompt: judge players by the stats you are shown, and if something "
+                    "you would normally weigh (injury status, bye weeks, playoff schedule) is "
+                    "not in the data, say the data does not cover it instead of guessing. Never "
+                    "state a stat, ranking or news item that is not in the prompt."
+                ),
+                prompt=prompt,
                 temperature=0.3,
-                max_tokens=1500,
-                response_format={"type": "json_object"}
+                max_tokens=2500,
+                purpose="trade_analysis",
             )
-
-            result = json.loads(response.choices[0].message.content)
-            logger.info("Trade analysis completed", tokens_used=response.usage.total_tokens)
 
             return result
 
@@ -106,31 +165,28 @@ class LLMService:
         try:
             prompt = self._build_suggestions_prompt(roster, league_info, recent_matchups, available_players)
 
-            response = self.client.chat.completions.create(
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert fantasy football strategist. Generate 3-5 actionable suggestions to improve the user's team. Return suggestions as a JSON array with fields: type (pickup/drop/trade/lineup), priority (high/medium/low), title, description, reasoning, potential_impact, confidence_score (0-1), and action_details."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                model=self.model,
+            result = self.complete_json(
+                system=(
+                    "You are an expert fantasy football strategist. Generate 3-5 actionable "
+                    "suggestions to improve the user's team. Return suggestions as a JSON array "
+                    "with fields: type (pickup/drop/trade/lineup), priority (high/medium/low), "
+                    "title, description, reasoning, potential_impact, confidence_score (0-1), "
+                    "and action_details. Every player you name must appear in the roster or free "
+                    "agent lists in the prompt, and every number you cite must come from that "
+                    "data. Do not invent injuries, transactions, or news."
+                ),
+                prompt=prompt,
                 temperature=0.5,
-                max_tokens=2000,
-                response_format={"type": "json_object"}
+                max_tokens=3000,
+                purpose="strategic_suggestions",
             )
-
-            result = json.loads(response.choices[0].message.content)
             suggestions = result.get("suggestions", [])
 
             # Add IDs to suggestions
             for i, suggestion in enumerate(suggestions):
                 suggestion["id"] = str(i + 1)
 
-            logger.info("Strategic suggestions generated", count=len(suggestions), tokens_used=response.usage.total_tokens)
+            logger.info("Strategic suggestions generated", count=len(suggestions))
 
             return suggestions
 
@@ -163,25 +219,18 @@ class LLMService:
         try:
             prompt = self._build_lineup_prompt(roster, current_lineup, opponent_team, week_matchups)
 
-            response = self.client.chat.completions.create(
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a fantasy football lineup optimizer. Analyze the current lineup and suggest changes based on matchups, player performance, and opponent strengths. Return as JSON."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                model=self.model,
+            result = self.complete_json(
+                system=(
+                    "You are a fantasy football lineup optimizer. Analyze the current lineup and "
+                    "suggest changes based on the projections and performance data you are given. "
+                    "Only move players who appear on the supplied roster, and base every claim on "
+                    "the supplied numbers rather than outside knowledge of the season."
+                ),
+                prompt=prompt,
                 temperature=0.3,
-                max_tokens=1000,
-                response_format={"type": "json_object"}
+                max_tokens=2000,
+                purpose="lineup_optimization",
             )
-
-            result = json.loads(response.choices[0].message.content)
-            logger.info("Lineup optimization completed", tokens_used=response.usage.total_tokens)
 
             return result
 
@@ -231,22 +280,18 @@ Recommend who to draft. Balance best-player-available against roster constructio
 - reasoning: 2-3 sentences explaining the pick (value, scarcity, roster fit)
 - strategy_note: one sentence on what to target in the next round or two
 """
-            response = self.client.chat.completions.create(
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert fantasy football draft strategist. Give sharp, specific draft advice grounded in value-based drafting and roster construction. Respond in JSON."
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                model=self.model,
+            result = self.complete_json(
+                system=(
+                    "You are an expert fantasy football draft strategist. Give sharp, specific "
+                    "draft advice grounded in value-based drafting and roster construction. "
+                    "Recommend only players from the supplied available list, named exactly as "
+                    "they appear there, and justify the pick from the supplied values. Respond in JSON."
+                ),
+                prompt=prompt,
                 temperature=0.4,
-                max_tokens=800,
-                response_format={"type": "json_object"},
+                max_tokens=2000,
+                purpose="draft_advice",
             )
-
-            result = json.loads(response.choices[0].message.content)
-            logger.info("Draft pick analysis completed", tokens_used=response.usage.total_tokens)
             return result
 
         except Exception as e:
