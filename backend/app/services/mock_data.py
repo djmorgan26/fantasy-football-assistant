@@ -211,7 +211,17 @@ ROSTER_QUOTA = {"QB": 2, "RB": 4, "WR": 4, "TE": 2, "K": 1, "DEF": 1}  # 14 play
 STARTER_PLAN = ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF"]  # 9 starters
 
 
-def _build_team_rosters() -> Dict[int, List[str]]:
+def _build_team_rosters(pick_offset: int = 0) -> Dict[int, List[str]]:
+    """Deterministic snake draft over the player pool.
+
+    `pick_offset` rotates the player pool within each position before drafting.
+    Rotating the *draft order* instead would only relabel which team got which
+    identical roster; rotating the pool regroups the players, so two leagues
+    built with different offsets end up *partially* overlapping — which is what
+    real life looks like when you play in more than one. Some of your players
+    are yours in both leagues, and some are on the roster of the person you are
+    playing in the other one.
+    """
     by_pos: Dict[str, List[str]] = {}
     for meta in sorted(_ORDERED, key=lambda m: m["_base_ppr"], reverse=True):
         by_pos.setdefault(meta["position"], []).append(meta["player_id"])
@@ -220,7 +230,10 @@ def _build_team_rosters() -> Dict[int, List[str]]:
     rosters: Dict[int, List[str]] = {tid: [] for tid in team_ids}
 
     for position, count in ROSTER_QUOTA.items():
-        pool = by_pos[position]
+        pool = list(by_pos[position])
+        if pick_offset and pool:
+            shift = pick_offset % len(pool)
+            pool = pool[shift:] + pool[:shift]
         idx = 0
         for draft_round in range(count):
             order = team_ids if draft_round % 2 == 0 else list(reversed(team_ids))
@@ -233,10 +246,15 @@ def _build_team_rosters() -> Dict[int, List[str]]:
 
 _TEAM_ROSTERS = _build_team_rosters()
 
+# The Sleeper demo league drafts in a different order, so it is a genuinely
+# different league rather than a copy of the ESPN one under another name.
+_SLEEPER_TEAM_ROSTERS = _build_team_rosters(pick_offset=3)
 
-def _starters_and_bench(team_id: int) -> tuple[List[str], List[str]]:
+
+def _starters_and_bench(team_id: int, sleeper: bool = False) -> tuple[List[str], List[str]]:
     """Fixed starting lineup (by preseason strength) + bench for a team."""
-    roster = list(_TEAM_ROSTERS[team_id])
+    source = _SLEEPER_TEAM_ROSTERS if sleeper else _TEAM_ROSTERS
+    roster = list(source[team_id])
     by_pos: Dict[str, List[str]] = {}
     for pid in roster:
         by_pos.setdefault(_PLAYERS[pid]["position"], []).append(pid)
@@ -503,8 +521,8 @@ def _sleeper_rosters() -> List[Dict[str, Any]]:
         rosters.append({
             "roster_id": t["id"],
             "owner_id": uid,
-            "players": list(_TEAM_ROSTERS[t["id"]]),
-            "starters": _starters_and_bench(t["id"])[0],
+            "players": list(_SLEEPER_TEAM_ROSTERS[t["id"]]),
+            "starters": _starters_and_bench(t["id"], sleeper=True)[0],
             "settings": {
                 "wins": rec["wins"],
                 "losses": rec["losses"],
@@ -550,7 +568,7 @@ def sleeper_matchups(week: int) -> List[Dict[str, Any]]:
     out = []
     for t in TEAMS:
         tid = t["id"]
-        starters, bench = _starters_and_bench(tid)
+        starters, bench = _starters_and_bench(tid, sleeper=True)
         players_points = {
             pid: _player_week_points(pid, week) for pid in starters + bench
         }

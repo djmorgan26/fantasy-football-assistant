@@ -16,13 +16,15 @@ logger = structlog.get_logger()
 router = APIRouter(prefix="/teams", tags=["teams"])
 
 
-async def _get_sleeper_team_roster(league: League, team: Team) -> List[dict]:
+async def _get_sleeper_team_roster(
+    league: League, team: Team, week: Optional[int] = None
+) -> List[dict]:
     """Build an ESPN-roster-shaped player list for a Sleeper team."""
     from app.services.sleeper_service import build_team_roster_entries, SleeperNotFoundError
 
     try:
         return await build_team_roster_entries(
-            league.sleeper_league_id, team.sleeper_roster_id
+            league.sleeper_league_id, team.sleeper_roster_id, week=week
         )
     except SleeperNotFoundError:
         raise HTTPException(
@@ -108,7 +110,9 @@ async def get_team_roster(
         # Sleeper teams: build the roster from Sleeper data (the ESPN client
         # cannot serve them; league.espn_league_id is None).
         if league.platform == PlatformType.SLEEPER:
-            roster = await _get_sleeper_team_roster(league, team)
+            roster = await _get_sleeper_team_roster(
+                league, team, week=week or league.current_week
+            )
             return RosterResponse(
                 team_id=team_id,
                 week=week or league.current_week or 1,

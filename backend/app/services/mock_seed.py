@@ -21,6 +21,12 @@ from app.services import mock_data
 logger = structlog.get_logger()
 
 
+# Which teams the demo account owns. Picked so the cross-league page
+# demonstrates both of its ideas at once — see the comment where they are used.
+DEMO_ESPN_TEAM_ID = 5
+DEMO_SLEEPER_ROSTER_ID = 8
+
+
 async def seed_mock_data() -> None:
     async with SessionLocal() as db:
         # ---- demo user ------------------------------------------------------
@@ -64,6 +70,13 @@ async def seed_mock_data() -> None:
 
             for t in mock_data.espn_teams():
                 db.add(Team(
+                    # The demo lands on a working app rather than a team-picker
+                    # modal. These two claims are chosen so the cross-league
+                    # view has something to show: the ESPN team and the Sleeper
+                    # team share players, and the Sleeper opponent starts
+                    # several more of them — the "rooting for and against the
+                    # same guy" case the page exists for.
+                    owner_user_id=user.id if t["id"] == DEMO_ESPN_TEAM_ID else None,
                     espn_team_id=t["id"],
                     league_id=espn_league.id,
                     name=t["name"],
@@ -116,6 +129,9 @@ async def seed_mock_data() -> None:
                 )
                 settings_ = roster.get("settings", {})
                 db.add(Team(
+                    owner_user_id=(
+                        user.id if roster["roster_id"] == DEMO_SLEEPER_ROSTER_ID else None
+                    ),
                     league_id=sleeper_league.id,
                     sleeper_roster_id=roster["roster_id"],
                     sleeper_owner_id=roster["owner_id"],

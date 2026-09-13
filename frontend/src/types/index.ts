@@ -663,3 +663,67 @@ export interface GameDay {
   /** Total games on the NFL slate, including ones nobody here is in. */
   slate_size: number;
 }
+
+// ── Across leagues ─────────────────────────────────────────────────────────
+/** One league's holding of a player: yours, or your opponent's. */
+export interface PlayerHolding {
+  league_id: number;
+  league: string;
+  team: string;
+  starting: boolean;
+  slot: string | null;
+  projected: number;
+  points: number;
+}
+
+export interface PlayerAcrossLeagues {
+  name: string;
+  position: string | null;
+  team: string | null;
+  player_id: number | string | null;
+  for: PlayerHolding[];
+  against: PlayerHolding[];
+}
+
+/** A player you are simultaneously rooting for and against. */
+export interface PlayerConflict extends PlayerAcrossLeagues {
+  for_count: number;
+  against_count: number;
+  net: number;
+  verdict: string;
+}
+
+/** A player you own in more than one league. */
+export interface PlayerExposure extends PlayerAcrossLeagues {
+  leagues: number;
+  starting_in: number;
+  projected: number;
+}
+
+export interface LeagueWeek {
+  league_id: number;
+  league: string;
+  platform: string | null;
+  week: number;
+  team: string;
+  record: string;
+  opponent: string | null;
+  points: number;
+  opponent_points: number;
+  projected: number;
+  opponent_projected: number;
+  margin: number;
+  status: 'comfortable' | 'tight' | 'behind';
+  alerts: { player: string; slot: string; status: string }[];
+}
+
+export interface Portfolio {
+  leagues: number;
+  teams: number;
+  /** Leagues you are in but have not claimed a team in, so the view can say why. */
+  unclaimed: { league_id: number; name: string }[];
+  weeks: LeagueWeek[];
+  conflicts: PlayerConflict[];
+  exposure: PlayerExposure[];
+  totals: { points: number; projected: number; winning: number; alerts: number };
+}

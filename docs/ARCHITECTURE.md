@@ -13,6 +13,7 @@ knowledge on the things a national site structurally cannot do:
 
 - a news wire filtered to players *somebody in your league* rosters, saying whose problem each story is
 - a Sunday view that ranks NFL games by how much each one swings *your* matchup, because it knows both starting lineups
+- a cross-league view that spots the player you are rooting for *and* against this week
 - an assistant that answers about the league, not just your team
 - generated content that sounds like your league, because it learns from your league
 
@@ -91,6 +92,21 @@ needs: load the league and prove the caller owns it, decrypt ESPN cookies, find
 the caller's team, pull a roster, resolve this week's opponent. Platform
 branching (ESPN vs Sleeper) is resolved there once. Routers that skip it end up
 re-implementing the ownership check, which is the one thing that must not vary.
+
+## Matching players across platforms
+
+ESPN and Sleeper number the same human differently, so anything that has to
+recognise one player in two leagues joins on a **normalized name**
+(`news_service._name_key`: lowercase, letters and spaces only). That is what
+lets the cross-league view notice you own Josh Allen in an ESPN league while
+playing against him in a Sleeper one — an id join would find nothing there.
+
+Sleeper rosters also have to be normalized before anything can read them:
+Sleeper returns arrays of player ids with no names, slots or points, so
+`build_team_roster_entries` converts one into the ESPN-shaped entries the app
+renders. Consumers read `is_starter`, `on_injured_reserve`, `projected_points`
+and `applied_points`; an entry missing those does not fail loudly, it renders a
+team with nobody on it.
 
 ## External services, and what happens when they are down
 

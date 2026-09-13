@@ -5,8 +5,8 @@ Two suites, both with coverage gates that fail the build.
 | | Backend | Frontend |
 | --- | --- | --- |
 | Runner | pytest + pytest-asyncio | vitest + Testing Library |
-| Tests | 265 | 213 |
-| Coverage | 84% (gate: 80%) | 36% statements, 75% branches (gate: 35 / 73) |
+| Tests | 285 | 230 |
+| Coverage | 85% (gate: 80%) | 38% statements, 76% branches (gate: 35 / 73) |
 
 ## Running
 

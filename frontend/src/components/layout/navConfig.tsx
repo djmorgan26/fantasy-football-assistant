@@ -10,6 +10,7 @@ import {
   ChatBubbleLeftRightIcon,
   RssIcon,
   SignalIcon,
+  Square3Stack3DIcon,
 } from '@heroicons/react/24/outline';
 
 export interface NavItem {
@@ -24,6 +25,9 @@ export interface NavItem {
 export const PRIMARY_NAV: NavItem[] = [
   { label: 'Dashboard', to: '/dashboard', icon: HomeIcon },
   { label: 'Leagues', to: '/leagues', icon: TrophyIcon },
+  // Spans every league rather than living inside one, so it belongs here
+  // rather than in the per-league nav.
+  { label: 'Across Leagues', to: '/across-leagues', icon: Square3Stack3DIcon },
 ];
 
 /** Per-league sub-navigation, built from a league id. */

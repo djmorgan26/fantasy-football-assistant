@@ -38,10 +38,10 @@ export default defineConfig({
        * number worth watching: it says the logic that *is* covered is covered
        * through its cases, not just executed once.
        */
-      statements: 35,
-      branches: 73,
-      functions: 56,
-      lines: 35,
+      statements: 37,
+      branches: 74,
+      functions: 58,
+      lines: 37,
     },
   },
   resolve: {

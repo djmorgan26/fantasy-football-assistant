@@ -13,6 +13,10 @@ from app.services import mock_data
 
 logger = structlog.get_logger()
 
+# Sleeper publishes a season-long projection rather than a weekly one, so a
+# per-week number has to be prorated across the regular season.
+REGULAR_SEASON_WEEKS = 17
+
 
 class SleeperError(Exception):
     """Base exception for Sleeper API errors"""
@@ -509,14 +513,25 @@ class SleeperService:
 
 
 async def build_team_roster_entries(
-    sleeper_league_id: str, sleeper_roster_id: int
+    sleeper_league_id: str,
+    sleeper_roster_id: int,
+    week: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """Build an ESPN-roster-shaped player list for one Sleeper roster.
 
-    Shared by the teams and suggestions APIs so Sleeper leagues get the same
-    response shape the frontend renders for ESPN rosters. Returns None-safe
-    data even when player metadata is missing. Raises SleeperNotFoundError if
-    the roster is not in the league.
+    "ESPN-shaped" is a contract, not a vibe. Consumers — the roster page, the
+    weekly primer, game day, the assistant's context, the cross-league view —
+    all read `is_starter`, `on_injured_reserve`, `projected_points` and
+    `applied_points`. An entry missing those does not fail loudly; it renders as
+    a team with no starters and nought points, which is how Sleeper leagues came
+    to look empty everywhere except the roster page.
+
+    Points come from the week's matchup feed, which is where Sleeper puts them:
+    `players_points` keyed by player id. Projections come from the season
+    projection set, prorated across the regular season, because Sleeper does not
+    publish a weekly projection.
+
+    Raises SleeperNotFoundError if the roster is not in the league.
     """
     # Imported lazily: draft_service imports SleeperService at module level,
     # so a top-level import here would be circular.
@@ -535,6 +550,25 @@ async def build_team_roster_entries(
     players_map = await draft_service.get_players_cached()
     starters = list(roster_entry.get("starters") or [])
     starter_set = set(starters)
+    reserve = set(roster_entry.get("reserve") or [])
+
+    # Actual points for the week, if the matchup feed has them yet.
+    week_points: Dict[str, float] = {}
+    if week:
+        try:
+            for row in await service.get_matchups(sleeper_league_id, week) or []:
+                if row.get("roster_id") == sleeper_roster_id:
+                    week_points = row.get("players_points") or {}
+                    break
+        except SleeperError as e:
+            logger.warning("Sleeper week points unavailable", error=str(e), week=week)
+
+    # Sleeper publishes season projections, not weekly ones, so prorate.
+    projections: Dict[str, Any] = {}
+    try:
+        projections = await draft_service._get_projections(settings.espn_season_year)
+    except Exception as e:
+        logger.warning("Sleeper projections unavailable", error=str(e))
 
     roster = []
     for pid in roster_entry.get("players") or []:
@@ -544,16 +578,29 @@ async def build_team_roster_entries(
             f"{meta.get('first_name', '')} {meta.get('last_name', '')}".strip() or str(pid)
         )
         is_starter = pid in starter_set
+        on_ir = pid in reserve
+        actual = round(float(week_points.get(pid) or 0), 2)
+
+        season_proj = (projections.get(pid) or {}).get("pts_ppr")
+        weekly_proj = round(float(season_proj) / REGULAR_SEASON_WEEKS, 2) if season_proj else actual
+
         roster.append({
             "player_id": pid,
             "full_name": full_name,
             "position_id": 0,
             "position_name": position,
-            "lineup_slot_id": 0 if is_starter else 20,
-            "lineup_slot_name": position if is_starter else "BENCH",
+            "lineup_slot_id": 21 if on_ir else (0 if is_starter else 20),
+            "lineup_slot_name": "IR" if on_ir else (position if is_starter else "BENCH"),
+            # The contract the rest of the app reads. Derived here so no caller
+            # has to re-derive a starter from a slot name.
+            "is_starter": is_starter and not on_ir,
+            "on_injured_reserve": on_ir,
             "pro_team_id": 0,
             "pro_team_abbr": meta.get("team"),
             "eligible_slots": [],
+            "projected_points": weekly_proj,
+            "applied_points": actual,
+            "season_points": actual,
             "stats": {"actual": {}, "projected": {}},
             "injury_status": meta.get("injury_status"),
         })

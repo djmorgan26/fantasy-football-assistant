@@ -53,6 +53,13 @@ describe('leagueNav', () => {
 
 describe('PRIMARY_NAV', () => {
   it('covers the top level and nothing league-scoped', () => {
-    expect(PRIMARY_NAV.map((i) => i.to)).toEqual(['/dashboard', '/leagues']);
+    // Across Leagues spans every league rather than living inside one, so it
+    // belongs here; nothing in this list may carry a league id.
+    expect(PRIMARY_NAV.map((i) => i.to)).toEqual([
+      '/dashboard',
+      '/leagues',
+      '/across-leagues',
+    ]);
+    PRIMARY_NAV.forEach((item) => expect(item.to).not.toMatch(/\/leagues\/\d/));
   });
 });

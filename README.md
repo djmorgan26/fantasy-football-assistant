@@ -24,6 +24,14 @@ lands on the board too and is rated the same way, so a flat recap gets rated
 flat and drops back out. This is the loop the rest of the app is arranged
 around; see [Architecture](docs/ARCHITECTURE.md#the-voice-loop).
 
+**Across Leagues.** If you play in more than one league, the same player ends
+up on your roster in one and on your opponent's in another — every point he
+scores helps you and hurts you at once, and most people never notice. This page
+names those conflicts, shows which players you are most exposed to across all
+your teams, and sorts your weeks with the most precarious first. Players are
+matched by name, not id, because ESPN and Sleeper number the same human
+differently.
+
 **Game Day.** On a Sunday, the only question is *who do I still have left, and
 who do they still have?* This maps both starting lineups onto the live NFL
 slate and ranks every game by how much it swings **your** matchup — so the game
@@ -69,6 +77,7 @@ Groq for generation, with deterministic fallbacks everywhere
 | News | `/api/news/league/{id}` · `/api/news/digest/{id}` · `/api/news/trending` · `/api/news/wire` |
 | Assistant | `/api/assistant/{id}/chat` · `.../suggestions` · `.../primer` |
 | Game day | `/api/gameday/{id}` |
+| Across leagues | `/api/portfolio` |
 | Health | `/health/live` · `/health/ready` |
 
 Interactive docs at `/docs` when running locally.
@@ -76,8 +85,8 @@ Interactive docs at `/docs` when running locally.
 ## Tests
 
 ```bash
-cd backend  && ./venv/bin/python -m pytest tests/ -q   # 265 tests, 84% covered
-cd frontend && npx vitest run                          # 213 tests
+cd backend  && ./venv/bin/python -m pytest tests/ -q   # 285 tests, 85% covered
+cd frontend && npx vitest run                          # 230 tests
 ```
 
 Both have coverage gates that fail the build. [docs/TESTING.md](docs/TESTING.md)

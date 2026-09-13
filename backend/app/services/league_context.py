@@ -69,20 +69,33 @@ async def all_teams(league: League, db: AsyncSession) -> List[Team]:
     return list(result.scalars().all())
 
 
-async def roster_for(league: League, team: Team) -> List[dict]:
-    """A team's roster, or an empty list if the platform is unreachable.
+async def roster_for(league: League, team: Team, week: Optional[int] = None) -> List[dict]:
+    """A team's roster in the normalized, ESPN-shaped form the app renders.
+
+    Sleeper's own roster object is arrays of player ids — no names, positions,
+    slots or points — so it has to go through `build_team_roster_entries`, the
+    same normalizer the teams API uses. Calling Sleeper's raw `get_team_roster`
+    here returns an object with no `roster` key at all, which reads as "this
+    team has nobody" and silently empties every feature downstream.
 
     Failing soft is deliberate: one team's roster failing should degrade a page,
     not take the whole request down with it.
     """
     try:
         if league.platform == PlatformType.SLEEPER and league.sleeper_league_id:
-            data = await SleeperService().get_team_roster(
-                league.sleeper_league_id, team.sleeper_roster_id
+            from app.services.sleeper_service import build_team_roster_entries
+
+            return await build_team_roster_entries(
+                league.sleeper_league_id,
+                team.sleeper_roster_id,
+                week=week or league.current_week,
             )
-        elif league.espn_league_id and team.espn_team_id is not None:
+        if league.espn_league_id and team.espn_team_id is not None:
             data = await ESPNService().get_team_roster(
-                str(league.espn_league_id), team.espn_team_id, cookies=espn_cookies(league)
+                str(league.espn_league_id),
+                team.espn_team_id,
+                week=week,
+                cookies=espn_cookies(league),
             )
         else:
             return []
@@ -103,10 +116,31 @@ async def opponent_this_week(
     """
     try:
         if league.platform == PlatformType.SLEEPER and league.sleeper_league_id:
-            games = await SleeperService().get_matchups(league.sleeper_league_id, week)
-            mine, home_key, away_key = team.sleeper_roster_id, "home_roster_id", "away_roster_id"
-            column = Team.sleeper_roster_id
-        elif league.espn_league_id and team.espn_team_id is not None:
+            # Sleeper does not express a matchup as home/away. It returns one
+            # row per roster, and two rows sharing a matchup_id are the pairing.
+            rows = await SleeperService().get_matchups(league.sleeper_league_id, week)
+            mine_row = next(
+                (r for r in rows or [] if r.get("roster_id") == team.sleeper_roster_id),
+                None,
+            )
+            if not mine_row or mine_row.get("matchup_id") is None:
+                return None  # bye week, or not in this week's slate
+            other = next(
+                (r for r in rows
+                 if r.get("matchup_id") == mine_row["matchup_id"]
+                 and r.get("roster_id") != team.sleeper_roster_id),
+                None,
+            )
+            if not other:
+                return None
+            return (await db.execute(
+                select(Team).where(
+                    Team.league_id == league.id,
+                    Team.sleeper_roster_id == other["roster_id"],
+                )
+            )).scalar_one_or_none()
+
+        if league.espn_league_id and team.espn_team_id is not None:
             games = await ESPNService().get_matchups(
                 str(league.espn_league_id), week=week, cookies=espn_cookies(league)
             )
