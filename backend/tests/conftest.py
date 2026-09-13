@@ -90,22 +90,33 @@ async def auth_headers(client: AsyncClient) -> dict:
 
 @pytest.fixture(autouse=True)
 def reset_service_caches():
-    """Keep the singleton draft service cache from leaking between tests.
+    """Empty every module-level cache around each test.
 
-    Mock-mode tests fill it with mock players; real-mode (respx) tests must
-    not be served those cached payloads, and vice versa.
+    These are singletons that outlive a test: mock-mode tests fill them with
+    mock payloads, and real-mode (respx) tests must not then be served that
+    cached data, or vice versa. The player index additionally tracks when it
+    last *attempted* a fetch, so a test that simulates Sleeper being down
+    leaves a cooldown that would silently skip the next test's fetch.
     """
     from app.services.draft_service import draft_service
+    from app.services import news_service
 
-    draft_service._players_cache = None
-    draft_service._players_cached_at = None
-    draft_service._proj_cache = {}
-    draft_service._board_cache = {}
+    def clear():
+        draft_service._players_cache = None
+        draft_service._players_cached_at = None
+        draft_service._proj_cache = {}
+        draft_service._board_cache = {}
+
+        news_service._news_cache.clear()
+        index = news_service.player_index
+        index._by_sleeper_id = {}
+        index._by_name = {}
+        index._fetched_at = 0.0
+        index._last_attempt_at = 0.0
+
+    clear()
     yield
-    draft_service._players_cache = None
-    draft_service._players_cached_at = None
-    draft_service._proj_cache = {}
-    draft_service._board_cache = {}
+    clear()
 
 
 @pytest.fixture

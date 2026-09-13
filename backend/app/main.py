@@ -10,8 +10,9 @@ from app.core.config import settings
 from app.db.database import engine, Base
 from app.api import (
     auth, leagues, teams, players, trades, suggestions, sleeper_leagues,
-    weekly_recap, draft, content, board, news, assistant,
+    weekly_recap, draft, content, board, news, assistant, health,
 )
+from app.core.observability import install_observability
 
 # Configure structured logging
 structlog.configure(
@@ -91,18 +92,6 @@ if not settings.debug and not settings.mock_mode:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts)
 
 
-# Health check endpoint
-@app.get("/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "app_name": settings.app_name,
-        "version": settings.app_version,
-        "debug": settings.debug,
-        "mock_mode": settings.mock_mode,
-    }
-
-
 # Public app metadata (no auth) — lets the frontend show a demo banner + creds.
 @app.get("/api/meta")
 async def app_meta():
@@ -119,6 +108,14 @@ async def app_meta():
         }
     return meta
 
+
+# Request ids, access logs, security headers, and a JSON body for unhandled
+# errors. Installed before the routers so it wraps every one of them.
+install_observability(app)
+
+
+# Health probes are unprefixed: /health, /health/live, /health/ready.
+app.include_router(health.router)
 
 # Include API routers
 app.include_router(auth.router, prefix="/api")

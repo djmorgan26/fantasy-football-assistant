@@ -249,9 +249,10 @@ export const MyRosterPage: React.FC = () => {
   // lookup uses userTeam.id. espn_team_id is only for links back to ESPN.
   const { opponent, myScore } = useCurrentMatchup(numericLeagueId, userTeam?.id || 0, week);
 
-  const players: RosterPlayer[] = rosterData?.roster || [];
-
   const { starters, bench, injuredReserve, startCandidates, totals } = useMemo(() => {
+    // Derived in here rather than above: `rosterData?.roster || []` is a fresh
+    // array identity on every render, which defeated this memo entirely.
+    const players: RosterPlayer[] = rosterData?.roster || [];
     const starters = players.filter((p) => p.is_starter);
     const bench = players.filter((p) => !p.is_starter && !p.on_injured_reserve);
     const injuredReserve = players.filter((p) => p.on_injured_reserve);
@@ -294,7 +295,7 @@ export const MyRosterPage: React.FC = () => {
         benchActual: sum(bench, 'applied_points'),
       },
     };
-  }, [players]);
+  }, [rosterData]);
 
   // Starters who cannot play, or might not. The single most useful thing this
   // page can tell you before kickoff.

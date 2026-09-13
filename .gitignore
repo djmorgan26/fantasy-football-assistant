@@ -28,4 +28,15 @@ build/
 
 # Coverage artifacts
 .coverage
+.coverage.*
 htmlcov/
+coverage/
+
+# Local scratch: dev-server logs/pids and database backups
+.dev/
+.backups/
+*.db.bak
+
+# Test caches
+.pytest_cache/
+.vitest/

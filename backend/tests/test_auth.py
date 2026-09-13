@@ -2,6 +2,8 @@ import pytest
 from httpx import AsyncClient
 from app.core.auth import get_password_hash, verify_password
 
+pytestmark = pytest.mark.integration
+
 
 class TestAuth:
     def test_password_hashing(self):

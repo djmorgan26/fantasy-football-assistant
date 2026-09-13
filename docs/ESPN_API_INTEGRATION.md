@@ -165,42 +165,63 @@ Returns: Trades, waiver claims, and add/drops
 }
 ```
 
-## Position IDs
+## Two id spaces, and the bug that comes from mixing them
 
-ESPN uses numeric IDs for player positions:
+ESPN uses **two different numeric id spaces** for positions, and they overlap
+without meaning the same thing. Reading one through the other's map is what put
+"RB/WR" on every wide receiver in production.
+
+| Field | Answers | Map to use |
+| --- | --- | --- |
+| `player.defaultPositionId` | *what a player is* | `POSITION_MAP` below |
+| `entry.lineupSlotId` | *where he lines up this week* | `LINEUP_SLOTS` below |
+
+### `defaultPositionId` — what a player is
 
 ```python
 POSITION_MAP = {
-    0: "QB",    # Quarterback
-    1: "TQB",   # Team QB (not used in standard leagues)
-    2: "RB",    # Running Back
-    3: "RB/WR", # Running Back/Wide Receiver
-    4: "WR",    # Wide Receiver
-    5: "WR/TE", # Wide Receiver/Tight End
-    6: "TE",    # Tight End
-    16: "D/ST", # Defense/Special Teams
-    17: "K",    # Kicker
-    20: "BENCH", # Bench
-    21: "IR",   # Injured Reserve
-    23: "FLEX"  # Flex (RB/WR/TE)
+    1: "QB",
+    2: "RB",
+    3: "WR",
+    4: "TE",
+    5: "K",
+    16: "D/ST",
 }
 ```
 
-## Lineup Slot IDs
+### `lineupSlotId` — where he is slotted
 
 ```python
 LINEUP_SLOTS = {
     0: "QB",
-    2: "RB", 
+    2: "RB",
+    3: "RB/WR",    # a flex slot, NOT the WR position
     4: "WR",
     6: "TE",
     16: "D/ST",
     17: "K",
     20: "BENCH",
     21: "IR",
-    23: "FLEX"
+    23: "FLEX",
 }
 ```
+
+Note slot `3`: in the slot space it is a flex, while in the position space `3`
+means wide receiver. Passing a `defaultPositionId` of 3 through `LINEUP_SLOTS`
+therefore labels every WR "RB/WR" — which shipped, and is why
+`espn_service.get_team_roster` now returns `is_starter` and
+`on_injured_reserve` directly rather than leaving the UI to re-derive them from
+slot names.
+
+Slot names come back **uppercase**, so a bench filter has to compare against
+`"BENCH"`, not `"Bench"`.
+
+### Per-player points
+
+Point totals are `projected_points` / `applied_points` / `season_points`
+(from `appliedTotal`). They are **not** `stats.projected["0"]` — that key is a
+raw stat id and reads `0.0`. Season rows use `scoringPeriodId` 0, and ESPN ships
+*last* season's rows in the same list, so filter on `seasonId`.
 
 ## Stat Categories
 

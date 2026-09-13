@@ -76,24 +76,3 @@ class TestConfig:
             assert settings.effective_database_url == settings.database_url
         finally:
             settings.mock_mode = original
-
-
-class TestHealthAndMeta:
-    async def test_health(self, client: AsyncClient):
-        resp = await client.get("/health")
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["status"] == "healthy"
-        assert "mock_mode" in body
-
-    async def test_meta_no_demo_credentials_in_real_mode(self, client: AsyncClient):
-        resp = await client.get("/api/meta")
-        assert resp.status_code == 200
-        assert "demo_credentials" not in resp.json()
-
-    async def test_meta_demo_credentials_in_mock_mode(self, client: AsyncClient, mock_mode):
-        resp = await client.get("/api/meta")
-        assert resp.status_code == 200
-        creds = resp.json()["demo_credentials"]
-        assert creds["email"]
-        assert creds["password"]

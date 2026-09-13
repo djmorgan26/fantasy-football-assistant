@@ -41,7 +41,8 @@ SLEEPER_HEADSHOT = "https://sleepercdn.com/content/nfl/players/{id}.jpg"
 SLEEPER_TEAM_LOGO = "https://sleepercdn.com/images/team_logos/nfl/{abbr}.png"
 
 _PLAYER_CACHE_TTL = 60 * 60 * 24  # a day; rosters don't churn faster than that
-_NEWS_CACHE_TTL = 60 * 5         # the wire moves, but not every request
+_NEWS_CACHE_TTL = 60 * 5          # the wire moves, but not every request
+_PLAYER_RETRY_COOLDOWN = 60 * 5   # how long to leave a failing endpoint alone
 
 
 def headshot_url(espn_player_id: Optional[int] = None,
@@ -89,6 +90,10 @@ class _PlayerIndex:
         self._by_sleeper_id: Dict[str, dict] = {}
         self._by_name: Dict[str, dict] = {}
         self._fetched_at = 0.0
+        # Tracked separately from _fetched_at: a failed attempt leaves the index
+        # empty, so a freshness check based on the data alone would let every
+        # subsequent request retry immediately and hammer a struggling endpoint.
+        self._last_attempt_at = 0.0
         self._lock = asyncio.Lock()
 
     @property
@@ -100,13 +105,21 @@ class _PlayerIndex:
         self._by_name = {_name_key(p["name"]): p for p in slim.values() if p.get("name")}
         self._fetched_at = time.time()
 
+    def _fresh(self) -> bool:
+        """Either the data is current, or a recent attempt failed and we wait."""
+        now = time.time()
+        if self._by_sleeper_id and (now - self._fetched_at) < _PLAYER_CACHE_TTL:
+            return True
+        return (now - self._last_attempt_at) < _PLAYER_RETRY_COOLDOWN
+
     async def ensure(self) -> None:
-        if self._by_sleeper_id and (time.time() - self._fetched_at) < _PLAYER_CACHE_TTL:
+        if self._fresh():
             return
         async with self._lock:
             # Another request may have filled it while we waited for the lock.
-            if self._by_sleeper_id and (time.time() - self._fetched_at) < _PLAYER_CACHE_TTL:
+            if self._fresh():
                 return
+            self._last_attempt_at = time.time()
 
             try:
                 on_disk = os.path.getmtime(self._disk_path)
@@ -128,8 +141,8 @@ class _PlayerIndex:
                     resp.raise_for_status()
                     raw = resp.json()
             except Exception as e:
+                # _last_attempt_at was stamped above, so the cooldown holds.
                 logger.warning("Could not refresh the player index", error=str(e))
-                self._fetched_at = time.time()  # don't hammer a failing endpoint
                 return
 
             slim = {

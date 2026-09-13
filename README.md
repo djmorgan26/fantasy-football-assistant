@@ -1,239 +1,97 @@
 # Fantasy Football Assistant
 
-A comprehensive web application that connects to ESPN Fantasy Football leagues to provide intelligent trade suggestions, waiver wire recommendations, and real-time alerts to optimize your fantasy football experience.
-
-## Features
-
-- **ESPN & Sleeper League Integration**: Seamlessly connect to your fantasy leagues
-- **Draft Prep & Live Draft Assistant**: League-scoring-aware value board (VBD rankings,
-  tiers, ADP) plus best-available pick recommendations during your draft
-- **Trade Analyzer**: Get intelligent trade suggestions based on player valuations and team needs
-- **Waiver Wire Assistant**: Receive recommendations for pickup targets and drop candidates
-- **Content & Humor Engine**: League-personalized recaps, power rankings, awards, and season
-  write-ups built from real weekly data and your league's own voice
-- **Real-time Alerts**: Get notified about injuries, breakout performances, and opportunities
-- **Team Optimization**: Lineup suggestions and roster management tools
-- **Mobile-Responsive UI**: Access your tools on any device
-
-### Draft Tools (ESPN & Sleeper)
-
-The draft endpoints build projections from your league's scoring settings, then
-convert them to Value-Based Drafting (VBD) scores so rankings reflect positional
-scarcity rather than generic rankings. They work for **both ESPN and Sleeper**
-leagues (Sleeper uses exact scoring pulled live; ESPN uses its scoring type,
-size, and lineup slots). Projections come from the free Sleeper data set either way:
-
-- `GET /api/draft/rankings?scoring_type=ppr&team_count=12` — generic pre-draft cheat sheet
-- `GET /api/draft/value-board/{league_id}` — value board tuned to your league's scoring
-- `GET /api/draft/assist/{league_id}` — best-available recommendations + optional AI advice
-
-Live in-draft pick tracking uses Sleeper's public draft feed. ESPN has no
-equivalent public feed, so for ESPN leagues the assistant serves a
-scoring-adjusted big board of best-available players.
-
-### Content & Humor Engine (ESPN & Sleeper)
-
-Generates league-personalized written content from **real weekly data** plus your
-league's own voice. The engine first extracts concrete "story hooks" from the week
-(biggest blowout, nail-biters, points left on the bench, the should've-started guy,
-lucky/unlucky wins), then writes content in your league's tone using manager personas
-and a corpus of past write-ups you provide.
-
-- `GET /api/content/{league_id}/profile` · `PUT .../profile` — manage voice, personas, and past write-ups
-- `GET /api/content/{league_id}/narrative/week/{week}` — the data-driven story facts (no AI)
-- `POST /api/content/{league_id}/generate` — generate `weekly_recap`, `power_rankings`, `awards`, or `season_recap`
-
-The **Press Box** page (`/leagues/:id/press-box`) drives all of this, including a
-Voice Settings panel where you paste previous years' reports — the single biggest
-lever on output quality. The engine works before any corpus is added (sensible
-default voice) and degrades to a facts-based draft when no AI key is configured.
-
-> **AI provider:** AI features run on **Groq** (single provider) using the
-> `LLM_MODEL` configured in `.env` (default `llama-3.3-70b-versatile`).
-
-## Tech Stack
-
-**Frontend**
-- React 18 with TypeScript
-- Vite for fast development and building
-- Tailwind CSS for styling
-- React Router for navigation
-- Recharts for data visualization
-- Headless UI for accessible components
-
-**Backend**
-- FastAPI with async/await support
-- SQLAlchemy 2.0 with async PostgreSQL
-- Pydantic for data validation
-- JWT authentication
-- Alembic for database migrations
-
-**Database**
-- PostgreSQL with asyncpg driver
-- Connection pooling for optimal performance
-
-## Installation
-
-### Prerequisites
-- Node.js 18+ and npm
-- Python 3.11+
-- PostgreSQL 14+
-
-### Quick Start
-
-1. **Clone and setup**
-   ```bash
-   git clone <repository-url>
-   cd fantasy-football-assistant
-   ```
-
-2. **Backend setup**
-   ```bash
-   cd backend
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
-
-3. **Database setup**
-   ```bash
-   # Create PostgreSQL database
-   createdb fantasy_football_db
-   
-   # Run migrations
-   alembic upgrade head
-   ```
-
-4. **Environment configuration**
-   ```bash
-   # Copy and configure environment files
-   cp .env.example .env
-   # Edit .env with your ESPN credentials and database settings
-   ```
-
-5. **Frontend setup**
-   ```bash
-   cd ../frontend
-   npm install
-   ```
-
-6. **Start development servers**
-   ```bash
-   # Terminal 1: Backend (from backend/)
-   uvicorn app.main:app --reload
-   
-   # Terminal 2: Frontend (from frontend/)
-   npm run dev
-   ```
-
-   > **Entrypoints:** `app.main:app` is the canonical application server for
-   > BOTH modes (real and mock) — see "Real mode vs Mock mode" below. The repo
-   > also contains two older standalone demo servers from early prototyping
-   > (`app.working_main`, `app.demo_main`); these are superseded by `MOCK_MODE`
-   > on `app.main` and are kept only for reference.
-
-## Hosted (Vercel + Supabase, free tier)
-
-The app is deployed on Vercel's free Hobby tier as two projects sharing this repo
-(the run mode is chosen per-project by the `MOCK_MODE` env var):
-
-- **Public mock demo:** runs on ephemeral SQLite with seeded sample data, no
-  credentials needed (one-click "Use demo account").
-- **Real app:** runs against live ESPN/Sleeper + Groq with a free Supabase
-  Postgres database (connected through Supabase's IPv4 transaction pooler;
-  `asyncpg` is configured with `statement_cache_size=0` + `NullPool` for
-  serverless). Row Level Security is enabled on all tables to lock down the
-  Supabase data API; the app connects as a `BYPASSRLS` role so it is unaffected.
-
-The serverless entrypoint is `api/index.py` and the build is configured in
-`vercel.json`. Redeploy with `vercel --prod`.
-
-## Real mode vs Mock mode
-
-The whole app runs in one of two modes, selected by the `MOCK_MODE` environment
-variable. Both use the same canonical entrypoint, `app.main:app`.
-
-| | Real mode | Mock mode |
-|---|---|---|
-| `MOCK_MODE` | `false` | `true` |
-| Data | live ESPN + Sleeper + Groq, your credentials | realistic sample data, no external calls |
-| Database | PostgreSQL (`DATABASE_URL`) | local SQLite (`fantasy_mock.db`), auto-created |
-| Credentials needed | Groq key, ESPN league/cookies, Postgres | none |
-| Use for | your real leagues | demos, UI development, offline work |
-
-In mock mode every feature degrades gracefully to coherent sample data: the
-Draft Room shows a full value board and an in-progress draft, and the Press Box
-shows a seeded league with auto-filled personas. The content engine still uses
-its facts-based fallback when no Groq key is set (add a key to `.env.mock` to
-exercise real AI writing against the mock data).
-
-### Launch mock mode (zero setup)
+A companion app for ESPN and Sleeper fantasy leagues that knows your **whole
+league**, not just your team — and spends that on the things a national fantasy
+site cannot do.
 
 ```bash
-# Backend (from backend/)
-./venv/bin/python -m uvicorn app.main:app --reload --env-file ../.env.mock --port 8000
-# Frontend (from frontend/)
-npm run dev
+# Backend (no credentials, no network, no database server)
+cd backend && ./venv/bin/python -m uvicorn app.main:app --reload --env-file ../.env.mock --port 8000
+
+# Frontend
+cd frontend && npm run dev
 ```
 
-Open http://localhost:3000 and click **Use demo account** on the login page
-(credentials: `demo@demo.app` / `demo1234`). A demo user, an ESPN league, and a
-Sleeper league are seeded automatically on startup.
+Then <http://localhost:3000> — sign in with the demo button, or
+`demo@demo.app` / `demo1234`. Full setup in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-### Launch real mode
+## What it does
+
+**The board.** Your league posts, comments and reacts. Reactions are typed —
+🔥 savage, 😂 funny, 💀 brutal, 🤓 smart, 🧊 cold take — and the posts the league
+rates highly become the style anchors the AI writes from. Generated content
+lands on the board too and is rated the same way, so a flat recap gets rated
+flat and drops back out. This is the loop the rest of the app is arranged
+around; see [Architecture](docs/ARCHITECTURE.md#the-voice-loop).
+
+**The Commissioner.** A league-aware assistant, docked on every league page. It
+answers from standings, your roster, the week's results and live waiver
+trends — in your league's voice, not a product's.
+
+**The league wire.** The NFL news feed, filtered to players somebody in your
+league rosters, flagged with the team that owns them, and summarised on demand
+into one paragraph about what changed *for your league* today.
+
+**Weekly primer.** One card: lineup risk, the single swap that gains the most
+points, this week's matchup, and a line of trash talk to paste into the group
+chat.
+
+**Draft tools.** Value-Based Drafting rankings built from your league's actual
+scoring settings, so they reflect positional scarcity rather than generic
+rankings. Live pick tracking for Sleeper; a scoring-adjusted big board for ESPN,
+which has no public draft feed.
+
+**Roster, trades, players, waiver budgets** across both platforms, with a
+mobile-first interface that works on a 320px screen.
+
+## Stack
+
+React 18 · TypeScript · Vite · Tailwind · react-query
+FastAPI · SQLAlchemy 2 (async) · Postgres / SQLite · Alembic
+Groq for generation, with deterministic fallbacks everywhere
+
+## API surface
+
+| Area | Routes |
+| --- | --- |
+| Auth | `/api/auth/*` |
+| Leagues & teams | `/api/leagues/*` · `/api/teams/*` · `/api/sleeper/*` |
+| Players & trades | `/api/players/*` · `/api/trades/*` |
+| Draft | `/api/draft/rankings` · `/api/draft/value-board/{id}` · `/api/draft/assist/{id}` |
+| Content | `/api/content/{id}/profile` · `/api/content/{id}/generate` · `/api/content/{id}/narrative/week/{week}` |
+| Board | `/api/board/{id}/posts` · `.../reactions` · `.../comments` · `.../voice-samples` |
+| News | `/api/news/league/{id}` · `/api/news/digest/{id}` · `/api/news/trending` · `/api/news/wire` |
+| Assistant | `/api/assistant/{id}/chat` · `.../suggestions` · `.../primer` |
+| Health | `/health/live` · `/health/ready` |
+
+Interactive docs at `/docs` when running locally.
+
+## Tests
 
 ```bash
-# One-time: create .env from .env.example, set DATABASE_URL, SECRET_KEY
-#   (openssl rand -hex 32), GROQ_API_KEY, and ESPN_SEASON_YEAR.
-# Backend (from backend/) — uvicorn loads .env automatically
-./venv/bin/python -m uvicorn app.main:app --reload --port 8000
-# Frontend (from frontend/)
-npm run dev
+cd backend  && ./venv/bin/python -m pytest tests/ -q   # 239 tests, 84% covered
+cd frontend && npx vitest run                          # 192 tests
 ```
 
-Register an account, then connect your ESPN or Sleeper league from the dashboard.
+Both have coverage gates that fail the build. [docs/TESTING.md](docs/TESTING.md)
 
-7. **Access the application**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
-   - API Documentation: http://localhost:8000/docs
+## Documentation
 
-## ESPN Integration Setup
+| | |
+| --- | --- |
+| [Architecture](docs/ARCHITECTURE.md) | how the pieces fit, and the voice loop |
+| [Development](docs/DEVELOPMENT.md) | running it locally, gotchas |
+| [Testing](docs/TESTING.md) | the suites, fixtures, and why coverage was lying |
+| [Operations](docs/OPERATIONS.md) | health, config, deploy, troubleshooting |
+| [ESPN API](docs/ESPN_API_INTEGRATION.md) | the upstream API and its two position id spaces |
+| [Design](docs/DESIGN.md) | the Stadium token system |
 
-To connect to your ESPN league, you'll need:
+## Status
 
-1. **League ID**: Found in your ESPN league URL
-2. **ESPN Cookies**: Required for private leagues
-   - `espn_s2`: Authentication cookie
-   - `SWID`: Session identifier
-
-See [ESPN_API_INTEGRATION.md](docs/ESPN_API_INTEGRATION.md) for detailed setup instructions.
-
-## Development
-
-- **Frontend**: Hot reload enabled with Vite
-- **Backend**: Auto-reload enabled with uvicorn
-- **Database**: Migrations managed with Alembic
-- **Type Safety**: Full TypeScript on frontend, Pydantic validation on backend
-
-## Project Structure
-
-```
-fantasy-football-assistant/
-├── frontend/           # React frontend application
-├── backend/            # FastAPI backend application
-├── docs/               # Project documentation
-├── scripts/            # Build and deployment scripts
-└── docker/             # Docker configuration files
-```
-
-## Contributing
-
-1. Follow the development setup in [DEVELOPMENT_SETUP.md](docs/DEVELOPMENT_SETUP.md)
-2. Use conventional commits for clear git history
-3. Ensure all tests pass before submitting PRs
-4. Maintain type safety and add proper validation
+`main` deploys to production on push. Work in progress is tracked in
+[NEXT_SESSION.md](NEXT_SESSION.md).
 
 ## License
 
-MIT License - see LICENSE file for details
+MIT — see [LICENSE](LICENSE). Not affiliated with or endorsed by ESPN or
+Sleeper; platform names identify league connections only.
