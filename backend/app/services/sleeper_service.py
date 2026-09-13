@@ -656,6 +656,23 @@ async def build_team_roster_entries(
     starter_set = set(starters)
     reserve = set(roster_entry.get("reserve") or [])
 
+    # Sleeper's `starters` array is positional: entry i fills the i-th non-bench
+    # slot of the league's `roster_positions`. Without that mapping a player in
+    # the FLEX reads as whatever position he happens to play, which is wrong on
+    # the one slot where knowing it matters.
+    slot_by_player: Dict[str, str] = {}
+    try:
+        league_info = await service.get_league(sleeper_league_id)
+        lineup_slots = [
+            slot for slot in (league_info.get("roster_positions") or [])
+            if slot not in ("BN", "IR", "TAXI")
+        ]
+        for index, pid in enumerate(starters):
+            if index < len(lineup_slots):
+                slot_by_player[pid] = lineup_slots[index]
+    except SleeperError as e:
+        logger.warning("Sleeper lineup slots unavailable", error=str(e))
+
     # Actual points for the week, if the matchup feed has them yet.
     week_points: Dict[str, float] = {}
     if week:
@@ -694,7 +711,11 @@ async def build_team_roster_entries(
             "position_id": 0,
             "position_name": position,
             "lineup_slot_id": 21 if on_ir else (0 if is_starter else 20),
-            "lineup_slot_name": "IR" if on_ir else (position if is_starter else "BENCH"),
+            "lineup_slot_name": (
+                "IR" if on_ir
+                else (slot_by_player.get(pid) or position) if is_starter
+                else "BENCH"
+            ),
             # The contract the rest of the app reads. Derived here so no caller
             # has to re-derive a starter from a slot name.
             "is_starter": is_starter and not on_ir,

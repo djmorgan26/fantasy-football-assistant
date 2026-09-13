@@ -439,42 +439,50 @@ async def get_league_matchups(
                 detail="League not found"
             )
         
-        # Get fresh matchup data from ESPN
-        espn_service = ESPNService()
-        cookies = None
-        if league.espn_s2_encrypted or league.espn_swid_encrypted:
-            cookies = ESPNCookies(
-                espn_s2=ESPNCredentialManager.decrypt_espn_s2(league.espn_s2_encrypted) if league.espn_s2_encrypted else None,
-                swid=ESPNCredentialManager.decrypt_espn_swid(league.espn_swid_encrypted) if league.espn_swid_encrypted else None
+        # Both platforms normalize to the same home/away shape; they differ in
+        # how they express a pairing and in which column identifies a team.
+        if league.platform == PlatformType.SLEEPER:
+            from app.services.sleeper_sync import normalized_matchups
+
+            matchups_data = await normalized_matchups(
+                league.sleeper_league_id, week or league.current_week or 1
             )
-        
-        matchups_data = await espn_service.get_matchups(
-            str(league.espn_league_id),
-            week,
-            cookies
-        )
-        
-        # Convert ESPN data to response format (simplified - not storing in DB for now)
+            team_column = Team.sleeper_roster_id
+        else:
+            espn_service = ESPNService()
+            cookies = None
+            if league.espn_s2_encrypted or league.espn_swid_encrypted:
+                cookies = ESPNCookies(
+                    espn_s2=ESPNCredentialManager.decrypt_espn_s2(league.espn_s2_encrypted) if league.espn_s2_encrypted else None,
+                    swid=ESPNCredentialManager.decrypt_espn_swid(league.espn_swid_encrypted) if league.espn_swid_encrypted else None
+                )
+            matchups_data = await espn_service.get_matchups(
+                str(league.espn_league_id),
+                week,
+                cookies
+            )
+            team_column = Team.espn_team_id
+
         matchups_with_teams = []
         for matchup_data in matchups_data:
             # Get team details
             home_team = None
             away_team = None
-            
+
             if matchup_data.get("home_team_id"):
                 result = await db.execute(
                     select(Team).where(
                         Team.league_id == league.id,
-                        Team.espn_team_id == matchup_data["home_team_id"]
+                        team_column == matchup_data["home_team_id"]
                     )
                 )
                 home_team = result.scalar_one_or_none()
-            
+
             if matchup_data.get("away_team_id"):
                 result = await db.execute(
                     select(Team).where(
                         Team.league_id == league.id,
-                        Team.espn_team_id == matchup_data["away_team_id"]
+                        team_column == matchup_data["away_team_id"]
                     )
                 )
                 away_team = result.scalar_one_or_none()

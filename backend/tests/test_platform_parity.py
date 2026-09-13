@@ -12,7 +12,7 @@ testing each separately, so a shape that drifts on one side fails immediately.
 """
 import pytest
 
-from app.services.sleeper_sync import current_week, scoring_type_from
+from app.services.sleeper_sync import current_week, normalized_matchups, scoring_type_from
 
 pytestmark = pytest.mark.integration
 
@@ -213,3 +213,70 @@ class TestRosterShapeParity:
 
         with_team = [p for p in roster if p["pro_team_abbr"]]
         assert len(with_team) > len(roster) / 2, f"{platform}: most players had no pro team"
+
+
+class TestSleeperMatchupPairing:
+    """Sleeper has no home and away: two rows sharing a matchup_id are the game."""
+
+    async def test_rows_are_paired_into_games(self, mock_mode):
+        from app.services import mock_data
+
+        games = await normalized_matchups("mock_sleeper_league", mock_data.MOCK_CURRENT_WEEK)
+        assert games
+        for game in games:
+            assert game["home_team_id"] is not None
+            assert game["away_team_id"] is not None
+            assert game["home_team_id"] != game["away_team_id"]
+
+    async def test_nobody_appears_in_two_games(self, mock_mode):
+        from app.services import mock_data
+
+        games = await normalized_matchups("mock_sleeper_league", mock_data.MOCK_CURRENT_WEEK)
+        rosters = [g["home_team_id"] for g in games] + [g["away_team_id"] for g in games]
+        assert len(rosters) == len(set(rosters))
+
+    async def test_pairing_is_stable_between_calls(self, mock_mode):
+        """The lower roster id is home, so ordering does not flap."""
+        from app.services import mock_data
+
+        week = mock_data.MOCK_CURRENT_WEEK
+        first = await normalized_matchups("mock_sleeper_league", week)
+        second = await normalized_matchups("mock_sleeper_league", week)
+        assert first == second
+
+        for game in first:
+            assert game["home_team_id"] < game["away_team_id"]
+
+    async def test_a_winner_is_named_from_the_scores(self, mock_mode):
+        from app.services import mock_data
+
+        for game in await normalized_matchups("mock_sleeper_league", mock_data.MOCK_CURRENT_WEEK):
+            if game["home_score"] > game["away_score"]:
+                assert game["winner"] == "HOME"
+            elif game["away_score"] > game["home_score"]:
+                assert game["winner"] == "AWAY"
+
+
+class TestSleeperLineupSlots:
+    """A flex player must read FLEX, not whatever position he happens to play."""
+
+    async def test_slots_follow_the_league_s_roster_positions(self, mock_mode):
+        from app.services.sleeper_service import build_team_roster_entries
+
+        roster = await build_team_roster_entries("mock_sleeper_league", 3, week=14)
+        starters = [p for p in roster if p["is_starter"]]
+
+        from app.services import mock_data
+        expected = [
+            slot for slot in mock_data.sleeper_league()["roster_positions"]
+            if slot not in ("BN", "IR", "TAXI")
+        ]
+        assert [p["lineup_slot_name"] for p in starters] == expected[: len(starters)]
+
+    async def test_bench_players_are_labelled_bench(self, mock_mode):
+        from app.services.sleeper_service import build_team_roster_entries
+
+        roster = await build_team_roster_entries("mock_sleeper_league", 3, week=14)
+        for player in roster:
+            if not player["is_starter"] and not player["on_injured_reserve"]:
+                assert player["lineup_slot_name"] == "BENCH"

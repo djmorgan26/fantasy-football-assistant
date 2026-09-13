@@ -135,3 +135,57 @@ async def refresh_league(
         week=league.current_week,
     )
     return len(rosters), league.current_week
+
+
+async def normalized_matchups(
+    sleeper_league_id: str, week: int
+) -> List[Dict[str, Any]]:
+    """Sleeper's matchup rows, paired into the home/away shape ESPN produces.
+
+    Sleeper returns one row per roster and expresses the pairing by a shared
+    `matchup_id`; there is no notion of home and away. The lower roster id is
+    treated as home so the ordering is at least stable between calls.
+
+    Sleeper publishes no per-matchup projection, so that stays None rather than
+    being invented — the UI already renders "No projection".
+    """
+    service = SleeperService()
+    rows = await service.get_matchups(sleeper_league_id, week)
+
+    by_matchup: Dict[Any, List[Dict[str, Any]]] = {}
+    for row in rows or []:
+        matchup_id = row.get("matchup_id")
+        if matchup_id is None:
+            continue  # a roster on bye is in no pairing
+        by_matchup.setdefault(matchup_id, []).append(row)
+
+    out = []
+    for matchup_id, pair in sorted(by_matchup.items(), key=lambda kv: (kv[0] is None, kv[0])):
+        pair.sort(key=lambda r: r.get("roster_id") or 0)
+        home = pair[0]
+        away = pair[1] if len(pair) > 1 else None
+
+        home_score = float(home.get("points") or 0)
+        away_score = float(away.get("points") or 0) if away else 0.0
+
+        if not away:
+            winner = "UNDECIDED"
+        elif home_score == away_score:
+            # Both still on zero means nobody has kicked off, not a tie.
+            winner = "UNDECIDED" if home_score == 0 else "TIE"
+        else:
+            winner = "HOME" if home_score > away_score else "AWAY"
+
+        out.append({
+            "matchup_id": matchup_id,
+            "week": week,
+            "home_team_id": home.get("roster_id"),
+            "away_team_id": away.get("roster_id") if away else None,
+            "home_score": home_score,
+            "away_score": away_score,
+            "home_projected_score": None,
+            "away_projected_score": None,
+            "is_playoff": False,
+            "winner": winner,
+        })
+    return out
