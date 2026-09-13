@@ -134,6 +134,16 @@ class SleeperService:
         path = endpoint.split("?", 1)[0].strip("/")
         parts = path.split("/")
 
+        # state/nfl
+        if parts[:2] == ["state", "nfl"]:
+            return {
+                "week": mock_data.MOCK_CURRENT_WEEK,
+                "leg": mock_data.MOCK_CURRENT_WEEK,
+                "season": str(mock_data.MOCK_SEASON),
+                "season_type": "regular",
+                "display_week": mock_data.MOCK_CURRENT_WEEK,
+            }
+
         # players/nfl, players/nfl/trending/<type>
         if parts[:2] == ["players", "nfl"]:
             if len(parts) >= 3 and parts[2] == "trending":
@@ -178,7 +188,10 @@ class SleeperService:
                 return mock_data.sleeper_matchups(week)
             if tail == "drafts":
                 return mock_data.sleeper_drafts()
-            if tail in ("transactions", "traded_picks", "winners_bracket", "losers_bracket"):
+            if tail == "transactions":
+                week = int(parts[3]) if len(parts) > 3 and parts[3].isdigit() else mock_data.MOCK_CURRENT_WEEK
+                return mock_data.sleeper_transactions(week)
+            if tail in ("traded_picks", "winners_bracket", "losers_bracket"):
                 return []
             return mock_data.sleeper_league()
 
@@ -186,6 +199,15 @@ class SleeperService:
         return {}
 
     # ==================== USER ENDPOINTS ====================
+
+    async def get_nfl_state(self) -> Dict[str, Any]:
+        """The current NFL week and season, as Sleeper sees it.
+
+        Authoritative and free. A league's own `settings.leg` is only correct
+        until the next kickoff, so anything captured at connect time drifts for
+        the rest of the season.
+        """
+        return await self._make_request("state/nfl")
 
     async def get_user(self, user_identifier: str) -> Dict[str, Any]:
         """
@@ -512,6 +534,87 @@ class SleeperService:
         return self.position_map.get(sleeper_position, sleeper_position)
 
 
+async def get_waiver_budgets(sleeper_league_id: str) -> List[Dict[str, Any]]:
+    """FAAB budgets for every roster, in the same shape ESPN's returns.
+
+    Sleeper splits this across three places: the league carries the budget
+    (`settings.waiver_budget`), each roster carries what it has spent
+    (`settings.waiver_budget_used`), and the bids themselves live in the
+    transaction feed. Leagues that do not use FAAB have no budget at all —
+    `waiver_type` 2 is FAAB, anything else is rolling or reverse-standings
+    waivers — and those get an empty list rather than a fake 100.
+    """
+    # Imported lazily: draft_service imports SleeperService at module level.
+    from app.services.draft_service import draft_service
+
+    service = SleeperService()
+    league = await service.get_league(sleeper_league_id)
+    league_settings = league.get("settings") or {}
+
+    total_budget = float(league_settings.get("waiver_budget") or 0)
+    if not total_budget:
+        logger.info("Sleeper league does not use FAAB", league_id=sleeper_league_id)
+        return []
+
+    rosters = await service.get_rosters(sleeper_league_id)
+    players_map = await draft_service.get_players_cached()
+
+    # Bids, newest first, bucketed by the roster that made them. Sleeper keys
+    # transactions by week ("round"), so recent weeks are walked backwards.
+    bids: Dict[int, List[Dict[str, Any]]] = {}
+    current_week = int(league_settings.get("leg") or league.get("settings", {}).get("leg") or 0)
+    weeks = [w for w in range(current_week, max(current_week - 4, 0), -1)] or [1]
+
+    for week in weeks:
+        try:
+            transactions = await service.get_transactions(sleeper_league_id, week)
+        except SleeperError as e:
+            logger.warning("Sleeper transactions unavailable", week=week, error=str(e))
+            continue
+
+        for tx in transactions or []:
+            if tx.get("type") != "waiver":
+                continue
+            bid = ((tx.get("settings") or {}).get("waiver_bid")) or 0
+            for roster_id in tx.get("roster_ids") or []:
+                player_id, player_name = _first_added_player(tx, players_map)
+                bids.setdefault(roster_id, []).append({
+                    "player_id": player_id,
+                    "player_name": player_name,
+                    "bid_amount": float(bid),
+                    "status": "SUCCESSFUL" if tx.get("status") == "complete" else "FAILED",
+                    "transaction_type": "ADD",
+                    "week": week,
+                })
+
+    budgets = []
+    for roster in rosters:
+        roster_id = roster.get("roster_id")
+        spent = float((roster.get("settings") or {}).get("waiver_budget_used") or 0)
+        budgets.append({
+            "team_id": roster_id,
+            "team_name": "",  # resolved from the database by the caller
+            "total_budget": total_budget,
+            "spent_budget": spent,
+            "current_budget": total_budget - spent,
+            "recent_transactions": bids.get(roster_id, [])[:5],
+        })
+    return budgets
+
+
+def _first_added_player(
+    transaction: Dict[str, Any], players_map: Dict[str, Any]
+) -> tuple[str, str]:
+    """(id, name) for what a waiver claim was for. A bare id is useless in a UI."""
+    for player_id in transaction.get("adds") or {}:
+        meta = players_map.get(str(player_id)) or {}
+        name = meta.get("full_name") or (
+            f"{meta.get('first_name', '')} {meta.get('last_name', '')}".strip()
+        )
+        return str(player_id), (name or str(player_id))
+    return "", "Waiver claim"
+
+
 async def build_team_roster_entries(
     sleeper_league_id: str,
     sleeper_roster_id: int,
@@ -539,6 +642,7 @@ async def build_team_roster_entries(
 
     service = SleeperService()
     rosters = await service.get_rosters(sleeper_league_id)
+    players_map = await draft_service.get_players_cached()
     roster_entry = next(
         (r for r in rosters if r.get("roster_id") == sleeper_roster_id), None
     )

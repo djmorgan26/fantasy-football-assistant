@@ -95,13 +95,33 @@ class TestPortfolio:
         assert resp.status_code in (200, 201), resp.text
         sleeper_league_id = resp.json()["league_id"]
 
-        await client.put(
-            f"/api/teams/{espn_league['teams'][0]['id']}/claim", headers=auth_headers
-        )
+        espn_team = espn_league["teams"][0]
+        await client.put(f"/api/teams/{espn_team['id']}/claim", headers=auth_headers)
+
+        # Claim the Sleeper roster that actually shares players with the ESPN
+        # team. The two leagues draft from differently-rotated pools, so most
+        # pairings overlap by nothing — and a fixture that picks one of those
+        # tests the cross-platform join against an empty set.
+        espn_names = {
+            p["full_name"]
+            for p in mock_data.espn_team_roster(espn_team["espn_team_id"], None)["roster"]
+        }
+        players_meta = mock_data.sleeper_all_players()
+        overlap = {
+            r["roster_id"]: len(espn_names & {
+                players_meta[str(pid)]["full_name"]
+                for pid in (r.get("players") or []) if str(pid) in players_meta
+            })
+            for r in mock_data.sleeper_rosters()
+        }
+        best_roster = max(overlap, key=overlap.get)
+        assert overlap[best_roster] > 0, "mock leagues share no players at all"
+
         sleeper_teams = (
             await client.get(f"/api/teams/league/{sleeper_league_id}", headers=auth_headers)
         ).json()
-        await client.put(f"/api/teams/{sleeper_teams[0]['id']}/claim", headers=auth_headers)
+        mine = next(t for t in sleeper_teams if t["sleeper_roster_id"] == best_roster)
+        await client.put(f"/api/teams/{mine['id']}/claim", headers=auth_headers)
 
         return {"espn": espn_league["league"]["id"], "sleeper": sleeper_league_id}
 

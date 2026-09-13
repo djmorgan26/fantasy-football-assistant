@@ -5,8 +5,8 @@ Two suites, both with coverage gates that fail the build.
 | | Backend | Frontend |
 | --- | --- | --- |
 | Runner | pytest + pytest-asyncio | vitest + Testing Library |
-| Tests | 285 | 230 |
-| Coverage | 85% (gate: 80%) | 38% statements, 76% branches (gate: 35 / 73) |
+| Tests | 314 | 230 |
+| Coverage | 85% (gate: 80%) | 39% statements, 75% branches (gate: 37 / 74) |
 
 ## Running
 
@@ -84,6 +84,14 @@ Three modules — `core/exceptions.py`, `core/logging.py`, `core/middleware.py` 
 were deleted rather than tested. They shipped with the repo, were imported by
 nothing, and had never run. Their real replacements live in
 `core/observability.py`, wired into the app and covered at 100%.
+
+## Platform parity
+
+`test_platform_parity.py` runs one set of assertions against both an ESPN and a
+Sleeper league, parametrized on platform. Write new platform-facing tests there
+rather than in a per-platform file: a gap between the two does not fail loudly,
+it renders an empty roster or a zero score, and only a shared assertion catches
+that.
 
 ## Environment gaps that look like bugs
 

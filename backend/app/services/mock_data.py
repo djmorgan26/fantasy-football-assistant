@@ -512,6 +512,11 @@ def _sleeper_users() -> List[Dict[str, Any]]:
     return users
 
 
+def _faab_spent(team_id: int) -> int:
+    """Deterministic FAAB spend so the demo shows a spread, not all zeros."""
+    return (team_id * 13) % 78
+
+
 def _sleeper_rosters() -> List[Dict[str, Any]]:
     rosters = []
     for t in TEAMS:
@@ -529,6 +534,7 @@ def _sleeper_rosters() -> List[Dict[str, Any]]:
                 "ties": 0,
                 "fpts": int(pf),
                 "fpts_decimal": int(round((pf - int(pf)) * 100)),
+                "waiver_budget_used": _faab_spent(t["id"]),
             },
         })
     return rosters
@@ -554,7 +560,13 @@ def sleeper_league() -> Dict[str, Any]:
         "scoring_settings": {},  # empty -> draft service uses precomputed pts_ppr
         "roster_positions": ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF",
                              "BN", "BN", "BN", "BN", "BN"],
-        "settings": {"num_teams": len(TEAMS)},
+        "settings": {
+            "num_teams": len(TEAMS),
+            # waiver_type 2 is FAAB; anything else means no budget to report.
+            "waiver_type": 2,
+            "waiver_budget": 100,
+            "leg": MOCK_CURRENT_WEEK,
+        },
     }
 
 
@@ -777,6 +789,27 @@ _TEAM_NAMES = {
     "NYJ": "Jets", "PHI": "Eagles", "PIT": "Steelers", "SEA": "Seahawks",
     "SF": "49ers", "TB": "Buccaneers", "TEN": "Titans", "WAS": "Commanders",
 }
+
+
+def sleeper_transactions(week: int) -> List[Dict[str, Any]]:
+    """A handful of completed FAAB claims for the week, deterministically."""
+    out = []
+    for t in TEAMS:
+        tid = t["id"]
+        if (tid + week) % 3:
+            continue
+        pool = _SLEEPER_TEAM_ROSTERS[tid]
+        player = pool[(week + tid) % len(pool)]
+        out.append({
+            "type": "waiver",
+            "status": "complete" if (tid + week) % 2 == 0 else "failed",
+            "roster_ids": [tid],
+            "adds": {player: tid},
+            "drops": None,
+            "settings": {"waiver_bid": ((tid * 7 + week) % 23) + 1},
+            "leg": week,
+        })
+    return out
 
 
 def nfl_scoreboard() -> List[Dict[str, Any]]:

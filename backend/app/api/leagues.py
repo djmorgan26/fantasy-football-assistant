@@ -6,10 +6,11 @@ from typing import List, Optional
 from datetime import datetime, timezone
 from app.db.database import get_database
 from app.models.user import User
-from app.models.league import League
+from app.models.league import League, PlatformType
 from app.models.team import Team
 from app.models.matchup import Matchup
 from app.models.waiver_budget import WaiverBudget, WaiverTransaction
+from app.services.sleeper_service import SleeperError
 from app.schemas.league import (
     LeagueConnectionRequest, 
     LeagueConnectionResponse, 
@@ -254,6 +255,22 @@ async def sync_league(
                 detail="League not found"
             )
         
+        # Sleeper leagues refresh through their own path; before this they
+        # could not be re-synced at all, so records and the current week stayed
+        # frozen at whatever they were when the league was connected.
+        if league.platform == PlatformType.SLEEPER:
+            from app.services.sleeper_sync import refresh_league
+
+            teams_synced, week = await refresh_league(league, db)
+            league.last_synced = datetime.now(timezone.utc)
+            await db.commit()
+            await db.refresh(league)
+            return LeagueConnectionResponse(
+                success=True,
+                message=f"Synced {teams_synced} teams (week {week})",
+                league=LeagueResponse.from_orm(league),
+            )
+
         espn_service = ESPNService()
         
         # Get stored credentials if available
@@ -528,20 +545,28 @@ async def get_league_waiver_budgets(
                 detail="League not found"
             )
         
-        # Get fresh budget data from ESPN
-        espn_service = ESPNService()
-        cookies = None
-        if league.espn_s2_encrypted or league.espn_swid_encrypted:
-            cookies = ESPNCookies(
-                espn_s2=ESPNCredentialManager.decrypt_espn_s2(league.espn_s2_encrypted) if league.espn_s2_encrypted else None,
-                swid=ESPNCredentialManager.decrypt_espn_swid(league.espn_swid_encrypted) if league.espn_swid_encrypted else None
+        # Both platforms report FAAB, in different places and shapes; each
+        # service normalizes to {team_id, total_budget, spent_budget,
+        # current_budget}, where team_id is that platform's own team key.
+        if league.platform == PlatformType.SLEEPER:
+            from app.services.sleeper_service import get_waiver_budgets as sleeper_budgets
+
+            budgets_data = await sleeper_budgets(league.sleeper_league_id)
+            team_column = Team.sleeper_roster_id
+        else:
+            espn_service = ESPNService()
+            cookies = None
+            if league.espn_s2_encrypted or league.espn_swid_encrypted:
+                cookies = ESPNCookies(
+                    espn_s2=ESPNCredentialManager.decrypt_espn_s2(league.espn_s2_encrypted) if league.espn_s2_encrypted else None,
+                    swid=ESPNCredentialManager.decrypt_espn_swid(league.espn_swid_encrypted) if league.espn_swid_encrypted else None
+                )
+            budgets_data = await espn_service.get_waiver_budgets(
+                str(league.espn_league_id),
+                cookies
             )
-        
-        budgets_data = await espn_service.get_waiver_budgets(
-            str(league.espn_league_id),
-            cookies
-        )
-        
+            team_column = Team.espn_team_id
+
         # Update budget data in database and prepare response
         budget_summaries = []
         for budget_data in budgets_data:
@@ -549,7 +574,7 @@ async def get_league_waiver_budgets(
             result = await db.execute(
                 select(Team).where(
                     Team.league_id == league.id,
-                    Team.espn_team_id == budget_data["team_id"]
+                    team_column == budget_data["team_id"]
                 )
             )
             team = result.scalar_one_or_none()
@@ -584,14 +609,34 @@ async def get_league_waiver_budgets(
                 )
                 db.add(budget_record)
             
-            # Get recent transactions
-            result = await db.execute(
-                select(WaiverTransaction).where(
-                    WaiverTransaction.team_id == team.id,
-                    WaiverTransaction.league_id == league.id
-                ).order_by(WaiverTransaction.created_at.desc()).limit(5)
-            )
-            transactions = result.scalars().all()
+            # Sleeper hands back live bids with the budget; ESPN does not, so
+            # its card falls back to whatever the transactions table has synced.
+            live_transactions = budget_data.get("recent_transactions")
+            if live_transactions:
+                recent = [
+                    WaiverTransactionResponse(
+                        id=index,
+                        league_id=league.id,
+                        team_id=team.id,
+                        player_id=tx.get("player_id") or 0,
+                        player_name=tx.get("player_name") or "Waiver claim",
+                        bid_amount=tx.get("bid_amount") or 0,
+                        status=tx.get("status") or "SUCCESSFUL",
+                        transaction_type=tx.get("transaction_type") or "ADD",
+                        week=tx.get("week") or (league.current_week or 1),
+                        created_at=datetime.now(timezone.utc),
+                        updated_at=datetime.now(timezone.utc),
+                    )
+                    for index, tx in enumerate(live_transactions, start=1)
+                ]
+            else:
+                result = await db.execute(
+                    select(WaiverTransaction).where(
+                        WaiverTransaction.team_id == team.id,
+                        WaiverTransaction.league_id == league.id
+                    ).order_by(WaiverTransaction.created_at.desc()).limit(5)
+                )
+                recent = [WaiverTransactionResponse.from_orm(t) for t in result.scalars().all()]
             
             budget_summary = TeamBudgetSummary(
                 team_id=team.id,
@@ -599,18 +644,18 @@ async def get_league_waiver_budgets(
                 current_budget=budget_data["current_budget"],
                 spent_budget=budget_data["spent_budget"],
                 total_budget=budget_data["total_budget"],
-                recent_transactions=[WaiverTransactionResponse.from_orm(t) for t in transactions]
+                recent_transactions=recent
             )
             budget_summaries.append(budget_summary)
         
         await db.commit()
         return budget_summaries
         
-    except ESPNError as e:
-        logger.error("ESPN API error getting waiver budgets", error=str(e))
+    except (ESPNError, SleeperError) as e:
+        logger.error("Platform API error getting waiver budgets", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"ESPN API error: {str(e)}"
+            detail=f"Could not reach the league platform: {str(e)}"
         )
     except HTTPException:
         raise

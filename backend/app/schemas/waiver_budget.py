@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, Union, List
 from datetime import datetime
 
 
@@ -33,7 +33,11 @@ class WaiverBudgetResponse(WaiverBudgetBase):
 class WaiverTransactionBase(BaseModel):
     league_id: int
     team_id: int
-    player_id: int
+    # Union because the two platforms number players differently: ESPN uses an
+    # integer id, Sleeper a string ("4034"), and a Sleeper team defense is the
+    # team abbreviation itself ("PHI"). Declaring this `int` silently rejected
+    # every Sleeper waiver claim.
+    player_id: Union[int, str]
     player_name: str
     transaction_type: str  # "ADD", "DROP", "TRADE"
     bid_amount: float = 0.0

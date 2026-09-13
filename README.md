@@ -85,7 +85,7 @@ Interactive docs at `/docs` when running locally.
 ## Tests
 
 ```bash
-cd backend  && ./venv/bin/python -m pytest tests/ -q   # 285 tests, 85% covered
+cd backend  && ./venv/bin/python -m pytest tests/ -q   # 314 tests, 85% covered
 cd frontend && npx vitest run                          # 230 tests
 ```
 

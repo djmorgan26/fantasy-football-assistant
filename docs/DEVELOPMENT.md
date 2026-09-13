@@ -57,9 +57,12 @@ optional and degrades independently:
 | `GROQ_API_KEY` | all generated writing | content falls back to a facts summary |
 | `LLM_MODEL` | which model to use | the code default |
 
-ESPN and Sleeper need no keys for public leagues. Private ESPN leagues need the
-`espn_s2` and `SWID` cookies, entered per-user in Profile Settings and stored
-encrypted — see [ESPN API](ESPN_API_INTEGRATION.md).
+**Sleeper needs nothing at all.** Its API is public and read-only; connecting a
+league takes a username, and the app looks up which leagues that username is in.
+
+Private ESPN leagues need the `espn_s2` and `SWID` cookies, entered per-user in
+Profile Settings and stored encrypted — see
+[ESPN API](ESPN_API_INTEGRATION.md).
 
 > **Groq retires models regularly.** A retired model id returns
 > `404 model_not_found` and every generated feature silently falls back. Check

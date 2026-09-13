@@ -93,6 +93,28 @@ the caller's team, pull a roster, resolve this week's opponent. Platform
 branching (ESPN vs Sleeper) is resolved there once. Routers that skip it end up
 re-implementing the ownership check, which is the one thing that must not vary.
 
+## Platform parity
+
+ESPN and Sleeper are meant to be interchangeable to everything above the
+service layer. `tests/test_platform_parity.py` enforces that by running the
+*same* assertions against a league of each kind rather than testing them
+separately — a shape that drifts on one side fails immediately.
+
+Where they genuinely differ, the difference is resolved once:
+
+| | ESPN | Sleeper | Resolved in |
+| --- | --- | --- | --- |
+| Roster | normalized entries | arrays of player ids | `build_team_roster_entries` |
+| Matchup | home/away on one row | two rows sharing a `matchup_id` | `league_context.opponent_this_week` |
+| Player id | integer | string; a defense is its team abbreviation | joins go through normalized names |
+| Scoring label | named on the league | derived from points-per-reception | `sleeper_sync.scoring_type_from` |
+| Current week | on the league | authoritative at `/v1/state/nfl` | `sleeper_sync.current_week` |
+| FAAB | on the team | split across league, roster and transactions | `sleeper_service.get_waiver_budgets` |
+| Sync | `/leagues/{id}/sync` | same endpoint, `sleeper_sync.refresh_league` | `api/leagues.py` |
+
+Sleeper needs no credentials at all — the whole API is public and read-only, so
+connecting a league needs only a username.
+
 ## Matching players across platforms
 
 ESPN and Sleeper number the same human differently, so anything that has to
