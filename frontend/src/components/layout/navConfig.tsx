@@ -7,6 +7,8 @@ import {
   ArrowsRightLeftIcon,
   BoltIcon,
   NewspaperIcon,
+  ChatBubbleLeftRightIcon,
+  RssIcon,
 } from '@heroicons/react/24/outline';
 
 export interface NavItem {
@@ -27,6 +29,10 @@ export const PRIMARY_NAV: NavItem[] = [
 export const leagueNav = (leagueId: string): NavItem[] => [
   { label: 'Overview', to: `/leagues/${leagueId}`, icon: Squares2X2Icon, end: true },
   { label: 'My Roster', to: `/leagues/${leagueId}/roster`, icon: UserGroupIcon },
+  // The board and the wire sit high on purpose: they are the two reasons to
+  // open the app on a day when you are not setting a lineup.
+  { label: 'Board', to: `/leagues/${leagueId}/board`, icon: ChatBubbleLeftRightIcon },
+  { label: 'News', to: `/leagues/${leagueId}/news`, icon: RssIcon },
   { label: 'Players', to: `/leagues/${leagueId}/players`, icon: MagnifyingGlassIcon },
   { label: 'Trades', to: `/leagues/${leagueId}/trades`, icon: ArrowsRightLeftIcon },
   { label: 'Draft', to: `/leagues/${leagueId}/draft`, icon: BoltIcon },

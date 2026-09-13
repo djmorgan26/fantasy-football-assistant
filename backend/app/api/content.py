@@ -15,6 +15,7 @@ from app.models.user import User
 from app.models.league import League, PlatformType
 from app.models.content_profile import LeagueContentProfile
 from app.core.auth import get_current_active_user
+from app.services import board_service
 from app.services.content_service import content_service, CONTENT_TYPES, DEFAULT_VOICE
 from app.services.sleeper_service import SleeperError
 from app.services.espn_service import ESPNCookies, ESPNError, ESPNService
@@ -98,6 +99,41 @@ async def _fetch_standings(league: League) -> list:
     if league.platform == PlatformType.SLEEPER:
         return await content_service.get_standings(league.sleeper_league_id)
     return await content_service.get_standings_espn(str(league.espn_league_id), _espn_cookies(league))
+
+
+async def _generation_profile(league_id: int, db: AsyncSession) -> dict:
+    """The voice profile as the generator should see it.
+
+    The stored profile holds whatever somebody typed into the settings form.
+    The content board holds what the league actually rated highly, which is
+    better material and costs nobody any effort to produce. Board samples go
+    first so they win the three-example cap in `_voice_block()`; hand-written
+    examples stay as the fallback for a league whose board is still empty.
+    """
+    profile = _profile_dict(await _get_profile(league_id, db))
+
+    harvested = await board_service.get_voice_examples(db, league_id, limit=3)
+    if harvested:
+        profile["humor_examples"] = [
+            {"title": e["title"], "text": e["text"]} for e in harvested
+        ] + list(profile.get("humor_examples") or [])
+
+    # Give each manager's own writing to the persona block, so the generator can
+    # describe somebody in terms they would recognise.
+    author_voices = await board_service.get_author_voices(db, league_id)
+    if author_voices:
+        by_name = {p.get("name"): p for p in (profile.get("personas") or [])}
+        for voice in author_voices:
+            persona = by_name.setdefault(voice["name"], {"name": voice["name"]})
+            persona["notes"] = (persona.get("notes") or "").strip()
+            sample = voice["samples"][0][:220] if voice["samples"] else ""
+            if sample:
+                persona["notes"] = (
+                    persona["notes"] + f" Writes like this: \"{sample}\""
+                ).strip()
+        profile["personas"] = list(by_name.values())
+
+    return profile
 
 
 def _profile_dict(profile: LeagueContentProfile) -> dict:
@@ -277,7 +313,7 @@ async def generate_content(
     league = await _load_league(league_id, current_user, db)
     _ensure_supported(league)
 
-    profile = _profile_dict(await _get_profile(league_id, db))
+    profile = await _generation_profile(league_id, db)
     week = payload.week or max((league.current_week or 1) - 1, 1)
 
     try:
@@ -297,6 +333,20 @@ async def generate_content(
             narrative=narrative,
             standings=standings,
         )
+        if payload.content_type in board_service.BOARD_PUBLISHED_KINDS:
+            try:
+                await board_service.publish_ai_post(
+                    db,
+                    league_id=league_id,
+                    kind=payload.content_type,
+                    title=board_service.POST_TITLES.get(payload.content_type, "New post"),
+                    body=result["content"],
+                    week=week,
+                    generated_by=result.get("generated_by"),
+                )
+            except Exception as e:  # never fail a generation over the board
+                logger.warning("Could not post generated content to the board", error=str(e))
+
         return GeneratedContentResponse(
             week=week,
             league_name=league.name,

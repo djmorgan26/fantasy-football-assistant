@@ -9,6 +9,7 @@ import {
 import { Header } from './Header';
 import { SidebarNav } from './SidebarNav';
 import { MobileTabBar } from './MobileTabBar';
+import { CommissionerDock } from '@/components/assistant/CommissionerDock';
 import { AppToaster } from '@/components/ui/AppToaster';
 import { cn } from '@/utils';
 
@@ -158,6 +159,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </div>
 
       <MobileTabBar leagueId={leagueId} onMore={() => setDrawerOpen(true)} />
+
+      <CommissionerDock />
 
       <AppToaster position="top-right" />
     </div>

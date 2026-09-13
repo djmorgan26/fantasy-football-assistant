@@ -6,5 +6,20 @@ from .trade import Trade
 from .matchup import Matchup
 from .waiver_budget import WaiverBudget, WaiverTransaction
 from .content_profile import LeagueContentProfile
+from .board import (
+    BoardPost,
+    BoardComment,
+    BoardReaction,
+    VoiceSample,
+    PostKind,
+    ReactionKind,
+    REACTION_WEIGHTS,
+    COMMENT_WEIGHT,
+)
 
-__all__ = ["User", "League", "Team", "Player", "Trade", "Matchup", "WaiverBudget", "WaiverTransaction", "LeagueContentProfile"]
+__all__ = [
+    "User", "League", "Team", "Player", "Trade", "Matchup",
+    "WaiverBudget", "WaiverTransaction", "LeagueContentProfile",
+    "BoardPost", "BoardComment", "BoardReaction", "VoiceSample",
+    "PostKind", "ReactionKind", "REACTION_WEIGHTS", "COMMENT_WEIGHT",
+]

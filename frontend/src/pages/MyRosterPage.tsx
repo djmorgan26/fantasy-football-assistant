@@ -12,6 +12,9 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Progress } from '@/components/ui/Progress';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { PageContainer, PageHeader } from '@/components/layout/Page';
+import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
+import { ToolHeader } from '@/components/ui/ToolHeader';
+import { PrimerCard } from '@/components/assistant/PrimerCard';
 import { getPositionColor } from '@/utils';
 import { RosterPlayer } from '@/types';
 import {
@@ -117,12 +120,15 @@ const PlayerRow: React.FC<{
         </span>
       </div>
 
-      {/* The crest is the first thing to go on a narrow screen: it costs 48px
-          that the player's name needs more. */}
+      {/* The headshot is the first thing to go on a narrow screen: it costs
+          48px that the player's name needs more. */}
       {!compact && (
-        <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand to-primary-700 text-xs font-bold text-brand-fg sm:flex">
-          {initials(player.full_name)}
-        </div>
+        <PlayerAvatar
+          name={player.full_name}
+          playerId={player.player_id}
+          position={player.position_name}
+          className="hidden sm:flex"
+        />
       )}
 
       {/* Identity */}
@@ -461,18 +467,14 @@ export const MyRosterPage: React.FC = () => {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Starting lineup */}
         <div className="lg:col-span-2">
+          <ToolHeader
+            className="mb-4"
+            icon={ClipboardDocumentListIcon}
+            title="Starting Lineup"
+            context={`Week ${week}`}
+            subtitle={`${starters.length} ${starters.length === 1 ? 'starter' : 'starters'} · ${league?.scoring_type ?? ''} scoring`}
+          />
           <Card data-testid="starters-panel">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center">
-                  <ClipboardDocumentListIcon className="mr-2 h-5 w-5" />
-                  Starting Lineup
-                </CardTitle>
-                <span className="text-sm text-fg-muted">
-                  {starters.length} {starters.length === 1 ? 'starter' : 'starters'}
-                </span>
-              </div>
-            </CardHeader>
             <CardContent>
               {rosterLoading ? (
                 <div className="space-y-3">
@@ -501,8 +503,10 @@ export const MyRosterPage: React.FC = () => {
           </Card>
         </div>
 
-        {/* Bench and IR */}
+        {/* Bench, IR, and the week's briefing */}
         <div className="space-y-6">
+          <PrimerCard leagueId={numericLeagueId} />
+
           <Card data-testid="bench-panel">
             <CardHeader>
               <div className="flex items-center justify-between">

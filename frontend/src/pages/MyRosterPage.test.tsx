@@ -95,6 +95,11 @@ const roster: RosterPlayer[] = [
 ];
 
 vi.mock('@/hooks/useLeagues', () => ({ useLeague: () => ({ data: league }) }));
+// The primer card is its own feature with its own tests; here it just must not
+// drag a live react-query client into this page's render.
+vi.mock('@/hooks/useAssistant', () => ({
+  useWeeklyPrimer: () => ({ data: undefined, isLoading: false, isError: true }),
+}));
 vi.mock('@/hooks/useAuth', () => ({ useCurrentUser: () => ({ data: { id: 1 } }) }));
 vi.mock('@/hooks/useTeams', () => ({
   useLeagueTeams: () => ({ data: [myTeam] }),
@@ -125,9 +130,12 @@ describe('MyRosterPage', () => {
   it('splits starters from the bench instead of listing everyone as a starter', () => {
     renderPage();
     // Slot names arrive uppercase ("BENCH"); the old filter compared against
-    // "Bench", so every player landed in the starting lineup.
-    expect(screen.getByText('3 starters')).toBeInTheDocument();
+    // "Bench", so every player landed in the starting lineup. The count now
+    // lives in the tool header alongside the scoring format.
+    expect(screen.getByText(/3 starters/)).toBeInTheDocument();
+    expect(within(panel('starters-panel')).getByText('Jonathan Taylor')).toBeInTheDocument();
     expect(within(panel('bench-panel')).getByText('Kenny Gainwell')).toBeInTheDocument();
+    expect(within(panel('starters-panel')).queryByText('Kenny Gainwell')).toBeNull();
   });
 
   it('shows per-player week projections rather than raw stat dicts', () => {

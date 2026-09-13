@@ -451,3 +451,158 @@ export interface GeneratedContent {
   league_name?: string | null;
   narrative?: WeeklyNarrative | null;
 }
+// ── Content board ──────────────────────────────────────────────────────────
+// Typed reactions, not a like/dislike binary: a binary records *that* a post
+// landed, these record *how*, which is the part the voice profile learns from.
+export type ReactionKind = 'savage' | 'funny' | 'brutal' | 'smart' | 'cold';
+
+export type PostKind =
+  | 'post'
+  | 'weekly_recap'
+  | 'power_rankings'
+  | 'awards'
+  | 'trash_talk'
+  | 'season_recap'
+  | 'digest';
+
+export interface BoardComment {
+  id: number;
+  post_id: number;
+  parent_id?: number | null;
+  body: string;
+  author_id?: number | null;
+  author_name: string;
+  is_mine: boolean;
+  created_at?: string;
+}
+
+export interface BoardPost {
+  id: number;
+  league_id: number;
+  kind: PostKind;
+  title?: string | null;
+  body: string;
+  media_paths: string[];
+  week?: number | null;
+  /** Written by the assistant rather than a person. Rated the same way. */
+  is_ai: boolean;
+  generated_by?: string | null;
+  allow_training: boolean;
+  author_id?: number | null;
+  author_name: string;
+  is_mine: boolean;
+  score: number;
+  reactions: Record<ReactionKind, number>;
+  my_reactions: ReactionKind[];
+  comment_count: number;
+  comments: BoardComment[];
+  created_at?: string;
+}
+
+export interface VoiceSample {
+  id: number;
+  title?: string | null;
+  text: string;
+  score: number;
+  tags: string[];
+  author_name?: string | null;
+}
+
+export interface BoardStats {
+  posts: number;
+  comments: number;
+  reactions: number;
+  voice_samples: number;
+  top_reaction?: ReactionKind | null;
+}
+
+// ── News ───────────────────────────────────────────────────────────────────
+export interface NewsArticle {
+  id: string;
+  headline: string;
+  description: string;
+  byline: string;
+  published?: string | null;
+  image?: string | null;
+  url?: string | null;
+  athletes: string[];
+  teams: string[];
+  category: string;
+  /** The fantasy team in this league that rosters the player involved. */
+  rostered_by?: string | null;
+}
+
+export interface LeagueNews {
+  articles: NewsArticle[];
+  rostered_count: number;
+  league_name: string;
+}
+
+export interface NewsDigest {
+  digest: string;
+  generated_by: string;
+  items: NewsArticle[];
+}
+
+export interface TrendingPlayer {
+  sleeper_id: string;
+  name: string;
+  position?: string | null;
+  team?: string | null;
+  count: number;
+  headshot?: string | null;
+}
+
+export interface ScoreboardSide {
+  abbr?: string;
+  name?: string;
+  logo?: string;
+  score?: string;
+}
+
+export interface ScoreboardGame {
+  id: string;
+  state: string;
+  detail: string;
+  home: ScoreboardSide;
+  away: ScoreboardSide;
+}
+
+// ── The Commissioner ───────────────────────────────────────────────────────
+export interface ChatTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatReply {
+  reply: string;
+  generated_by: string;
+  /** What the answer was grounded on, e.g. ["standings", "your roster"]. */
+  grounded_on: string[];
+}
+
+export interface PrimerAlert {
+  player: string;
+  slot: string;
+  status: string;
+  severity: 'out' | 'questionable';
+}
+
+export interface PrimerSwap {
+  start: string;
+  sit: string;
+  slot: string;
+  gain: number;
+}
+
+export interface WeeklyPrimer {
+  week: number;
+  team_name: string;
+  record: string;
+  opponent?: string | null;
+  projected: number;
+  starters: number;
+  alerts: PrimerAlert[];
+  best_swap?: PrimerSwap | null;
+  trash_talk?: string | null;
+}

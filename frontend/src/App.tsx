@@ -18,6 +18,8 @@ import { PlayerSearchPage } from '@/pages/PlayerSearchPage';
 import { MyRosterPage } from '@/pages/MyRosterPage';
 import { DraftRoomPage } from '@/pages/DraftRoomPage';
 import { PressBoxPage } from '@/pages/PressBoxPage';
+import { BoardPage } from '@/pages/BoardPage';
+import { NewsPage } from '@/pages/NewsPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import './index.css';
 
@@ -148,6 +150,23 @@ function App() {
                 }
               />
               
+              <Route
+                path="leagues/:leagueId/board"
+                element={
+                  <ProtectedRoute>
+                    <BoardPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="leagues/:leagueId/news"
+                element={
+                  <ProtectedRoute>
+                    <NewsPage />
+                  </ProtectedRoute>
+                }
+              />
+
               <Route
                 path="profile"
                 element={

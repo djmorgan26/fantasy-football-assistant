@@ -3,7 +3,7 @@ import os
 from typing import AsyncGenerator
 
 import pytest
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -63,7 +63,10 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 
     app.dependency_overrides[get_database] = override_get_database
 
-    async with AsyncClient(app=app, base_url="http://testserver") as ac:
+    # httpx 0.28 dropped the `app=` shortcut; the ASGI transport is the
+    # supported way to drive the app in-process.
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
         yield ac
 
     app.dependency_overrides.clear()
