@@ -19,69 +19,11 @@ from app.db.database import get_database
 from app.models.league import League, PlatformType
 from app.models.team import Team
 from app.models.user import User
-from app.services import board_service, news_service
-from app.services.content_service import content_service
-from app.services.espn_service import ESPNCookies, ESPNService
+from app.services import board_service, league_context, news_service
 from app.services.llm_service import llm_service
-from app.services.sleeper_service import SleeperService
-from app.utils.encryption import ESPNCredentialManager
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/news", tags=["news"])
-
-
-async def _league_or_404(league_id: int, user: User, db: AsyncSession) -> League:
-    result = await db.execute(
-        select(League).where(League.id == league_id, League.owner_user_id == user.id)
-    )
-    league = result.scalar_one_or_none()
-    if not league:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="League not found")
-    return league
-
-
-def _espn_cookies(league: League) -> Optional[ESPNCookies]:
-    s2 = ESPNCredentialManager.decrypt_espn_s2(league.espn_s2_encrypted) if league.espn_s2_encrypted else None
-    swid = ESPNCredentialManager.decrypt_espn_swid(league.espn_swid_encrypted) if league.espn_swid_encrypted else None
-    return ESPNCookies(espn_s2=s2, swid=swid) if (s2 or swid) else None
-
-
-async def _roster_ownership(league: League, db: AsyncSession) -> Dict[str, str]:
-    """Map every rostered player in the league to the team that owns him.
-
-    Keys are normalized names so they match against the athlete tags ESPN puts
-    on its articles. Failures per-team are swallowed: a partial map still makes
-    the feed more useful than no map.
-    """
-    teams = (await db.execute(select(Team).where(Team.league_id == league.id))).scalars().all()
-    if not teams:
-        return {}
-
-    owned: Dict[str, str] = {}
-
-    async def load(team: Team) -> None:
-        try:
-            if league.platform == PlatformType.SLEEPER and league.sleeper_league_id:
-                data = await SleeperService().get_team_roster(
-                    league.sleeper_league_id, team.sleeper_roster_id
-                )
-            elif league.espn_league_id and team.espn_team_id is not None:
-                data = await ESPNService().get_team_roster(
-                    str(league.espn_league_id), team.espn_team_id, cookies=_espn_cookies(league)
-                )
-            else:
-                return
-        except Exception as e:  # a down platform must not take the feed with it
-            logger.warning("Roster load failed for news filter", team=team.name, error=str(e))
-            return
-
-        for player in (data or {}).get("roster", []) or []:
-            name = player.get("full_name")
-            if name:
-                owned[news_service._name_key(name)] = team.name
-
-    await asyncio.gather(*(load(t) for t in teams))
-    return owned
 
 
 @router.get("/wire")
@@ -118,11 +60,11 @@ async def league_news(
     db: AsyncSession = Depends(get_database),
 ):
     """The wire, annotated with who in your league owns the player involved."""
-    league = await _league_or_404(league_id, current_user, db)
+    league = await league_context.load_league(league_id, current_user, db)
 
     articles, ownership = await asyncio.gather(
         news_service.fetch_news(limit=limit),
-        _roster_ownership(league, db),
+        league_context.roster_ownership(league, db),
     )
 
     annotated = []
@@ -153,11 +95,11 @@ async def league_digest(
     are gathered first and handed to the model, which is only allowed to write
     about what it was given.
     """
-    league = await _league_or_404(league_id, current_user, db)
+    league = await league_context.load_league(league_id, current_user, db)
 
     articles, ownership = await asyncio.gather(
         news_service.fetch_news(limit=40),
-        _roster_ownership(league, db),
+        league_context.roster_ownership(league, db),
     )
 
     relevant = []

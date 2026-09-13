@@ -9,6 +9,7 @@ import {
   NewspaperIcon,
   ChatBubbleLeftRightIcon,
   RssIcon,
+  SignalIcon,
 } from '@heroicons/react/24/outline';
 
 export interface NavItem {
@@ -29,8 +30,10 @@ export const PRIMARY_NAV: NavItem[] = [
 export const leagueNav = (leagueId: string): NavItem[] => [
   { label: 'Overview', to: `/leagues/${leagueId}`, icon: Squares2X2Icon, end: true },
   { label: 'My Roster', to: `/leagues/${leagueId}/roster`, icon: UserGroupIcon },
-  // The board and the wire sit high on purpose: they are the two reasons to
-  // open the app on a day when you are not setting a lineup.
+  // Order is the mobile tab bar's order, and it only shows four. Game Day is
+  // the most valuable screen in the app on a Sunday; the board is the reason to
+  // open it the rest of the week. The wire is a weekday read and sits behind More.
+  { label: 'Game Day', to: `/leagues/${leagueId}/gameday`, icon: SignalIcon },
   { label: 'Board', to: `/leagues/${leagueId}/board`, icon: ChatBubbleLeftRightIcon },
   { label: 'News', to: `/leagues/${leagueId}/news`, icon: RssIcon },
   { label: 'Players', to: `/leagues/${leagueId}/players`, icon: MagnifyingGlassIcon },

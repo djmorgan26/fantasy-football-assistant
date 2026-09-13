@@ -12,6 +12,7 @@ them, what happened between them, and how the group talks — and spends that
 knowledge on the things a national site structurally cannot do:
 
 - a news wire filtered to players *somebody in your league* rosters, saying whose problem each story is
+- a Sunday view that ranks NFL games by how much each one swings *your* matchup, because it knows both starting lineups
 - an assistant that answers about the league, not just your team
 - generated content that sounds like your league, because it learns from your league
 
@@ -82,6 +83,14 @@ Design decisions that carry weight:
 - **`allow_training` on every post.** One boolean now; an unpleasant retrofit after a season.
 
 Constants live in `services/board_service.py` — threshold, weights, corpus size.
+
+## Shared league helpers
+
+`services/league_context.py` owns the operations every league-scoped router
+needs: load the league and prove the caller owns it, decrypt ESPN cookies, find
+the caller's team, pull a roster, resolve this week's opponent. Platform
+branching (ESPN vs Sleeper) is resolved there once. Routers that skip it end up
+re-implementing the ownership check, which is the one thing that must not vary.
 
 ## External services, and what happens when they are down
 

@@ -24,6 +24,12 @@ lands on the board too and is rated the same way, so a flat recap gets rated
 flat and drops back out. This is the loop the rest of the app is arranged
 around; see [Architecture](docs/ARCHITECTURE.md#the-voice-loop).
 
+**Game Day.** On a Sunday, the only question is *who do I still have left, and
+who do they still have?* This maps both starting lineups onto the live NFL
+slate and ranks every game by how much it swings **your** matchup — so the game
+where you have two starters against their quarterback sits at the top, not
+whichever kicked off first.
+
 **The Commissioner.** A league-aware assistant, docked on every league page. It
 answers from standings, your roster, the week's results and live waiver
 trends — in your league's voice, not a product's.
@@ -62,6 +68,7 @@ Groq for generation, with deterministic fallbacks everywhere
 | Board | `/api/board/{id}/posts` · `.../reactions` · `.../comments` · `.../voice-samples` |
 | News | `/api/news/league/{id}` · `/api/news/digest/{id}` · `/api/news/trending` · `/api/news/wire` |
 | Assistant | `/api/assistant/{id}/chat` · `.../suggestions` · `.../primer` |
+| Game day | `/api/gameday/{id}` |
 | Health | `/health/live` · `/health/ready` |
 
 Interactive docs at `/docs` when running locally.
@@ -69,8 +76,8 @@ Interactive docs at `/docs` when running locally.
 ## Tests
 
 ```bash
-cd backend  && ./venv/bin/python -m pytest tests/ -q   # 239 tests, 84% covered
-cd frontend && npx vitest run                          # 192 tests
+cd backend  && ./venv/bin/python -m pytest tests/ -q   # 265 tests, 84% covered
+cd frontend && npx vitest run                          # 213 tests
 ```
 
 Both have coverage gates that fail the build. [docs/TESTING.md](docs/TESTING.md)

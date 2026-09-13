@@ -606,3 +606,60 @@ export interface WeeklyPrimer {
   best_swap?: PrimerSwap | null;
   trash_talk?: string | null;
 }
+
+// ── Game day ───────────────────────────────────────────────────────────────
+/** pre = not kicked off · in = on the field · post = done · null = no game */
+export type GameState = 'pre' | 'in' | 'post' | null;
+
+export interface GamedayPlayer {
+  player_id: number;
+  name: string;
+  position: string;
+  slot: string;
+  team: string | null;
+  projected: number;
+  points: number;
+  injury_status?: string | null;
+  game_state: GameState;
+}
+
+export interface GamedaySummary {
+  playing_now: number;
+  yet_to_play: number;
+  finished: number;
+  points: number;
+  /** Projected points still to come, on the field or not yet kicked off. */
+  points_in_play: number;
+  projected_total: number;
+}
+
+export interface GamedaySide {
+  name: string | null;
+  summary: GamedaySummary;
+  players: GamedayPlayer[];
+}
+
+export interface GamedayGame {
+  id: string;
+  state: Exclude<GameState, null>;
+  detail: string;
+  home: ScoreboardSide;
+  away: ScoreboardSide;
+  /** Your starters in this game. */
+  mine: GamedayPlayer[];
+  /** Your opponent's starters in this game. */
+  theirs: GamedayPlayer[];
+  /** One line on why this game matters to your matchup. */
+  why: string;
+  /** How much this game decides the matchup; the feed is sorted by it. */
+  leverage: number;
+}
+
+export interface GameDay {
+  week: number;
+  my_team: GamedaySide;
+  opponent: GamedaySide | null;
+  games: GamedayGame[];
+  /** Total games on the NFL slate, including ones nobody here is in. */
+  slate_size: number;
+}

@@ -5,8 +5,8 @@ Two suites, both with coverage gates that fail the build.
 | | Backend | Frontend |
 | --- | --- | --- |
 | Runner | pytest + pytest-asyncio | vitest + Testing Library |
-| Tests | 239 | 192 |
-| Coverage | 84% (gate: 80%) | 34% statements, 72% branches (gate: 32 / 68) |
+| Tests | 265 | 213 |
+| Coverage | 84% (gate: 80%) | 36% statements, 75% branches (gate: 35 / 73) |
 
 ## Running
 
@@ -75,7 +75,7 @@ them as coverage grows.
 
 The frontend statement number is low because a large share of the tree is page
 and hook wiring inherited from before the suite existed. The branch figure
-(72%) is the more meaningful one: the logic that *is* covered is covered
+(75%) is the more meaningful one: the logic that *is* covered is covered
 through its cases rather than executed once. Untested areas, in rough priority
 order: `App.tsx` routing, the older pages (Dashboard, Leagues, Profile, Trade
 Analyzer, Player Search), and the thin react-query hooks around them.

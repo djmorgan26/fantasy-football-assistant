@@ -408,7 +408,7 @@ def espn_team_roster(team_id: int, week: Optional[int]) -> Dict[str, Any]:
             "is_starter": not is_bench,
             "on_injured_reserve": False,
             "pro_team_id": 0,
-            "pro_team_abbr": meta.get("pro_team_abbr", "FA"),
+            "pro_team_abbr": meta.get("team") or "FA",
             "eligible_slots": [],
             "eligible_slot_names": [meta["position"]],
             "injury_status": "ACTIVE",
@@ -721,3 +721,64 @@ def seed_humor_examples() -> List[Dict[str, Any]]:
             "lifting. See you all next week, losers."
         ),
     }]
+
+
+# ---------------------------------------------------------------- scoreboard
+
+# A Sunday slate over the 32 real NFL teams, deterministic so the demo looks the
+# same every time. Deliberately mixed: some games finished, some in progress,
+# some yet to kick off, because the game-day view has to render all three and a
+# slate that is entirely one state hides two thirds of it.
+_MOCK_SLATE = [
+    # (away, home, away_score, home_score, state, detail)
+    ("BUF", "MIA", 24, 17, "post", "Final"),
+    ("DAL", "PHI", 10, 31, "post", "Final"),
+    ("NYG", "WAS", 21, 20, "in", "Q4 2:41"),
+    ("NYJ", "NE", 13, 9, "in", "Q3 8:15"),
+    ("SF", "SEA", 17, 14, "in", "Q3 1:02"),
+    ("KC", "LV", 28, 7, "in", "Q4 11:30"),
+    ("GB", "MIN", 14, 14, "in", "Q2 0:38"),
+    ("DET", "CHI", 3, 7, "in", "Q1 4:55"),
+    ("HOU", "IND", 0, 0, "pre", "Sun 4:05 PM ET"),
+    ("JAX", "TEN", 0, 0, "pre", "Sun 4:05 PM ET"),
+    ("LAC", "DEN", 0, 0, "pre", "Sun 4:25 PM ET"),
+    ("LAR", "ARI", 0, 0, "pre", "Sun 4:25 PM ET"),
+    ("TB", "NO", 0, 0, "pre", "Sun 4:25 PM ET"),
+    ("ATL", "CAR", 0, 0, "pre", "Sun 4:25 PM ET"),
+    ("BAL", "PIT", 0, 0, "pre", "Sun 8:20 PM ET"),
+    ("CIN", "CLE", 0, 0, "pre", "Mon 8:15 PM ET"),
+]
+
+_TEAM_NAMES = {
+    "ARI": "Cardinals", "ATL": "Falcons", "BAL": "Ravens", "BUF": "Bills",
+    "CAR": "Panthers", "CHI": "Bears", "CIN": "Bengals", "CLE": "Browns",
+    "DAL": "Cowboys", "DEN": "Broncos", "DET": "Lions", "GB": "Packers",
+    "HOU": "Texans", "IND": "Colts", "JAX": "Jaguars", "KC": "Chiefs",
+    "LAC": "Chargers", "LAR": "Rams", "LV": "Raiders", "MIA": "Dolphins",
+    "MIN": "Vikings", "NE": "Patriots", "NO": "Saints", "NYG": "Giants",
+    "NYJ": "Jets", "PHI": "Eagles", "PIT": "Steelers", "SEA": "Seahawks",
+    "SF": "49ers", "TB": "Buccaneers", "TEN": "Titans", "WAS": "Commanders",
+}
+
+
+def nfl_scoreboard() -> List[Dict[str, Any]]:
+    """The canned slate, in the shape news_service.fetch_scoreboard returns."""
+    def side(abbr: str, score: int) -> Dict[str, Any]:
+        return {
+            "abbr": abbr,
+            "name": _TEAM_NAMES.get(abbr, abbr),
+            "logo": f"https://a.espncdn.com/i/teamlogos/nfl/500/{abbr.lower()}.png",
+            "score": str(score),
+        }
+
+    return [
+        {
+            "id": f"mock-{i}",
+            "state": state,
+            "detail": detail,
+            "home": side(home, home_score),
+            "away": side(away, away_score),
+        }
+        for i, (away, home, away_score, home_score, state, detail)
+        in enumerate(_MOCK_SLATE, start=1)
+    ]

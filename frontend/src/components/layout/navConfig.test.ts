@@ -35,12 +35,13 @@ describe('leagueNav', () => {
     expect(overview?.to).toBe('/leagues/42');
   });
 
-  it('puts the board and the wire in the first four, where the tab bar shows them', () => {
-    // MobileTabBar slices the first four; these are the two reasons to open
-    // the app on a day you are not setting a lineup, so they have to survive.
+  it('spends the tab bar\'s four slots on the screens people open', () => {
+    // MobileTabBar slices the first four. Game Day is the reason to open the
+    // app on a Sunday and the Board is the reason the rest of the week; the
+    // wire is a weekday read and deliberately sits behind More.
     const firstFour = leagueNav('42').slice(0, 4).map((i) => i.label);
-    expect(firstFour).toContain('Board');
-    expect(firstFour).toContain('News');
+    expect(firstFour).toEqual(['Overview', 'My Roster', 'Game Day', 'Board']);
+    expect(leagueNav('42').map((i) => i.label)).toContain('News');
   });
 
   it('gives every item an icon and a unique route', () => {

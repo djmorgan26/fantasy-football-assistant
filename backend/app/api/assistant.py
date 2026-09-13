@@ -23,12 +23,9 @@ from app.models.board import BoardPost
 from app.models.league import League, PlatformType
 from app.models.team import Team
 from app.models.user import User
-from app.services import board_service, news_service
+from app.services import board_service, league_context, news_service
 from app.services.content_service import DEFAULT_VOICE, content_service
-from app.services.espn_service import ESPNCookies, ESPNService
 from app.services.llm_service import llm_service
-from app.services.sleeper_service import SleeperService
-from app.utils.encryption import ESPNCredentialManager
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/assistant", tags=["assistant"])
@@ -55,45 +52,8 @@ class ChatResponse(BaseModel):
     grounded_on: List[str] = []
 
 
-async def _league_or_404(league_id: int, user: User, db: AsyncSession) -> League:
-    result = await db.execute(
-        select(League).where(League.id == league_id, League.owner_user_id == user.id)
-    )
-    league = result.scalar_one_or_none()
-    if not league:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="League not found")
-    return league
 
 
-def _espn_cookies(league: League) -> Optional[ESPNCookies]:
-    s2 = ESPNCredentialManager.decrypt_espn_s2(league.espn_s2_encrypted) if league.espn_s2_encrypted else None
-    swid = ESPNCredentialManager.decrypt_espn_swid(league.espn_swid_encrypted) if league.espn_swid_encrypted else None
-    return ESPNCookies(espn_s2=s2, swid=swid) if (s2 or swid) else None
-
-
-async def _my_team(league: League, user: User, db: AsyncSession) -> Optional[Team]:
-    result = await db.execute(
-        select(Team).where(Team.league_id == league.id, Team.owner_user_id == user.id)
-    )
-    return result.scalar_one_or_none()
-
-
-async def _roster_for(league: League, team: Team) -> List[dict]:
-    try:
-        if league.platform == PlatformType.SLEEPER and league.sleeper_league_id:
-            data = await SleeperService().get_team_roster(
-                league.sleeper_league_id, team.sleeper_roster_id
-            )
-        elif league.espn_league_id and team.espn_team_id is not None:
-            data = await ESPNService().get_team_roster(
-                str(league.espn_league_id), team.espn_team_id, cookies=_espn_cookies(league)
-            )
-        else:
-            return []
-        return (data or {}).get("roster", []) or []
-    except Exception as e:
-        logger.warning("Roster load failed for assistant", error=str(e))
-        return []
 
 
 def _roster_lines(roster: List[dict]) -> str:
@@ -137,13 +97,13 @@ async def _build_context(
         blocks.append(f"STANDINGS:\n{standings}")
         sources.append("standings")
 
-    team = await _my_team(league, user, db)
+    team = await league_context.my_team(league, user, db)
     if team:
         blocks.append(
             f"THE PERSON ASKING owns '{team.name}' "
             f"({team.wins}-{team.losses}, {team.points_for:.1f} PF)."
         )
-        roster = await _roster_for(league, team)
+        roster = await league_context.roster_for(league, team)
         if roster:
             starters = [p for p in roster if p.get("is_starter")]
             bench = [p for p in roster if not p.get("is_starter")]
@@ -179,7 +139,7 @@ async def _narrative(league: League) -> Optional[dict]:
         return await content_service.get_weekly_narrative(league.sleeper_league_id, week)
     if league.espn_league_id:
         return await content_service.get_weekly_narrative_espn(
-            str(league.espn_league_id), week, _espn_cookies(league)
+            str(league.espn_league_id), week, league_context.espn_cookies(league)
         )
     return None
 
@@ -230,12 +190,12 @@ async def prompt_suggestions(
     Generic chips ("ask me anything") get ignored. Chips naming your real
     opponent and a real player on your bench get tapped.
     """
-    league = await _league_or_404(league_id, current_user, db)
+    league = await league_context.load_league(league_id, current_user, db)
     chips: List[str] = ["Who should I start this week?"]
 
-    team = await _my_team(league, current_user, db)
+    team = await league_context.my_team(league, current_user, db)
     if team:
-        roster = await _roster_for(league, team)
+        roster = await league_context.roster_for(league, team)
         bench = [p for p in roster if not p.get("is_starter")]
         if bench:
             best_bench = max(bench, key=lambda p: p.get("projected_points") or 0)
@@ -264,7 +224,7 @@ async def chat(
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_database),
 ):
-    league = await _league_or_404(league_id, current_user, db)
+    league = await league_context.load_league(league_id, current_user, db)
 
     if not llm_service.is_available():
         return {"reply": UNAVAILABLE, "generated_by": "unavailable", "grounded_on": []}
@@ -312,48 +272,6 @@ async def chat(
     return {"reply": reply.strip(), "generated_by": generated_by, "grounded_on": sources}
 
 
-async def _opponent_this_week(
-    league: League, team: Team, week: int, db: AsyncSession
-) -> Optional[str]:
-    """Who this team plays this week, by name.
-
-    The weekly narrative only describes games that have already been played, so
-    it is no use before kickoff. The platform's own matchup feed carries the
-    pairing for the current week, keyed by team id, which the DB can resolve to
-    a name.
-    """
-    try:
-        if league.platform == PlatformType.SLEEPER and league.sleeper_league_id:
-            games = await SleeperService().get_matchups(league.sleeper_league_id, week)
-            mine, key_home, key_away = team.sleeper_roster_id, "home_roster_id", "away_roster_id"
-        elif league.espn_league_id and team.espn_team_id is not None:
-            games = await ESPNService().get_matchups(
-                str(league.espn_league_id), week=week, cookies=_espn_cookies(league)
-            )
-            mine, key_home, key_away = team.espn_team_id, "home_team_id", "away_team_id"
-        else:
-            return None
-    except Exception as e:
-        logger.warning("Could not load this week's matchup", error=str(e))
-        return None
-
-    for game in games or []:
-        home, away = game.get(key_home), game.get(key_away)
-        if home is None or away is None:
-            continue          # bye week
-        if mine == home:
-            return await _team_name(db, league.id, away, key_away)
-        if mine == away:
-            return await _team_name(db, league.id, home, key_home)
-    return None
-
-
-async def _team_name(db: AsyncSession, league_id: int, platform_id: int, key: str) -> Optional[str]:
-    column = Team.sleeper_roster_id if "roster" in key else Team.espn_team_id
-    row = (await db.execute(
-        select(Team).where(Team.league_id == league_id, column == platform_id)
-    )).scalar_one_or_none()
-    return row.name if row else None
 
 
 @router.get("/{league_id}/primer")
@@ -367,13 +285,13 @@ async def weekly_primer(
     Everything here is computed, not generated — the one AI touch is the closing
     line of trash talk, and the card reads fine without it.
     """
-    league = await _league_or_404(league_id, current_user, db)
-    team = await _my_team(league, current_user, db)
+    league = await league_context.load_league(league_id, current_user, db)
+    team = await league_context.my_team(league, current_user, db)
     if not team:
         raise HTTPException(status_code=400, detail="Claim your team first to get a primer.")
 
     week = league.current_week or 1
-    roster = await _roster_for(league, team)
+    roster = await league_context.roster_for(league, team)
 
     starters = [p for p in roster if p.get("is_starter")]
     bench = [p for p in roster if not p.get("is_starter") and not p.get("on_injured_reserve")]
@@ -418,7 +336,8 @@ async def weekly_primer(
 
     projected = sum(p.get("projected_points") or 0 for p in starters)
 
-    opponent = await _opponent_this_week(league, team, week, db)
+    opponent_team = await league_context.opponent_this_week(league, team, week, db)
+    opponent = opponent_team.name if opponent_team else None
 
     trash_talk = None
     if llm_service.is_available() and opponent:

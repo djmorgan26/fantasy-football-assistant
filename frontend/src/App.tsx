@@ -20,6 +20,7 @@ import { DraftRoomPage } from '@/pages/DraftRoomPage';
 import { PressBoxPage } from '@/pages/PressBoxPage';
 import { BoardPage } from '@/pages/BoardPage';
 import { NewsPage } from '@/pages/NewsPage';
+import { GameDayPage } from '@/pages/GameDayPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import './index.css';
 
@@ -155,6 +156,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <BoardPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="leagues/:leagueId/gameday"
+                element={
+                  <ProtectedRoute>
+                    <GameDayPage />
                   </ProtectedRoute>
                 }
               />

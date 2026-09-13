@@ -296,7 +296,8 @@ async def fetch_scoreboard() -> List[dict]:
         return cached.value
 
     if settings.mock_mode:
-        return cached.put([])
+        from app.services import mock_data
+        return cached.put(mock_data.nfl_scoreboard())
 
     try:
         async with httpx.AsyncClient(timeout=20) as client:
