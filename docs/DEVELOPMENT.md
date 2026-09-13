@@ -88,14 +88,26 @@ See [Testing](TESTING.md) for how the suite is organised.
 
 ## Database changes
 
-The app calls `create_all` on startup, so new tables appear automatically in
-local SQLite. For Postgres, add an Alembic migration as well:
+The app calls `create_all` on startup, so new tables appear automatically. For
+Postgres, add an Alembic revision as well so the schema has a reproducible
+history:
 
 ```bash
 cd backend
-./venv/bin/alembic revision -m "describe the change"
-./venv/bin/alembic upgrade head
+DATABASE_URL=... ./venv/bin/alembic revision --autogenerate -m "describe the change"
+DATABASE_URL=... ./venv/bin/alembic upgrade head
 ```
+
+Alembic reads `DATABASE_URL` from the environment — the same source the app
+reads. The `sqlalchemy.url` in `alembic.ini` is an unused placeholder.
+
+> **On a database that already has the schema, run `alembic stamp head`, not
+> `upgrade head`.** Every existing deployment was built by `create_all`, so an
+> upgrade would try to create tables that already exist. `stamp` records the
+> baseline as applied without touching anything.
+
+To check a revision against the models, autogenerate a second one: if it detects
+nothing, the migration and the models agree.
 
 Supabase-specific DDL (row-level security, Realtime, Storage buckets) lives in
 `supabase/migrations/` and is applied separately — Alembic does not manage it.

@@ -131,7 +131,8 @@ git push origin <branch>:main
 
 Two mechanisms, deliberately separate:
 
-- **Alembic** (`backend/alembic/versions/`) — tables and columns. The app also calls `create_all` on startup, so new tables appear without a migration; the migration exists so Postgres has a reproducible history.
+- **Alembic** (`backend/alembic/versions/`) — tables and columns. The app also calls `create_all` on startup, so new tables appear without a migration; the revisions exist so Postgres has a reproducible history. Alembic resolves its URL from `DATABASE_URL`, not from `alembic.ini`.
+  - **First run against an existing database: `alembic stamp head`, once.** Production's schema was built by `create_all`, so `upgrade head` would try to create tables that already exist.
 - **Supabase SQL** (`supabase/migrations/`) — row-level security, Realtime publications, Storage buckets. Alembic does not manage these. They are written idempotently, so re-running after `create_all` has already made the tables is safe.
 
 ## When something is wrong

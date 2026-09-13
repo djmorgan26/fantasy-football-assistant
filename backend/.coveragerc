@@ -11,8 +11,6 @@ concurrency = greenlet,thread
 source = app
 branch = false
 omit =
-    app/demo_main.py
-    app/working_main.py
     */__pycache__/*
 
 [report]

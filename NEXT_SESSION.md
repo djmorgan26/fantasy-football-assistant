@@ -23,10 +23,15 @@ session did not have.
    policies cast `auth.uid()` to one.
 2. **Apply that migration.** It is idempotent, so it is safe even though the
    app's `create_all` will already have made the tables on first boot.
-3. **Verify against production data**, not mock: post to the board, react,
+3. **Stamp Alembic, once:** `DATABASE_URL=<prod> alembic stamp head`. The
+   revision chain was broken until 2026-09-13 (003 pointed at a nonexistent
+   002), so production's schema came entirely from `create_all` and Alembic has
+   no record of it. `upgrade head` would try to create tables that exist;
+   `stamp` just records the baseline.
+4. **Verify against production data**, not mock: post to the board, react,
    confirm a `voice_samples` row appears, generate a recap, check it reads in
    the league's voice.
-4. **Check the deploy** with [the post-deploy list](docs/OPERATIONS.md#after-a-deploy).
+5. **Check the deploy** with [the post-deploy list](docs/OPERATIONS.md#after-a-deploy).
    In particular confirm `LLM_MODEL` is a model Groq still serves —
    `openai/gpt-oss-120b` was verified working on 2026-09-12.
 
