@@ -58,10 +58,15 @@ async def live() -> Dict[str, Any]:
 
 async def _check_database() -> Dict[str, Any]:
     started = time.perf_counter()
+
+    async def probe() -> None:
+        async with SessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+
     try:
-        async with asyncio.timeout(DB_CHECK_TIMEOUT_SECONDS):
-            async with SessionLocal() as session:
-                await session.execute(text("SELECT 1"))
+        # wait_for rather than asyncio.timeout: the latter is 3.11+, and the
+        # serverless runtime's Python version is not pinned anywhere.
+        await asyncio.wait_for(probe(), timeout=DB_CHECK_TIMEOUT_SECONDS)
         return {"status": "ok", "latency_ms": round((time.perf_counter() - started) * 1000, 2)}
     except asyncio.TimeoutError:
         return {"status": "timeout", "timeout_seconds": DB_CHECK_TIMEOUT_SECONDS}
