@@ -9,6 +9,7 @@ each position.
 """
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime, timedelta
+import asyncio
 import json
 import structlog
 
@@ -73,37 +74,81 @@ class DraftService:
         # only depends on scoring/roster/team inputs, all static within a draft.
         self._board_cache: Dict[str, Tuple[Dict[str, Any], datetime]] = {}
         self._board_ttl = timedelta(minutes=30)
+        # One fetch at a time per payload. See _lock_for.
+        self._locks: Dict[str, Tuple[Any, asyncio.Lock]] = {}
 
     # ---------------------------------------------------------------- helpers
+
+    def _lock_for(self, name: str) -> asyncio.Lock:
+        """A lock for one cached payload, bound to the running loop.
+
+        This service is a module-level singleton, so it outlives any one event
+        loop: a reused serverless container can hand it a fresh loop on the next
+        invocation, and a lock left over from a dead loop would raise rather
+        than serialize. Rebuilding it whenever the loop changes keeps that safe.
+        """
+        loop = asyncio.get_running_loop()
+        existing = self._locks.get(name)
+        if existing is None or existing[0] is not loop:
+            lock = asyncio.Lock()
+            self._locks[name] = (loop, lock)
+            return lock
+        return existing[1]
+
+    def _players_if_fresh(self) -> Optional[Dict[str, Any]]:
+        if self._players_cache is None or self._players_cached_at is None:
+            return None
+        if datetime.utcnow() - self._players_cached_at >= self._players_ttl:
+            return None
+        return self._players_cache
 
     async def get_players_cached(self) -> Dict[str, Any]:
         """Public accessor for the cached all-players payload (shared by other services)."""
         return await self._get_players()
 
     async def _get_players(self) -> Dict[str, Any]:
-        """Get all NFL players, cached in memory for a few hours."""
-        now = datetime.utcnow()
-        if (
-            self._players_cache is not None
-            and self._players_cached_at is not None
-            and now - self._players_cached_at < self._players_ttl
-        ):
-            return self._players_cache
+        """Every NFL player, fetched at most once per TTL and once at a time.
 
-        players = await self.sleeper.get_all_players()
-        self._players_cache = players
-        self._players_cached_at = now
-        return players
+        The payload is ~10MB. Callers fan out: building the league-wide
+        ownership map asks for a roster per team, and all twelve start together,
+        so a plain read-then-fetch cache has every one of them miss the empty
+        cache and fetch their own copy. That made one news request pull ~10MB
+        twelve times and take 6.5 seconds. The lock means the first caller
+        fetches and the other eleven wait for that result.
+        """
+        fresh = self._players_if_fresh()
+        if fresh is not None:
+            return fresh
+
+        async with self._lock_for("players"):
+            # Whoever held the lock has almost certainly just filled the cache.
+            fresh = self._players_if_fresh()
+            if fresh is not None:
+                return fresh
+
+            players = await self.sleeper.get_all_players()
+            self._players_cache = players
+            self._players_cached_at = datetime.utcnow()
+            return players
 
     async def _get_projections(self, season: int) -> Dict[str, Any]:
-        """Get season projections, cached in memory (static during a draft)."""
-        now = datetime.utcnow()
+        """Season projections, cached in memory and fetched one at a time.
+
+        Same fan-out as _get_players: twelve concurrent roster builds each want
+        the projections for the season.
+        """
         cached = self._proj_cache.get(season)
-        if cached and now - cached[1] < self._proj_ttl:
+        if cached and datetime.utcnow() - cached[1] < self._proj_ttl:
             return cached[0]
-        proj = await self.sleeper.get_player_projections(season)
-        self._proj_cache[season] = (proj, now)
-        return proj
+
+        async with self._lock_for(f"projections:{season}"):
+            cached = self._proj_cache.get(season)
+            if cached and datetime.utcnow() - cached[1] < self._proj_ttl:
+                return cached[0]
+
+            proj = await self.sleeper.get_player_projections(season)
+            self._proj_cache[season] = (proj, datetime.utcnow())
+            return proj
 
     @staticmethod
     def _resolve_scoring_weights(
