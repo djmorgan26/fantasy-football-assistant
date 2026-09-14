@@ -13,11 +13,11 @@
 
 -- ---------------------------------------------------------------- posts ----
 create table if not exists public.board_posts (
-    id              bigint generated always as identity primary key,
-    league_id       bigint      not null references public.leagues(id) on delete cascade,
+    id              serial primary key,
+    league_id       integer      not null references public.leagues(id) on delete cascade,
     -- NULL author means the AI wrote it. Those posts are rated like any other;
     -- that rating is the only training signal the voice profile ever gets.
-    author_user_id  bigint      references public.users(id) on delete set null,
+    author_user_id  integer      references public.users(id) on delete set null,
     kind            varchar(32) not null default 'post',
     title           varchar(300),
     body            text        not null,
@@ -36,10 +36,10 @@ create index if not exists ix_board_posts_author
 
 -- ------------------------------------------------------------- comments ----
 create table if not exists public.board_comments (
-    id              bigint generated always as identity primary key,
-    post_id         bigint      not null references public.board_posts(id) on delete cascade,
-    parent_id       bigint      references public.board_comments(id) on delete cascade,
-    author_user_id  bigint      not null references public.users(id) on delete cascade,
+    id              serial primary key,
+    post_id         integer      not null references public.board_posts(id) on delete cascade,
+    parent_id       integer      references public.board_comments(id) on delete cascade,
+    author_user_id  integer      not null references public.users(id) on delete cascade,
     body            text        not null,
     created_at      timestamptz not null default now()
 );
@@ -51,10 +51,10 @@ create index if not exists ix_board_comments_post
 -- Stored as varchar rather than a native enum: adding a sixth reaction should
 -- be a code change, not a migration, and SQLite gets identical DDL locally.
 create table if not exists public.board_reactions (
-    id          bigint generated always as identity primary key,
-    post_id     bigint      references public.board_posts(id) on delete cascade,
-    comment_id  bigint      references public.board_comments(id) on delete cascade,
-    user_id     bigint      not null references public.users(id) on delete cascade,
+    id          serial primary key,
+    post_id     integer      references public.board_posts(id) on delete cascade,
+    comment_id  integer      references public.board_comments(id) on delete cascade,
+    user_id     integer      not null references public.users(id) on delete cascade,
     reaction    varchar(16) not null,
     created_at  timestamptz not null default now(),
 
@@ -75,10 +75,10 @@ create index if not exists ix_board_reactions_comment on public.board_reactions 
 -- the posts this league rated highest. Replaces the hand-typed humor_examples
 -- on league_content_profiles, which nobody ever filled in.
 create table if not exists public.voice_samples (
-    id              bigint generated always as identity primary key,
-    league_id       bigint      not null references public.leagues(id) on delete cascade,
-    source_post_id  bigint      references public.board_posts(id) on delete set null,
-    author_user_id  bigint      references public.users(id) on delete set null,
+    id              serial primary key,
+    league_id       integer      not null references public.leagues(id) on delete cascade,
+    source_post_id  integer      references public.board_posts(id) on delete set null,
+    author_user_id  integer      references public.users(id) on delete set null,
     title           varchar(300),
     text            text        not null,
     score           integer     not null default 0,
@@ -94,7 +94,8 @@ create index if not exists ix_voice_samples_league_score
 -- Weighted reactions plus comment volume. A reply is the strongest evidence a
 -- post landed, so it counts double; a cold take is the only thing that
 -- subtracts, and it is what keeps a flat recap out of the corpus.
-create or replace view public.board_post_scores as
+create or replace view public.board_post_scores
+with (security_invoker = on) as
 select
     p.id,
     p.league_id,
@@ -121,7 +122,7 @@ alter table public.board_comments  enable row level security;
 alter table public.board_reactions enable row level security;
 alter table public.voice_samples   enable row level security;
 
-create or replace function public.is_league_member(target_league_id bigint)
+create or replace function public.is_league_member(target_league_id integer)
 returns boolean
 language sql
 stable
@@ -131,12 +132,12 @@ as $$
     select exists (
         select 1 from public.leagues l
         where l.id = target_league_id
-          and l.owner_user_id = auth.uid()::text::bigint
+          and l.owner_user_id = auth.uid()::text::integer
     )
     or exists (
         select 1 from public.teams t
         where t.league_id = target_league_id
-          and t.owner_user_id = auth.uid()::text::bigint
+          and t.owner_user_id = auth.uid()::text::integer
     );
 $$;
 
@@ -152,14 +153,14 @@ drop policy if exists board_posts_author_update on public.board_posts;
 create policy board_posts_author_update on public.board_posts
     for update using (
         public.is_league_member(league_id)
-        and (author_user_id = auth.uid()::text::bigint or author_user_id is null)
+        and (author_user_id = auth.uid()::text::integer or author_user_id is null)
     );
 
 drop policy if exists board_posts_author_delete on public.board_posts;
 create policy board_posts_author_delete on public.board_posts
     for delete using (
         public.is_league_member(league_id)
-        and (author_user_id = auth.uid()::text::bigint or author_user_id is null)
+        and (author_user_id = auth.uid()::text::integer or author_user_id is null)
     );
 
 drop policy if exists board_comments_member_read on public.board_comments;
@@ -172,7 +173,7 @@ create policy board_comments_member_read on public.board_comments
 drop policy if exists board_comments_member_write on public.board_comments;
 create policy board_comments_member_write on public.board_comments
     for insert with check (
-        author_user_id = auth.uid()::text::bigint
+        author_user_id = auth.uid()::text::integer
         and exists (
             select 1 from public.board_posts p
             where p.id = post_id and public.is_league_member(p.league_id)
@@ -181,7 +182,7 @@ create policy board_comments_member_write on public.board_comments
 
 drop policy if exists board_comments_author_delete on public.board_comments;
 create policy board_comments_author_delete on public.board_comments
-    for delete using (author_user_id = auth.uid()::text::bigint);
+    for delete using (author_user_id = auth.uid()::text::integer);
 
 drop policy if exists board_reactions_member_read on public.board_reactions;
 create policy board_reactions_member_read on public.board_reactions
@@ -192,11 +193,11 @@ create policy board_reactions_member_read on public.board_reactions
 
 drop policy if exists board_reactions_own_write on public.board_reactions;
 create policy board_reactions_own_write on public.board_reactions
-    for insert with check (user_id = auth.uid()::text::bigint);
+    for insert with check (user_id = auth.uid()::text::integer);
 
 drop policy if exists board_reactions_own_delete on public.board_reactions;
 create policy board_reactions_own_delete on public.board_reactions
-    for delete using (user_id = auth.uid()::text::bigint);
+    for delete using (user_id = auth.uid()::text::integer);
 
 -- The corpus is derived data: readable by the league, written only by the API.
 drop policy if exists voice_samples_member_read on public.voice_samples;
@@ -222,3 +223,14 @@ end $$;
 insert into storage.buckets (id, name, public)
 values ('board-media', 'board-media', true)
 on conflict (id) do nothing;
+
+-- ------------------------------------------------------- function grants ----
+-- Postgres grants EXECUTE to PUBLIC on every new function, so `anon` picks it
+-- up by inheritance and revoking from `anon` alone is a no-op. Drop the PUBLIC
+-- grant and hand it back only to the roles that need it. `authenticated` must
+-- keep it: the policies above call this as the querying user, and without
+-- EXECUTE every board SELECT fails with "permission denied".
+revoke execute on function public.is_league_member(integer) from public;
+revoke execute on function public.is_league_member(integer) from anon;
+grant  execute on function public.is_league_member(integer) to authenticated;
+grant  execute on function public.is_league_member(integer) to service_role;
