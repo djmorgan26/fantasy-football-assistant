@@ -1,6 +1,6 @@
 """
 The things every league-scoped endpoint needs: load the league (and prove the
-caller owns it), decrypt its ESPN cookies, find the caller's team, pull a
+caller belongs to it), decrypt its ESPN cookies, find the caller's team, pull a
 roster, and work out who they play this week.
 
 These were copy-pasted into api/news.py and api/assistant.py before a third
@@ -23,18 +23,19 @@ from app.models.user import User
 from app.services.espn_service import ESPNCookies, ESPNService
 from app.services.sleeper_service import SleeperService
 from app.utils.encryption import ESPNCredentialManager
+from app.services.league_access import claimed_team_id, visible_to
 
 logger = structlog.get_logger()
 
 
 async def load_league(league_id: int, user: User, db: AsyncSession) -> League:
-    """The league, if this user owns it. 404 otherwise — never 403.
+    """The league, if this user owns it or belongs to it. 404 otherwise, never 403.
 
     A 403 would confirm the league exists, which is more than someone guessing
     ids should learn.
     """
     result = await db.execute(
-        select(League).where(League.id == league_id, League.owner_user_id == user.id)
+        select(League).where(League.id == league_id, visible_to(user.id))
     )
     league = result.scalar_one_or_none()
     if not league:
@@ -58,6 +59,19 @@ def espn_cookies(league: League) -> Optional[ESPNCookies]:
 
 
 async def my_team(league: League, user: User, db: AsyncSession) -> Optional[Team]:
+    """The caller's own team.
+
+    The claim is per manager (league_members.team_id) so that co-owners of one
+    team each keep their own; `Team.owner_user_id` is the fallback for claims
+    made before there was such a thing.
+    """
+    claimed_id = await claimed_team_id(db, league.id, user.id)
+    if claimed_id is not None:
+        result = await db.execute(select(Team).where(Team.id == claimed_id))
+        team = result.scalar_one_or_none()
+        if team:
+            return team
+
     result = await db.execute(
         select(Team).where(Team.league_id == league.id, Team.owner_user_id == user.id)
     )

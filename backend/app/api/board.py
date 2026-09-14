@@ -34,6 +34,7 @@ from app.schemas.board import (
     VoiceSampleResponse,
 )
 from app.services import board_service
+from app.services.league_access import visible_to
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/board", tags=["board"])
@@ -42,7 +43,7 @@ router = APIRouter(prefix="/board", tags=["board"])
 async def _league_or_404(league_id: int, user: User, db: AsyncSession) -> League:
     """The board is private to a league; everything here goes through this."""
     result = await db.execute(
-        select(League).where(League.id == league_id, League.owner_user_id == user.id)
+        select(League).where(League.id == league_id, visible_to(user.id))
     )
     league = result.scalar_one_or_none()
     if not league:

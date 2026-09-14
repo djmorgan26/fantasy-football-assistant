@@ -88,10 +88,33 @@ Constants live in `services/board_service.py` — threshold, weights, corpus siz
 ## Shared league helpers
 
 `services/league_context.py` owns the operations every league-scoped router
-needs: load the league and prove the caller owns it, decrypt ESPN cookies, find
-the caller's team, pull a roster, resolve this week's opponent. Platform
-branching (ESPN vs Sleeper) is resolved there once. Routers that skip it end up
-re-implementing the ownership check, which is the one thing that must not vary.
+needs: load the league and prove the caller belongs to it, decrypt ESPN
+cookies, find the caller's team, pull a roster, resolve this week's opponent.
+Platform branching (ESPN vs Sleeper) is resolved there once. Routers that skip
+it end up re-implementing the access check, which is the one thing that must
+not vary.
+
+## Who is in a league
+
+One platform league is **one row** in `leagues`, shared by every manager in it.
+That has to be true for the board to work at all: a league's managers only see
+each other's posts if they resolve to the same `league_id`.
+
+`services/league_access.py` holds the single definition of who may see a
+league, `visible_to(user_id)`, and every router imports it rather than
+comparing `owner_user_id` itself:
+
+| | Where it lives | Notes |
+| --- | --- | --- |
+| Access | `leagues.owner_user_id` OR a row in `league_members` | `visible_to` |
+| Their team | `league_members.team_id` | co-owners each keep their own claim |
+| Their Sleeper account | `league_members.sleeper_user_id` | `leagues.sleeper_user_id` is the owner's |
+
+Connecting a league that already exists adds the caller as a member. It does
+**not** reassign `owner_user_id`, and claiming a team does not take it from
+whoever claimed it before: doing either of those locked a real user out of
+their own league and made their roster vanish, because both facts used to live
+in a single column that the second manager simply overwrote.
 
 ## Platform parity
 

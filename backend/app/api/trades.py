@@ -11,6 +11,7 @@ from app.core.auth import get_current_active_user
 from app.services.espn_service import ESPNService, ESPNCookies, ESPNError
 from app.services.llm_service import llm_service
 from app.utils.encryption import ESPNCredentialManager
+from app.services.league_access import visible_to
 import structlog
 from datetime import datetime, timedelta
 
@@ -29,7 +30,7 @@ async def analyze_trade(
         league_result = await db.execute(
             select(League).where(
                 League.id == trade_request.league_id,
-                League.owner_user_id == current_user.id
+                visible_to(current_user.id)
             )
         )
         league = league_result.scalar_one_or_none()
@@ -237,7 +238,7 @@ async def create_trade(
         league_result = await db.execute(
             select(League).where(
                 League.id == trade_data.league_id,
-                League.owner_user_id == current_user.id
+                visible_to(current_user.id)
             )
         )
         league = league_result.scalar_one_or_none()

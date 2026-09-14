@@ -9,6 +9,7 @@ from app.schemas.player import PlayerSearchRequest, PlayerSearchResponse
 from app.core.auth import get_current_active_user
 from app.services.espn_service import ESPNService, ESPNCookies, ESPNError
 from app.utils.encryption import ESPNCredentialManager
+from app.services.league_access import visible_to
 import structlog
 
 logger = structlog.get_logger()
@@ -26,7 +27,7 @@ async def search_players(
         league_result = await db.execute(
             select(League).where(
                 League.id == search_request.league_id,
-                League.owner_user_id == current_user.id
+                visible_to(current_user.id)
             )
         )
         league = league_result.scalar_one_or_none()
@@ -107,7 +108,7 @@ async def get_available_players(
         league_result = await db.execute(
             select(League).where(
                 League.id == league_id,
-                League.owner_user_id == current_user.id
+                visible_to(current_user.id)
             )
         )
         league = league_result.scalar_one_or_none()

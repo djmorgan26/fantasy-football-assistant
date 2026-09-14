@@ -30,6 +30,7 @@ from app.models.league import League
 from app.models.team import Team
 from app.models.user import User
 from app.services import league_context, news_service
+from app.services.league_access import visible_to
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
@@ -106,7 +107,7 @@ async def portfolio(
     leagues = (
         await db.execute(
             select(League)
-            .where(League.owner_user_id == current_user.id)
+            .where(visible_to(current_user.id))
             .order_by(League.name)
         )
     ).scalars().all()

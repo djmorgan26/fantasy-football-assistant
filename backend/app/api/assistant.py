@@ -205,7 +205,7 @@ async def prompt_suggestions(
             chips.append(f"How bad is the {hurt[0].get('full_name')} injury for me?")
 
     others = (await db.execute(
-        select(Team).where(Team.league_id == league.id, Team.owner_user_id.is_(None)).limit(1)
+        select(Team).where(Team.league_id == league.id, Team.id != (team.id if team else -1)).limit(1)
     )).scalars().first()
     if others:
         chips.append(f"Talk me through a trade with {others.name}")

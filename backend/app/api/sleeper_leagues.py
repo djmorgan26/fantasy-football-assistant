@@ -21,6 +21,7 @@ from app.schemas.sleeper import (
 from app.schemas.league import LeagueResponse
 from app.core.auth import get_current_active_user
 from app.services.sleeper_service import SleeperService, SleeperError, SleeperNotFoundError
+from app.services.league_access import ensure_member, visible_to
 import structlog
 
 logger = structlog.get_logger()
@@ -112,8 +113,14 @@ async def connect_sleeper_league(
             league.scoring_type = scoring_type
             league.roster_settings = {"roster_positions": roster_positions}
             league.scoring_settings = scoring_settings
-            league.sleeper_user_id = user_data["user_id"]
-            league.owner_user_id = current_user.id
+            # Ownership is not up for grabs. See the same note in api/leagues.py:
+            # reassigning it here locked the first manager out of their own league.
+            if league.owner_user_id is None:
+                league.owner_user_id = current_user.id
+            # Same reasoning for the Sleeper account on the row: it is the
+            # owner's. Everyone else's lands on their membership below.
+            if league.owner_user_id == current_user.id or not league.sleeper_user_id:
+                league.sleeper_user_id = user_data["user_id"]
             league.is_active = True
             league.platform = PlatformType.SLEEPER
         else:
@@ -136,6 +143,15 @@ async def connect_sleeper_league(
 
         await db.commit()
         await db.refresh(league)
+
+        membership = await ensure_member(
+            db,
+            league.id,
+            current_user.id,
+            role="owner" if league.owner_user_id == current_user.id else "member",
+        )
+        membership.sleeper_user_id = user_data["user_id"]
+        await db.commit()
 
         # Sync teams
         for roster in rosters:
@@ -301,7 +317,7 @@ async def get_sleeper_matchups(
         result = await db.execute(
             select(League).where(
                 League.sleeper_league_id == league_id,
-                League.owner_user_id == current_user.id
+                visible_to(current_user.id)
             )
         )
         league = result.scalar_one_or_none()
@@ -376,7 +392,7 @@ async def get_sleeper_rosters(
         result = await db.execute(
             select(League).where(
                 League.sleeper_league_id == league_id,
-                League.owner_user_id == current_user.id
+                visible_to(current_user.id)
             )
         )
         league = result.scalar_one_or_none()

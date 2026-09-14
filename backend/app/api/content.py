@@ -17,6 +17,7 @@ from app.models.content_profile import LeagueContentProfile
 from app.core.auth import get_current_active_user
 from app.services import board_service
 from app.services.content_service import content_service, CONTENT_TYPES, DEFAULT_VOICE
+from app.services.league_access import visible_to
 from app.services.sleeper_service import SleeperError
 from app.services.espn_service import ESPNCookies, ESPNError, ESPNService
 from app.services.llm_service import llm_service
@@ -35,7 +36,7 @@ router = APIRouter(prefix="/content", tags=["content"])
 
 async def _load_league(league_id: int, user: User, db: AsyncSession) -> League:
     result = await db.execute(
-        select(League).where(League.id == league_id, League.owner_user_id == user.id)
+        select(League).where(League.id == league_id, visible_to(user.id))
     )
     league = result.scalar_one_or_none()
     if not league:

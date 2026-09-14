@@ -15,6 +15,7 @@ from app.services.sleeper_service import SleeperError
 from app.services.llm_service import llm_service
 from app.utils.encryption import ESPNCredentialManager
 from app.schemas.suggestion import SuggestionResponse
+from app.services.league_access import visible_to
 import structlog
 
 logger = structlog.get_logger()
@@ -45,7 +46,7 @@ async def get_strategic_suggestions(
         league_result = await db.execute(
             select(League).where(
                 League.id == league_id,
-                League.owner_user_id == current_user.id
+                visible_to(current_user.id)
             )
         )
         league = league_result.scalar_one_or_none()

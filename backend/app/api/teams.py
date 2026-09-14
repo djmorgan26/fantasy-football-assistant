@@ -10,10 +10,24 @@ from app.schemas.team import TeamResponse, RosterResponse
 from app.core.auth import get_current_active_user
 from app.services.espn_service import ESPNService, ESPNCookies, ESPNError
 from app.utils.encryption import ESPNCredentialManager
+from app.services.league_access import claimed_team_id, ensure_member, visible_to
 import structlog
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/teams", tags=["teams"])
+
+
+def _team_response(team: Team, user_id: int, claimed_id: Optional[int]) -> TeamResponse:
+    """`owner_user_id`, answered from the caller's point of view.
+
+    The claim is per manager now (league_members.team_id), so a team co-owned by
+    two people who both use the app reads as "yours" to each of them. The stored
+    column is only the fallback for a league nobody has claimed a team in.
+    """
+    response = TeamResponse.from_orm(team)
+    if claimed_id is not None:
+        response.owner_user_id = user_id if team.id == claimed_id else None
+    return response
 
 
 async def _get_sleeper_team_roster(
@@ -44,7 +58,7 @@ async def get_league_teams(
         league_result = await db.execute(
             select(League).where(
                 League.id == league_id,
-                League.owner_user_id == current_user.id
+                visible_to(current_user.id)
             )
         )
         league = league_result.scalar_one_or_none()
@@ -61,7 +75,8 @@ async def get_league_teams(
         )
         teams = teams_result.scalars().all()
         
-        return [TeamResponse.from_orm(team) for team in teams]
+        claimed_id = await claimed_team_id(db, league_id, current_user.id)
+        return [_team_response(team, current_user.id, claimed_id) for team in teams]
     except HTTPException:
         raise
     except Exception as e:
@@ -96,7 +111,7 @@ async def get_team_roster(
         league_result = await db.execute(
             select(League).where(
                 League.id == team.league_id,
-                League.owner_user_id == current_user.id
+                visible_to(current_user.id)
             )
         )
         league = league_result.scalar_one_or_none()
@@ -182,7 +197,7 @@ async def get_team(
         league_result = await db.execute(
             select(League).where(
                 League.id == team.league_id,
-                League.owner_user_id == current_user.id
+                visible_to(current_user.id)
             )
         )
         league = league_result.scalar_one_or_none()
@@ -229,7 +244,7 @@ async def claim_team(
         league_result = await db.execute(
             select(League).where(
                 League.id == team.league_id,
-                League.owner_user_id == current_user.id
+                visible_to(current_user.id)
             )
         )
         league = league_result.scalar_one_or_none()
@@ -250,13 +265,22 @@ async def claim_team(
         existing_teams = clear_result.scalars().all()
         for existing_team in existing_teams:
             existing_team.owner_user_id = None
-        
-        # Set the current user as owner of this team
-        team.owner_user_id = current_user.id
+
+        # The claim lives on the membership, one per manager, because real
+        # leagues have co-owned teams and `Team.owner_user_id` only holds one
+        # user: claiming a team someone else had claimed used to take it from
+        # them and their roster simply disappeared.
+        membership = await ensure_member(db, team.league_id, current_user.id)
+        membership.team_id = team.id
+
+        # Keep the legacy column meaningful for whoever got there first, but
+        # never take it from them.
+        if team.owner_user_id is None:
+            team.owner_user_id = current_user.id
         await db.commit()
-        
+
         logger.info("Team claimed successfully", team_id=team_id, user_id=current_user.id)
-        return TeamResponse.from_orm(team)
+        return _team_response(team, current_user.id, team.id)
         
     except HTTPException:
         raise

@@ -1,5 +1,6 @@
 from .user import User
 from .league import League
+from .league_member import LeagueMember
 from .team import Team
 from .player import Player
 from .trade import Trade
@@ -18,7 +19,7 @@ from .board import (
 )
 
 __all__ = [
-    "User", "League", "Team", "Player", "Trade", "Matchup",
+    "User", "League", "LeagueMember", "Team", "Player", "Trade", "Matchup",
     "WaiverBudget", "WaiverTransaction", "LeagueContentProfile",
     "BoardPost", "BoardComment", "BoardReaction", "VoiceSample",
     "PostKind", "ReactionKind", "REACTION_WEIGHTS", "COMMENT_WEIGHT",

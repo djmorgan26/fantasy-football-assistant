@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.sql import func
 from typing import List, Optional
 from datetime import datetime, timezone
 from app.db.database import get_database
 from app.models.user import User
 from app.models.league import League, PlatformType
+from app.models.league_member import LeagueMember
 from app.models.team import Team
 from app.models.matchup import Matchup
 from app.models.waiver_budget import WaiverBudget, WaiverTransaction
@@ -25,6 +26,7 @@ from app.schemas.waiver_budget import (
 from app.core.auth import get_current_active_user
 from app.services.espn_service import ESPNService, ESPNCookies, ESPNError
 from app.utils.encryption import ESPNCredentialManager
+from app.services.league_access import ensure_member, visible_to
 import structlog
 
 logger = structlog.get_logger()
@@ -84,7 +86,11 @@ async def connect_league(
             league.scoring_type = league_info["scoring_type"]
             league.roster_settings = league_info["roster_settings"]
             league.scoring_settings = league_info["scoring_settings"]
-            league.owner_user_id = current_user.id  # Ensure ownership is set
+            # Do NOT reassign ownership. A league row is shared by the managers
+            # in it, and overwriting the owner here is how the second person to
+            # connect an ESPN league used to lock the first one out of it.
+            if league.owner_user_id is None:
+                league.owner_user_id = current_user.id
             league.is_active = True  # Always set to active when connecting
         else:
             # Create new league
@@ -114,7 +120,16 @@ async def connect_league(
         
         await db.commit()
         await db.refresh(league)
-        
+
+        # Whoever connected it belongs in it, first manager or fifth.
+        await ensure_member(
+            db,
+            league.id,
+            current_user.id,
+            role="owner" if league.owner_user_id == current_user.id else "member",
+        )
+        await db.commit()
+
         # Create/update teams
         for team_data in teams_data:
             result = await db.execute(
@@ -187,7 +202,7 @@ async def get_user_leagues(
     try:
         result = await db.execute(
             select(League).where(
-                League.owner_user_id == current_user.id,
+                visible_to(current_user.id),
                 League.is_active == True
             )
         )
@@ -211,7 +226,7 @@ async def get_league(
         result = await db.execute(
             select(League).where(
                 League.id == league_id,
-                League.owner_user_id == current_user.id
+                visible_to(current_user.id)
             )
         )
         league = result.scalar_one_or_none()
@@ -244,7 +259,7 @@ async def sync_league(
         result = await db.execute(
             select(League).where(
                 League.id == league_id,
-                League.owner_user_id == current_user.id
+                visible_to(current_user.id)
             )
         )
         league = result.scalar_one_or_none()
@@ -383,7 +398,7 @@ async def disconnect_league(
         result = await db.execute(
             select(League).where(
                 League.id == league_id,
-                League.owner_user_id == current_user.id
+                visible_to(current_user.id)
             )
         )
         league = result.scalar_one_or_none()
@@ -394,9 +409,19 @@ async def disconnect_league(
                 detail="League not found"
             )
         
-        league.is_active = False
+        # A league row is shared now, so "disconnect" means two different
+        # things. The owner takes it down; anyone else just leaves, and
+        # deactivating it for the whole league would be a surprise.
+        if league.owner_user_id == current_user.id:
+            league.is_active = False
+        await db.execute(
+            delete(LeagueMember).where(
+                LeagueMember.league_id == league.id,
+                LeagueMember.user_id == current_user.id,
+            )
+        )
         await db.commit()
-        
+
         return {"message": "League disconnected successfully"}
     except HTTPException:
         raise
@@ -428,7 +453,7 @@ async def get_league_matchups(
         result = await db.execute(
             select(League).where(
                 League.id == league_id,
-                League.owner_user_id == current_user.id
+                visible_to(current_user.id)
             )
         )
         league = result.scalar_one_or_none()
@@ -542,7 +567,7 @@ async def get_league_waiver_budgets(
         result = await db.execute(
             select(League).where(
                 League.id == league_id,
-                League.owner_user_id == current_user.id
+                visible_to(current_user.id)
             )
         )
         league = result.scalar_one_or_none()

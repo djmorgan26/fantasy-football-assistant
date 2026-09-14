@@ -27,6 +27,7 @@ from app.services.sleeper_service import SleeperService, SleeperError
 from app.services.draft_service import draft_service
 from app.services.llm_service import llm_service
 from app.schemas.draft import ValueBoardResponse, DraftAssistResponse, DraftAdvice, DraftPickRecommendation
+from app.services.league_access import sleeper_id_for, visible_to
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/draft", tags=["draft"])
@@ -46,7 +47,7 @@ async def _load_league(league_id: int, user: User, db: AsyncSession) -> League:
     result = await db.execute(
         select(League).where(
             League.id == league_id,
-            League.owner_user_id == user.id,
+            visible_to(user.id),
         )
     )
     league = result.scalar_one_or_none()
@@ -264,7 +265,7 @@ async def get_draft_assist(
     try:
         result = await draft_service.recommend_picks(
             draft_id=draft_id,
-            user_id=league.sleeper_user_id,
+            user_id=await sleeper_id_for(db, league, current_user.id),
             scoring_settings=scoring_settings,
             scoring_type=league.scoring_type or "ppr",
             roster_positions=roster_positions,
