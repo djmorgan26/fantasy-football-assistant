@@ -23,6 +23,10 @@ import { NewsPage } from '@/pages/NewsPage';
 import { GameDayPage } from '@/pages/GameDayPage';
 import { AcrossLeaguesPage } from '@/pages/AcrossLeaguesPage';
 import { ProfilePage } from '@/pages/ProfilePage';
+import { LandingPage } from '@/pages/LandingPage';
+import { PrivacyPage } from '@/pages/PrivacyPage';
+import { TermsPage } from '@/pages/TermsPage';
+import { useAuth } from '@/contexts/AuthContext';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -33,6 +37,37 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+/**
+ * What "/" shows depends on who is asking.
+ *
+ * Signed in, it is the dashboard as before. Signed out, it is the public
+ * landing page rather than a bounce to /login: Google requires a home page
+ * that is reachable without an account and describes what the app does, and a
+ * redirect to a sign-in form does neither.
+ */
+const HomeRoute = () => {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-surface">
+        <span className="sr-only">Loading</span>
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-brand" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LandingPage />;
+  }
+
+  return (
+    <Layout>
+      <DashboardPage />
+    </Layout>
+  );
+};
 
 function App() {
   return (
@@ -47,20 +82,17 @@ function App() {
               <Route path="register" element={<RegisterPage />} />
             </Route>
             
+            {/* Public pages: reachable with no account */}
+            <Route path="/" element={<HomeRoute />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/terms" element={<TermsPage />} />
+
             {/* Legacy auth routes for backward compatibility */}
             <Route path="/login" element={<AuthLayout><LoginPage /></AuthLayout>} />
             <Route path="/register" element={<AuthLayout><RegisterPage /></AuthLayout>} />
 
             {/* Protected routes */}
             <Route path="/" element={<Layout />}>
-              <Route
-                index
-                element={
-                  <ProtectedRoute>
-                    <DashboardPage />
-                  </ProtectedRoute>
-                }
-              />
               <Route
                 path="dashboard"
                 element={
