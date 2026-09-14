@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { Team, RosterResponse, ApiError } from '@/types';
 import { teamsService } from '@/services/teams';
+import { invalidateLeagueIdentity } from './invalidate';
 import toast from 'react-hot-toast';
 
 export const useLeagueTeams = (leagueId: number) => {
@@ -53,8 +54,9 @@ export const useClaimTeam = () => {
     {
       onSuccess: (team: Team) => {
         toast.success(`Successfully claimed ${team.name}!`);
-        // Invalidate teams queries to refresh the data
-        queryClient.invalidateQueries(['teams']);
+        // Every league page is built on "which team is mine", not just the
+        // team list, so they all have to refetch.
+        invalidateLeagueIdentity(queryClient, team.league_id);
       },
       onError: (error: ApiError) => {
         toast.error(error.detail || 'Failed to claim team');

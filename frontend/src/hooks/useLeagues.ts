@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from 'react-query';
 import { League, LeagueConnectionRequest, LeagueConnectionResponse, ApiError } from '@/types';
 import { leaguesService } from '@/services/leagues';
+import { invalidateLeagueIdentity } from './invalidate';
 import toast from 'react-hot-toast';
 
 export const useLeagues = () => {
@@ -35,8 +36,9 @@ export const useConnectLeague = () => {
       onSuccess: (data) => {
         if (data.success) {
           toast.success(data.message);
-          // Invalidate leagues query to refetch the list
-          queryClient.invalidateQueries('leagues');
+          // Connecting may have added you to a league that already existed, so
+          // the whole league view is new to you, not just the list.
+          invalidateLeagueIdentity(queryClient, data.league?.id);
         } else {
           toast.error(data.message);
         }
@@ -54,9 +56,9 @@ export const useDisconnectLeague = () => {
   return useMutation<{ message: string }, ApiError, number>(
     leaguesService.disconnectLeague,
     {
-      onSuccess: (data) => {
+      onSuccess: (data, leagueId) => {
         toast.success(data.message);
-        queryClient.invalidateQueries('leagues');
+        invalidateLeagueIdentity(queryClient, leagueId);
       },
       onError: (error: ApiError) => {
         toast.error(error.detail || 'Failed to disconnect league');
@@ -74,10 +76,9 @@ export const useSyncLeague = () => {
       onSuccess: (data) => {
         if (data.success) {
           toast.success(data.message);
-          // Invalidate both leagues and teams queries to refetch updated data
-          queryClient.invalidateQueries('leagues');
-          queryClient.invalidateQueries(['league']);
-          queryClient.invalidateQueries(['teams']);
+          // A sync rewrites teams, records and rosters, which every league page
+          // is downstream of.
+          invalidateLeagueIdentity(queryClient, data.league?.id);
         } else {
           toast.error(data.message);
         }

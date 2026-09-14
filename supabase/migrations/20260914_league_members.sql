@@ -33,6 +33,7 @@ create table if not exists public.league_members (
     constraint uq_league_members_league_user unique (league_id, user_id)
 );
 
+create index if not exists ix_league_members_id        on public.league_members (id);
 create index if not exists ix_league_members_league_id on public.league_members (league_id);
 create index if not exists ix_league_members_user_id   on public.league_members (user_id);
 

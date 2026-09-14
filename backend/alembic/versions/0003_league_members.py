@@ -36,7 +36,7 @@ def upgrade() -> None:
         sa.Column('role', sa.String(length=32), nullable=False, server_default='member'),
         sa.Column('sleeper_user_id', sa.String(length=255), nullable=True),
         sa.Column('team_id', sa.Integer(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.ForeignKeyConstraint(['league_id'], ['leagues.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
         sa.ForeignKeyConstraint(['team_id'], ['teams.id'], ondelete='SET NULL'),

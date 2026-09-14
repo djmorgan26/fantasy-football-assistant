@@ -195,3 +195,73 @@ class TestTeamClaims:
         uid = me.json()["id"]
         teams = await client.get(f"/api/teams/league/{lid}", headers=auth_headers)
         assert [t["id"] for t in teams.json() if t["owner_user_id"] == uid] == [second]
+
+
+class TestCoOwnedTeam:
+    """David and Jake co-own one ESPN team. Everything has to work for both.
+
+    This is the shape the bug actually took in production, so it gets a test
+    that walks the whole surface rather than just the claim endpoint.
+    """
+
+    async def _both_on_one_team(self, client: AsyncClient, auth_headers, espn_league):
+        from app.services import mock_data
+
+        lid = espn_league["league"]["id"]
+        team_id = espn_league["teams"][0]["id"]
+        other = await _second_user(client)
+        await client.post(
+            "/api/leagues/connect",
+            json={"league_id": mock_data.MOCK_ESPN_LEAGUE_ID},
+            headers=other,
+        )
+        for headers in (auth_headers, other):
+            resp = await client.put(f"/api/teams/{team_id}/claim", headers=headers)
+            assert resp.status_code == 200, resp.text
+        return lid, team_id, other
+
+    async def test_every_league_page_answers_for_both(
+        self, client: AsyncClient, auth_headers, espn_league, mock_mode
+    ):
+        lid, team_id, other = await self._both_on_one_team(
+            client, auth_headers, espn_league
+        )
+
+        # The pages that hang off "which team is mine".
+        for headers, who in ((auth_headers, "owner"), (other, "co-owner")):
+            for path in (
+                f"/api/leagues/{lid}",
+                f"/api/teams/league/{lid}",
+                f"/api/teams/{team_id}/roster",
+                f"/api/board/{lid}/posts",
+                f"/api/leagues/{lid}/matchups",
+                f"/api/actions/{lid}",
+            ):
+                resp = await client.get(path, headers=headers)
+                assert resp.status_code == 200, f"{who} {path} -> {resp.status_code} {resp.text[:200]}"
+
+    async def test_the_action_plan_is_about_their_shared_team(
+        self, client: AsyncClient, auth_headers, espn_league, mock_mode
+    ):
+        lid, _, other = await self._both_on_one_team(client, auth_headers, espn_league)
+
+        plans = [
+            (await client.get(f"/api/actions/{lid}", headers=h)).json()
+            for h in (auth_headers, other)
+        ]
+        assert plans[0]["team"] == plans[1]["team"]
+
+    async def test_neither_is_offered_a_trade_with_themselves(
+        self, client: AsyncClient, auth_headers, espn_league, mock_mode
+    ):
+        """The trade chip used to pick any team with no owner_user_id, which
+        after a co-owned claim could be the asker's own team."""
+        lid, _, other = await self._both_on_one_team(client, auth_headers, espn_league)
+
+        for headers in (auth_headers, other):
+            resp = await client.get(f"/api/assistant/{lid}/suggestions", headers=headers)
+            assert resp.status_code == 200, resp.text
+            plan = (await client.get(f"/api/actions/{lid}", headers=headers)).json()
+            mine = plan["team"]
+            trade_chips = [s for s in resp.json()["suggestions"] if "trade with" in s]
+            assert not any(mine in chip for chip in trade_chips), trade_chips

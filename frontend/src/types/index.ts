@@ -92,6 +92,7 @@ export interface SleeperUserLeaguesResponse {
 // Team types
 export interface Team {
   id: number;
+  league_id: number;
   espn_team_id?: number;
   sleeper_roster_id?: number;
   sleeper_owner_id?: string;

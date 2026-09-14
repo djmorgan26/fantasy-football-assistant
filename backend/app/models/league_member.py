@@ -42,4 +42,4 @@ class LeagueMember(Base):
     # claim silently unclaimed the first, and their roster vanished.
     team_id = Column(Integer, ForeignKey("teams.id", ondelete="SET NULL"), nullable=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

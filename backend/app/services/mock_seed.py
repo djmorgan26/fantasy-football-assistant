@@ -17,6 +17,7 @@ from app.models.league import League, PlatformType
 from app.models.team import Team
 from app.models.content_profile import LeagueContentProfile
 from app.services import mock_data
+from app.services.league_access import ensure_member
 
 logger = structlog.get_logger()
 
@@ -25,6 +26,24 @@ logger = structlog.get_logger()
 # demonstrates both of its ideas at once — see the comment where they are used.
 DEMO_ESPN_TEAM_ID = 5
 DEMO_SLEEPER_ROSTER_ID = 8
+
+
+async def _claim(db, league_id, user_id, column, platform_team_id, sleeper_user_id=None):
+    """Put the demo user in the league the way a real connect + claim would.
+
+    Without this the demo is the only place where a league has an owner but no
+    membership row, so it would exercise the `Team.owner_user_id` fallback
+    instead of the claim path every real league uses.
+    """
+    team = (await db.execute(
+        select(Team).where(Team.league_id == league_id, column == platform_team_id)
+    )).scalar_one_or_none()
+
+    membership = await ensure_member(db, league_id, user_id, role="owner")
+    membership.team_id = team.id if team else None
+    if sleeper_user_id:
+        membership.sleeper_user_id = sleeper_user_id
+    await db.commit()
 
 
 async def seed_mock_data() -> None:
@@ -91,6 +110,7 @@ async def seed_mock_data() -> None:
                     points_against=t["points_against"],
                 ))
             await db.commit()
+            await _claim(db, espn_league.id, user.id, Team.espn_team_id, DEMO_ESPN_TEAM_ID)
             logger.info("Seeded mock ESPN league", league_id=espn_league.id)
 
         # ---- Sleeper league -------------------------------------------------
@@ -143,6 +163,11 @@ async def seed_mock_data() -> None:
                     points_against=float(settings_.get("fpts_against", 0)),
                 ))
             await db.commit()
+            await _claim(
+                db, sleeper_league.id, user.id,
+                Team.sleeper_roster_id, DEMO_SLEEPER_ROSTER_ID,
+                sleeper_user_id=mock_data.MOCK_SLEEPER_USER_ID,
+            )
             logger.info("Seeded mock Sleeper league", league_id=sleeper_league.id)
 
         # ---- content / voice profiles for both leagues ----------------------

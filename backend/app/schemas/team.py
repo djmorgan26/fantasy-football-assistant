@@ -5,6 +5,9 @@ from datetime import datetime
 
 class TeamResponse(BaseModel):
     id: int
+    # The league this team is in. The client needs it to know which league's
+    # caches a team claim just invalidated.
+    league_id: int
     # Platform-specific identifiers: ESPN teams have espn_team_id, Sleeper
     # teams have sleeper_roster_id. Each is None on the other platform.
     espn_team_id: Optional[int] = None
