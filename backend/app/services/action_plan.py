@@ -45,6 +45,14 @@ SLOT_ELIGIBILITY: Dict[str, frozenset] = {
 # defining starter is worth a third of the budget; a depth flier is not.
 FAAB_SHARE = {"critical": 0.35, "high": 0.2, "medium": 0.1, "low": 0.04}
 
+# Below this a projection is the platform saying "no idea" or "will not play",
+# and such a player must never be presented as a pickup.
+MIN_USEFUL_PROJECTION = 1.0
+
+# Two weekly projections inside this are the same forecast with rounding
+# between them, so something other than the projection has to break the tie.
+PROJECTION_NOISE = 1.5
+
 
 def _points(player: Dict[str, Any], key: str = "projected_points") -> float:
     return float(player.get(key) or 0)
@@ -134,7 +142,13 @@ def bench_options(
         and not is_unavailable(p)
         and eligible_for(hole.get("slot"), p.get("position_name"))
     ]
-    options.sort(key=lambda o: (o["projected"], o["last_week"]), reverse=True)
+    # Projection leads, but inside PROJECTION_NOISE the two are indistinguishable
+    # forecasts and last week's actual is the better tiebreak. Sorting on
+    # projection alone let a 0.1 edge outrank a man who scored 14 more points.
+    options.sort(
+        key=lambda o: (round(o["projected"] / PROJECTION_NOISE), o["last_week"]),
+        reverse=True,
+    )
     return options
 
 
@@ -154,6 +168,11 @@ def waiver_options(
     out = []
     for fa in free_agents:
         if not eligible_for(hole.get("slot"), fa.get("position_name")):
+            continue
+        # A player the platform projects at zero is not an option, he is noise.
+        # Offering four of them reads as advice and is worse than saying the
+        # pool has nothing.
+        if _points(fa) < MIN_USEFUL_PROJECTION:
             continue
         name = fa.get("full_name")
         out.append({

@@ -198,3 +198,46 @@ class TestDepthAndTrades:
             player("Only RB", "RB", "RB", starter=True, proj=10.0),
         ])
         assert ap.trade_angles(thin, [{"team": "X", "depth": {}}], need="WR") == []
+
+
+class TestAdviceQuality:
+    """The failures found by running this against a real roster.
+
+    Both made the page actively misleading rather than merely thin: it offered
+    four players projected 0.0 as pickups, and it preferred a 0.1-point
+    projection edge over a man who had scored 14 more points the week before.
+    """
+
+    def test_a_player_projected_zero_is_never_offered(self):
+        hole = {"slot": "WR", "position": "WR"}
+        pool = [
+            {"full_name": "Nate Adkins", "position_name": "WR", "projected_points": 0.0},
+            {"full_name": "Real Option", "position_name": "WR", "projected_points": 8.1},
+        ]
+        assert [w["player"] for w in ap.waiver_options(hole, pool)] == ["Real Option"]
+
+    def test_an_empty_pool_is_better_than_a_useless_one(self):
+        hole = {"slot": "WR", "position": "WR"}
+        pool = [
+            {"full_name": f"Nobody {i}", "position_name": "WR", "projected_points": 0.0}
+            for i in range(4)
+        ]
+        assert ap.waiver_options(hole, pool) == []
+
+    def test_recent_production_breaks_a_projection_tie(self):
+        """0.1 apart is the same forecast; 33.8 against 19.9 is not."""
+        hole = {"slot": "WR", "position": "WR"}
+        roster = [
+            player("Devaughn Vele", "WR", "BENCH", starter=False, proj=9.3, last=19.9),
+            player("Jalen Coker", "WR", "BENCH", starter=False, proj=9.2, last=33.8),
+        ]
+        assert ap.bench_options(hole, roster)[0]["player"] == "Jalen Coker"
+
+    def test_a_real_projection_gap_still_wins(self):
+        """The tiebreak must not override an actual difference in forecast."""
+        hole = {"slot": "WR", "position": "WR"}
+        roster = [
+            player("Big Projection", "WR", "BENCH", starter=False, proj=16.0, last=0.0),
+            player("Had One Good Week", "WR", "BENCH", starter=False, proj=6.0, last=33.8),
+        ]
+        assert ap.bench_options(hole, roster)[0]["player"] == "Big Projection"

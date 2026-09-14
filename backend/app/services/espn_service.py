@@ -414,7 +414,9 @@ class ESPNService:
                 player = player_data.get("player", {})
                 
                 # Filter by position if specified
-                if position and self.position_map.get(player.get("defaultPositionId")) != position:
+                if position and self.player_position_map.get(
+                    player.get("defaultPositionId")
+                ) != position:
                     continue
                 
                 # Check if player is available (not on any roster)
@@ -445,7 +447,12 @@ class ESPNService:
                     "first_name": player.get("firstName", ""),
                     "last_name": player.get("lastName", ""),
                     "position_id": player.get("defaultPositionId"),
-                    "position_name": self.position_map.get(player.get("defaultPositionId"), "UNKNOWN"),
+                    # player_position_map, not position_map: the first says what
+                    # he is, the second where he lines up. They are different id
+                    # spaces and mixing them mislabels every free agent.
+                    "position_name": self.player_position_map.get(
+                        player.get("defaultPositionId"), "UNKNOWN"
+                    ),
                     "pro_team_id": player.get("proTeamId"),
                     "pro_team_abbr": self._get_pro_team_abbr(player.get("proTeamId")),
                     "eligible_slots": player.get("eligibleSlots", []),
