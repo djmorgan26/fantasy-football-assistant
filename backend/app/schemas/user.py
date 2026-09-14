@@ -27,12 +27,22 @@ class UserUpdate(BaseModel):
     espn_swid: Optional[str] = Field(None, description="ESPN SWID cookie for private leagues")
 
 
+class GoogleLoginRequest(BaseModel):
+    credential: str = Field(..., description="The ID token issued by Google Identity Services")
+
+
 class UserResponse(UserBase):
     id: int
     is_active: bool
     created_at: datetime
     has_espn_credentials: bool = Field(description="Whether user has stored ESPN credentials")
-    
+    has_password: bool = Field(
+        default=True,
+        description="False for a Google-only account, which can set a first password without proving an old one",
+    )
+    has_google: bool = Field(default=False, description="Whether a Google account is linked")
+    avatar_url: Optional[str] = Field(default=None, description="Profile picture from Google, if linked")
+
     class Config:
         from_attributes = True
     
@@ -44,5 +54,8 @@ class UserResponse(UserBase):
             full_name=user.full_name,
             is_active=user.is_active,
             created_at=user.created_at,
-            has_espn_credentials=bool(user.espn_s2_encrypted or user.espn_swid_encrypted)
+            has_espn_credentials=bool(user.espn_s2_encrypted or user.espn_swid_encrypted),
+            has_password=user.hashed_password is not None,
+            has_google=user.google_sub is not None,
+            avatar_url=user.avatar_url,
         )

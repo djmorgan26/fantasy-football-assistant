@@ -6,12 +6,17 @@ export interface User {
   is_active: boolean;
   created_at: string;
   has_espn_credentials: boolean;
+  has_password: boolean;
+  has_google: boolean;
+  avatar_url: string | null;
 }
 
 export interface AuthResponse {
   access_token: string;
   token_type: string;
   user: User;
+  /** Google sign-in only: whether this call linked, created or resumed an account. */
+  outcome?: 'signed_in' | 'linked' | 'created';
 }
 
 export interface LoginRequest {

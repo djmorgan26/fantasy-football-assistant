@@ -100,6 +100,12 @@ async def app_meta():
         "mock_mode": settings.mock_mode,
         "app_name": settings.app_name,
         "version": settings.app_version,
+        # Public by design: the client id ships in any page that renders a
+        # Google button. Serving it here rather than baking it into the
+        # frontend build means rotating it takes an env var change, not a
+        # redeploy of the static assets. Empty string = Google sign-in off,
+        # and the frontend hides the button rather than rendering a broken one.
+        "google_client_id": settings.google_client_id,
     }
     if settings.mock_mode:
         from app.services import mock_data

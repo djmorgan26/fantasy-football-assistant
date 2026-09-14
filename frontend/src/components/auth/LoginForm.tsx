@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Link } from 'react-router-dom';
 import { metaService, AppMeta } from '@/services/meta';
+import { GoogleSignInButton } from './GoogleSignInButton';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -82,6 +83,8 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
             </p>
           </div>
         )}
+        <GoogleSignInButton onSuccess={onSuccess} text="signin_with" />
+
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <Input
             label="Email"

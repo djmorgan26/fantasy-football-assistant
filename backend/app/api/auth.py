@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_database
-from app.schemas.user import UserCreate, UserLogin, UserResponse, UserUpdate
+from app.schemas.user import (
+    UserCreate, UserLogin, UserResponse, UserUpdate, GoogleLoginRequest,
+)
 from app.schemas.auth import Token
 from app.core.auth import auth_service, get_current_active_user
 from app.models.user import User
@@ -64,6 +66,20 @@ async def login(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Login failed"
         )
+
+
+@router.post("/google", response_model=Token)
+async def google_login(
+    payload: GoogleLoginRequest,
+    db: AsyncSession = Depends(get_database)
+):
+    """Sign in with a Google ID token, linking an existing account by email.
+
+    Deliberately not wrapped in a bare `except Exception` that flattens
+    everything to a 500 like the handlers above: the linking path raises
+    meaningful 401/403s that the user needs to see.
+    """
+    return await auth_service.login_with_google(db=db, credential=payload.credential)
 
 
 @router.get("/me", response_model=UserResponse)

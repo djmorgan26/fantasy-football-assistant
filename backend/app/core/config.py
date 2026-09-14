@@ -49,6 +49,16 @@ class Settings(BaseSettings):
     # ACCESS_TOKEN_EXPIRE_MINUTES where that trade is not worth it.
     access_token_expire_minutes: int = 60 * 24 * 7
     
+    # Google sign-in
+    # The OAuth 2.0 Web client id from Google Cloud Console. This is public by
+    # design (it ships in the page that renders the Google button), so it is
+    # not a secret and is served to the frontend from /api/meta. There is no
+    # client secret: the Identity Services flow we use returns a signed ID
+    # token straight to the browser, so nothing needs to be kept confidential
+    # on our side. Leaving this empty disables Google sign-in entirely rather
+    # than half-enabling it.
+    google_client_id: str = ""
+
     # CORS
     allowed_origins: str = "http://localhost:3000,http://localhost:5173"
 

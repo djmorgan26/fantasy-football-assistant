@@ -16,25 +16,28 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { useLeagues } from '@/hooks/useLeagues';
 import { TrophyIcon, PlusIcon } from '@heroicons/react/24/outline';
 
-const profileSchema = z
-  .object({
-    full_name: z.string().optional(),
-    current_password: z.string().optional(),
-    new_password: z
-      .string()
-      .min(8, 'Password must be at least 8 characters')
-      .optional()
-      .or(z.literal('')),
-    espn_cookies: z.string().optional(),
-    espn_s2: z.string().optional(),
-    espn_swid: z.string().optional(),
-  })
-  .refine((data) => !data.new_password || !!data.current_password, {
-    message: 'Current password is required to set a new password',
-    path: ['current_password'],
-  });
+// The "you must supply your current password" rule cannot hold for an account
+// that has never had one, so the schema depends on the account it validates.
+const buildProfileSchema = (hasPassword: boolean) =>
+  z
+    .object({
+      full_name: z.string().optional(),
+      current_password: z.string().optional(),
+      new_password: z
+        .string()
+        .min(8, 'Password must be at least 8 characters')
+        .optional()
+        .or(z.literal('')),
+      espn_cookies: z.string().optional(),
+      espn_s2: z.string().optional(),
+      espn_swid: z.string().optional(),
+    })
+    .refine((data) => !hasPassword || !data.new_password || !!data.current_password, {
+      message: 'Current password is required to set a new password',
+      path: ['current_password'],
+    });
 
-type ProfileFormData = z.infer<typeof profileSchema>;
+type ProfileFormData = z.infer<ReturnType<typeof buildProfileSchema>>;
 
 export const ProfilePage: React.FC = () => {
   const { user, updateProfile } = useAuth();
@@ -46,6 +49,10 @@ export const ProfilePage: React.FC = () => {
   const espnLeagues = (leagues || []).filter((l) => l.platform === 'espn');
   const sleeperLeagues = (leagues || []).filter((l) => l.platform === 'sleeper');
 
+  // Defaults to true so the form does not flash the "set your first password"
+  // wording while /auth/me is still in flight.
+  const hasPassword = user?.has_password ?? true;
+
   const {
     register,
     handleSubmit,
@@ -53,7 +60,7 @@ export const ProfilePage: React.FC = () => {
     reset,
     formState: { errors, isSubmitting },
   } = useForm<ProfileFormData>({
-    resolver: zodResolver(profileSchema),
+    resolver: zodResolver(buildProfileSchema(hasPassword)),
     defaultValues: {
       full_name: user?.full_name || '',
     },
@@ -128,7 +135,15 @@ export const ProfilePage: React.FC = () => {
             <dl className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                 <dt className="text-sm text-fg-muted">Full name</dt>
-                <dd className="text-sm font-medium text-fg">
+                <dd className="flex items-center gap-2 text-sm font-medium text-fg">
+                  {user?.avatar_url && (
+                    <img
+                      src={user.avatar_url}
+                      alt=""
+                      className="h-7 w-7 rounded-full border border-border object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  )}
                   {user?.full_name || 'Not set'}
                 </dd>
               </div>
@@ -148,6 +163,23 @@ export const ProfilePage: React.FC = () => {
                   </dd>
                 </div>
               )}
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                <dt className="text-sm text-fg-muted">
+                  Sign-in methods
+                  <span className="block text-xs text-fg-subtle">
+                    How you get into this account
+                  </span>
+                </dt>
+                <dd className="flex flex-wrap items-center gap-1.5">
+                  <Badge variant={user?.has_google ? 'success' : 'default'} size="sm">
+                    {user?.has_google ? 'Google linked' : 'Google not linked'}
+                  </Badge>
+                  <Badge variant={hasPassword ? 'success' : 'warning'} size="sm">
+                    {hasPassword ? 'Password set' : 'No password'}
+                  </Badge>
+                </dd>
+              </div>
+
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                 <dt className="text-sm text-fg-muted">
                   ESPN credentials
@@ -256,25 +288,29 @@ export const ProfilePage: React.FC = () => {
 
               <div className="border-t border-border pt-6">
                 <h4 className="mb-1 text-sm font-medium text-fg">
-                  Change Password (Optional)
+                  {hasPassword ? 'Change Password (Optional)' : 'Set a Password (Optional)'}
                 </h4>
                 <p className="mb-4 text-xs text-fg-muted">
-                  Leave blank to keep your current password.
+                  {hasPassword
+                    ? 'Leave blank to keep your current password.'
+                    : 'You sign in with Google, so you have no password yet. Adding one gives you a way in if you ever lose access to your Google account.'}
                 </p>
 
                 <div className="space-y-4">
-                  <Input
-                    label="Current Password"
-                    type="password"
-                    {...register('current_password')}
-                    error={errors.current_password?.message}
-                    fullWidth
-                    placeholder="Enter your current password"
-                    autoComplete="current-password"
-                  />
+                  {hasPassword && (
+                    <Input
+                      label="Current Password"
+                      type="password"
+                      {...register('current_password')}
+                      error={errors.current_password?.message}
+                      fullWidth
+                      placeholder="Enter your current password"
+                      autoComplete="current-password"
+                    />
+                  )}
 
                   <Input
-                    label="New Password"
+                    label={hasPassword ? 'New Password' : 'Password'}
                     type="password"
                     {...register('new_password')}
                     error={errors.new_password?.message}

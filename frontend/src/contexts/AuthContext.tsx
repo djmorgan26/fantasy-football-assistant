@@ -8,6 +8,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (credentials: LoginRequest) => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<void>;
   register: (userData: RegisterRequest) => Promise<void>;
   logout: () => void;
   updateProfile: (updates: {
@@ -73,6 +74,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const loginWithGoogle = async (credential: string): Promise<void> => {
+    try {
+      setIsLoading(true);
+      const response: AuthResponse = await authService.loginWithGoogle(credential);
+      setUser(response.user);
+      // The linked case is worth calling out: the user pressed a Google
+      // button and needs to know it attached to the account they already
+      // had rather than starting them over on an empty one.
+      if (response.outcome === 'linked') {
+        toast.success('Google linked to your existing account');
+      } else if (response.outcome === 'created') {
+        toast.success('Welcome! Your account is ready.');
+      } else {
+        toast.success('Signed in with Google');
+      }
+    } catch (error) {
+      const apiError = error as ApiError;
+      toast.error(apiError.detail || 'Google sign-in failed');
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const register = async (userData: RegisterRequest): Promise<void> => {
     try {
       setIsLoading(true);
@@ -128,6 +153,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isAuthenticated,
     isLoading,
     login,
+    loginWithGoogle,
     register,
     logout,
     updateProfile,

@@ -16,6 +16,13 @@ export const authService = {
     return response.data;
   },
 
+  async loginWithGoogle(credential: string): Promise<AuthResponse> {
+    const response = await api.post<AuthResponse>('/auth/google', { credential });
+    const { access_token } = response.data;
+    setAuthToken(access_token);
+    return response.data;
+  },
+
   async getCurrentUser(): Promise<User> {
     const response = await api.get<User>('/auth/me');
     return response.data;

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Link } from 'react-router-dom';
+import { GoogleSignInButton } from './GoogleSignInButton';
 
 const registerSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -53,6 +54,8 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess }) => {
         <CardTitle className="text-center">Create Account</CardTitle>
       </CardHeader>
       <CardContent>
+        <GoogleSignInButton onSuccess={onSuccess} text="signup_with" />
+
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <Input
             label="Email"

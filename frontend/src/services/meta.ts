@@ -8,6 +8,12 @@ export interface AppMeta {
     email: string;
     password: string;
   };
+  /**
+   * Google OAuth client id, served by the API rather than baked in at build
+   * time so it can be rotated without rebuilding the frontend. Empty or
+   * absent means Google sign-in is not configured, and the button is hidden.
+   */
+  google_client_id?: string;
 }
 
 export const metaService = {

@@ -9,11 +9,21 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
-    hashed_password = Column(String(255), nullable=False)
+    # Nullable: a user who only ever signs in with Google has no password.
+    # Any code path that verifies a password must handle None (see
+    # authenticate_user) rather than passing it to bcrypt, which raises.
+    hashed_password = Column(String(255), nullable=True)
     full_name = Column(String(255))
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Google sign-in. We key on `sub`, Google's immutable per-account subject
+    # id, not on email: a Google account can change its email address, and
+    # matching on email would then either lose the link or, worse, hand the
+    # account to whoever inherits the old address.
+    google_sub = Column(String(255), unique=True, index=True, nullable=True)
+    avatar_url = Column(Text, nullable=True)
 
     # Encrypted ESPN credentials
     espn_s2_encrypted = Column(Text, nullable=True)

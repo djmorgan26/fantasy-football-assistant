@@ -101,6 +101,7 @@ def reset_service_caches():
     from app.services.draft_service import draft_service
     from app.services import news_service
     from app.services.sleeper_service import clear_request_cache
+    from app.services.google_oauth import clear_certs_cache
 
     def clear():
         draft_service._players_cache = None
@@ -111,6 +112,9 @@ def reset_service_caches():
         # serves its payloads to the next real-mode one.
         clear_request_cache()
         draft_service._board_cache = {}
+        # Google's signing keys are cached module-wide; tests prime this with a
+        # throwaway keypair and must not leak it into the next test.
+        clear_certs_cache()
 
         news_service._news_cache.clear()
         index = news_service.player_index
