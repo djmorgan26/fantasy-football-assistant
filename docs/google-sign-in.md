@@ -99,6 +99,20 @@ Everyone else gets `access_denied`. Currently listed:
 Add more at [Audience](https://console.cloud.google.com/auth/audience?project=fantasy-football-asst),
 up to 100 over the app's lifetime.
 
+Everything the Branding page asks for now exists and is public, served by the
+app itself so it stays on the authorized domain:
+
+| Field | Value |
+| --- | --- |
+| Application home page | `https://fantasy-football-real.vercel.app/` |
+| Privacy policy link | `https://fantasy-football-real.vercel.app/privacy` |
+| Terms of service link | `https://fantasy-football-real.vercel.app/terms` |
+| App logo | `docs/assets/google-consent-logo.png` |
+
+`/` serves the dashboard to signed-in users and a landing page to everyone
+else, because Google wants a home page reachable without an account. See
+`HomeRoute` in `frontend/src/App.tsx`.
+
 A 120x120 logo for the Branding page is committed at
 `docs/assets/google-consent-logo.png` (23KB, well under Google's 1MB cap). It
 is flattened onto the tile's own dark background rather than left transparent,
