@@ -1,4 +1,5 @@
 import React, { Fragment } from 'react';
+import { BrandMark } from '@/components/ui/BrandMark';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/Button';
@@ -32,9 +33,7 @@ export const Header: React.FC = () => {
         <div className="flex min-w-0 items-center gap-3">
           {/* Brand — visible on mobile (sidebar shows it on desktop) */}
           <Link to="/" className="flex min-w-0 items-center gap-2 lg:hidden">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand">
-              <span className="text-sm font-bold text-brand-fg">FF</span>
-            </div>
+            <BrandMark className="h-8 w-8" />
             <span className="truncate font-display text-base font-bold text-fg sm:text-lg">
               Fantasy Football
             </span>

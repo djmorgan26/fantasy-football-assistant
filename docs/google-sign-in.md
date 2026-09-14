@@ -99,6 +99,11 @@ Everyone else gets `access_denied`. Currently listed:
 Add more at [Audience](https://console.cloud.google.com/auth/audience?project=fantasy-football-asst),
 up to 100 over the app's lifetime.
 
+A 120x120 logo for the Branding page is committed at
+`docs/assets/google-consent-logo.png` (23KB, well under Google's 1MB cap). It
+is flattened onto the tile's own dark background rather than left transparent,
+because the consent card renders it on white.
+
 To let anyone sign in, publish the app. The Console requires the
 [Branding](https://console.cloud.google.com/auth/branding?project=fantasy-football-asst)
 page to be completed first (app logo, home page, privacy policy and terms

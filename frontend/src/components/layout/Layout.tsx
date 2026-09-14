@@ -11,6 +11,7 @@ import { SidebarNav } from './SidebarNav';
 import { MobileTabBar } from './MobileTabBar';
 import { CommissionerDock } from '@/components/assistant/CommissionerDock';
 import { AppToaster } from '@/components/ui/AppToaster';
+import { BrandMark } from '@/components/ui/BrandMark';
 import { cn } from '@/utils';
 
 interface LayoutProps {
@@ -21,9 +22,7 @@ const SIDEBAR_COLLAPSED_KEY = 'ff:sidebar-collapsed';
 
 const Brand: React.FC<{ compact?: boolean }> = ({ compact = false }) => (
   <Link to="/" className="flex items-center gap-2" aria-label="Fantasy Football home">
-    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-brand">
-      <span className="text-sm font-bold text-brand-fg">FF</span>
-    </div>
+    <BrandMark className="h-9 w-9" />
     {!compact && (
       <span className="font-display text-lg font-bold leading-tight text-fg">Fantasy&nbsp;Football</span>
     )}
@@ -175,9 +174,7 @@ export const AuthLayout: React.FC<LayoutProps> = ({ children }) => {
     <div className="flex min-h-screen flex-col justify-center bg-surface px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
       <div className="mx-auto w-full max-w-md">
         <div className="flex justify-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-brand">
-            <span className="text-xl font-bold text-brand-fg">FF</span>
-          </div>
+          <BrandMark className="h-14 w-14" />
         </div>
         <h2 className="mt-6 text-center font-display text-3xl font-bold tracking-tight text-fg">
           Fantasy Football Assistant
