@@ -41,7 +41,13 @@ class Settings(BaseSettings):
     # SECRET_KEY via .env (generate with: openssl rand -hex 32).
     secret_key: str = "dev-only-insecure-secret-change-me-for-real-mode"
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
+    # There is no refresh-token flow, so this is the whole session length, not
+    # the gap between silent refreshes. At 30 minutes a user got logged out
+    # mid-use: the 401 interceptor clears the token and bounces them to /login,
+    # losing whatever they were doing. A week matches how people actually use
+    # this (check in Thursday, again on Sunday). Shorten it with
+    # ACCESS_TOKEN_EXPIRE_MINUTES where that trade is not worth it.
+    access_token_expire_minutes: int = 60 * 24 * 7
     
     # CORS
     allowed_origins: str = "http://localhost:3000,http://localhost:5173"

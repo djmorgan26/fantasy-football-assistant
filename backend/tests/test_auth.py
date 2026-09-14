@@ -186,3 +186,39 @@ class TestProfile:
             "/api/auth/me", headers={"Authorization": "Bearer garbage"}
         )
         assert resp.status_code == 401
+
+
+class TestSessionLength:
+    """The token lifetime is the whole session: there is no refresh flow.
+
+    At the old 30 minutes a user got logged out mid-use. The 401 interceptor
+    clears the token and redirects to /login, so whatever they were doing is
+    gone. This guards against someone trimming it back without first adding
+    refresh tokens.
+    """
+
+    def test_session_outlasts_a_sitting(self):
+        from app.core.config import settings
+
+        assert settings.access_token_expire_minutes >= 60 * 12, (
+            "A session shorter than half a day logs people out while they are "
+            "still using the app; add a refresh flow before shortening this."
+        )
+
+    def test_token_carries_that_expiry(self):
+        from datetime import datetime, timedelta, timezone
+
+        from jose import jwt
+
+        from app.core.auth import create_access_token
+        from app.core.config import settings
+
+        token = create_access_token(data={"sub": "1"})
+        claims = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+
+        expires = datetime.fromtimestamp(claims["exp"], tz=timezone.utc)
+        expected = datetime.now(timezone.utc) + timedelta(
+            minutes=settings.access_token_expire_minutes
+        )
+        # A minute of slack for the clock between issuing and asserting.
+        assert abs((expires - expected).total_seconds()) < 60
