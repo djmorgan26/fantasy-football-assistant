@@ -166,8 +166,12 @@ async def action_plan_for_league(
             "start_instead": best,
             "other_bench": bench[1:3],
             "waiver_targets": waivers,
-            "faab": action_plan.faab_advice(
-                budget["remaining"], budget["total"], urgency
+            # FAAB is what a waiver claim costs. Moving your own bench player
+            # into the slot costs nothing, so telling someone to bid on a
+            # player they already roster is not advice, it is noise.
+            "faab": (
+                action_plan.faab_advice(budget["remaining"], budget["total"], urgency)
+                if waivers else None
             ),
             "trades": action_plan.trade_angles(depth, rivals, hole.get("position")),
         })
@@ -232,6 +236,11 @@ async def _write_summary(
             )
         else:
             lines.append("  No bench player is eligible for that slot.")
+        if not action["waiver_targets"]:
+            lines.append(
+                "  Nothing worth adding is available, so this is a free bench "
+                "swap with no waiver claim and no bid."
+            )
         for w in action["waiver_targets"][:3]:
             lines.append(
                 f"  Available: {w['player']} ({w['position']}, {w['team']}), "
@@ -262,6 +271,10 @@ HARD RULES:
   them. If it is not there, it did not happen.
 - Do not invent injuries, projections, opponents or managers' real names.
 - Lead with the single most urgent action.
+- Only mention bidding or FAAB where a "FAAB:" line appears above. Starting a
+  player already on the bench costs nothing, so never attach a bid to one.
+- Never tell them to bid on, claim or add a player who is already on their
+  roster.
 
 FORMAT: plain text, no markdown, no bullets, no bold."""
 

@@ -105,3 +105,54 @@ class TestActionsEndpoint:
         lid = both["espn"]["league"]
         resp = await client.get(f"/api/actions/{lid}", headers=auth_headers)
         assert resp.status_code == 200, resp.text
+
+
+class TestFaabIsOnlyForClaims:
+    """FAAB is what a waiver claim costs, not what a bench swap costs.
+
+    The page told a manager to "bid $10" to move a player he already rostered
+    into an open slot, directly under a panel saying nothing was available to
+    add. That is not advice, it is noise, and it makes the rest look unreliable.
+    """
+
+    async def test_no_bid_advice_when_nothing_is_available(
+        self, client, auth_headers, both, monkeypatch
+    ):
+        from app.api import actions
+
+        async def empty_pool(league, position):
+            return []
+
+        monkeypatch.setattr(actions, "_free_agents", empty_pool)
+
+        lid = both["espn"]["league"]
+        body = (await client.get(f"/api/actions/{lid}", headers=auth_headers)).json()
+
+        for action in body["actions"]:
+            assert action["waiver_targets"] == []
+            assert action["faab"] is None, "advised a bid with nothing to bid on"
+
+    async def test_bid_advice_appears_when_there_is_a_target(
+        self, client, auth_headers, both, monkeypatch
+    ):
+        from app.api import actions
+
+        async def pool(league, position):
+            return [{
+                "player_id": 99, "full_name": "Real Target", "position_name": "WR",
+                "pro_team_abbr": "NYG", "projected_points": 11.0, "injury_status": None,
+            }]
+
+        async def budget(league, team):
+            return {"remaining": 100.0, "total": 100.0}
+
+        monkeypatch.setattr(actions, "_free_agents", pool)
+        monkeypatch.setattr(actions, "_my_budget", budget)
+
+        lid = both["espn"]["league"]
+        body = (await client.get(f"/api/actions/{lid}", headers=auth_headers)).json()
+
+        withtargets = [a for a in body["actions"] if a["waiver_targets"]]
+        for action in withtargets:
+            assert action["faab"] is not None
+            assert action["faab"]["suggested_bid"] >= 1

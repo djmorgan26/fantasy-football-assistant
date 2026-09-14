@@ -156,6 +156,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </footer>
         {/* Clears the fixed bottom bar on phones; the bar is hidden from lg: up. */}
         <div className="pb-tabbar lg:hidden" aria-hidden />
+        {/* Desktop has no tab bar, so nothing kept the floating assistant off
+            the end of the page. This is the room it needs. */}
+        <div className="hidden h-16 lg:block" aria-hidden />
       </div>
 
       <MobileTabBar leagueId={leagueId} onMore={() => setDrawerOpen(true)} />

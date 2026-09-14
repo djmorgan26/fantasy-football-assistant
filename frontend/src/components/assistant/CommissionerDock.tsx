@@ -71,19 +71,33 @@ export const CommissionerDock: React.FC = () => {
 
   return (
     <>
-      {/* The launcher clears the mobile tab bar; on desktop it sits in the corner. */}
+      {/* A compact disc that clears the mobile tab bar and sits in the corner on
+          desktop. It used to be a full pill with the label always showing,
+          which floated a large opaque block over whatever was underneath it.
+          The label now unfurls on hover or keyboard focus, so the resting
+          footprint is one 48px target and the wording is still discoverable. */}
       <button
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Ask the Commissioner"
         className={cn(
-          'fixed right-4 z-30 flex items-center gap-2 rounded-pill bg-brand px-4 py-3 font-semibold text-brand-fg shadow-elevation-3',
-          'transition-transform hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+          'group fixed right-4 z-30 flex h-12 items-center justify-center rounded-pill bg-brand px-3.5',
+          'font-semibold text-brand-fg shadow-elevation-3',
+          'transition-shadow hover:shadow-elevation-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
           'bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:bottom-6'
         )}
       >
-        <SparklesIcon className="h-5 w-5" />
-        <span className="hidden text-sm sm:inline">Ask the Commissioner</span>
+        <SparklesIcon className="h-5 w-5 shrink-0" />
+        <span
+          className={cn(
+            'max-w-0 overflow-hidden whitespace-nowrap text-sm opacity-0',
+            'transition-all duration-200 motion-reduce:transition-none',
+            'group-hover:ml-2 group-hover:max-w-[12rem] group-hover:opacity-100',
+            'group-focus-visible:ml-2 group-focus-visible:max-w-[12rem] group-focus-visible:opacity-100'
+          )}
+        >
+          Ask the Commissioner
+        </span>
       </button>
 
       <Transition show={open} as={Fragment}>

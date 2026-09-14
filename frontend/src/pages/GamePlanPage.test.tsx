@@ -158,4 +158,15 @@ describe('GamePlanPage', () => {
     show(undefined, { isError: true, error: { detail: 'Upstream is down' } });
     expect(screen.getByText('Upstream is down')).toBeInTheDocument();
   });
+
+  it('does not ask you to bid when there is nothing to claim', () => {
+    // Moving your own bench player into the slot costs nothing. Showing a bid
+    // under "nothing is available" reads as advice to bid on a player you
+    // already own.
+    show(plan({ actions: [action({ waiver_targets: [], faab: null })] }));
+
+    expect(screen.getByText(/Nothing better than your bench is free/)).toBeInTheDocument();
+    expect(screen.queryByText('What to bid')).toBeNull();
+    expect(screen.queryByText(/\$20/)).toBeNull();
+  });
 });
