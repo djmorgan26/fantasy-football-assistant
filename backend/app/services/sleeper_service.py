@@ -733,3 +733,72 @@ async def build_team_roster_entries(
     order = {pid: i for i, pid in enumerate(starters)}
     roster.sort(key=lambda p: order.get(p["player_id"], len(order) + 1))
     return roster
+
+
+FANTASY_POSITIONS = ("QB", "RB", "WR", "TE", "K", "DEF")
+
+
+async def get_free_agents(
+    sleeper_league_id: str,
+    position: Optional[str] = None,
+    limit: int = 25,
+) -> List[Dict[str, Any]]:
+    """Players in the pool that nobody in this league rosters.
+
+    Sleeper publishes no free-agent endpoint: the pool is everyone in the
+    player dictionary minus everyone on a roster, so it has to be derived. The
+    dictionary is ~10MB, which is why this goes through the shared cache rather
+    than fetching its own copy.
+
+    Ranked by prorated season projection, the same number the roster entries
+    carry, so a free agent and a bench player can be compared directly.
+    """
+    from app.services.draft_service import draft_service
+
+    service = SleeperService()
+    rosters = await service.get_rosters(sleeper_league_id)
+    players_map = await draft_service.get_players_cached()
+    projections = await draft_service._get_projections(settings.espn_season_year)
+
+    rostered: set = set()
+    for roster in rosters or []:
+        for pid in (roster.get("players") or []):
+            rostered.add(str(pid))
+
+    wanted = position.upper() if position else None
+    if wanted == "D/ST":
+        wanted = "DEF"
+
+    out: List[Dict[str, Any]] = []
+    for pid, meta in (players_map or {}).items():
+        if str(pid) in rostered:
+            continue
+        if not isinstance(meta, dict):
+            continue
+
+        pos = meta.get("position")
+        if pos not in FANTASY_POSITIONS:
+            continue
+        if wanted and pos != wanted:
+            continue
+        # Someone who is not on an NFL roster cannot help this week.
+        if pos != "DEF" and not meta.get("team"):
+            continue
+
+        season_proj = (projections.get(str(pid)) or {}).get("pts_ppr")
+        if not season_proj:
+            continue
+
+        out.append({
+            "player_id": str(pid),
+            "full_name": meta.get("full_name")
+            or f"{meta.get('first_name', '')} {meta.get('last_name', '')}".strip()
+            or str(pid),
+            "position_name": "D/ST" if pos == "DEF" else pos,
+            "pro_team_abbr": meta.get("team"),
+            "projected_points": round(float(season_proj) / REGULAR_SEASON_WEEKS, 2),
+            "injury_status": meta.get("injury_status"),
+        })
+
+    out.sort(key=lambda p: p["projected_points"], reverse=True)
+    return out[:limit]

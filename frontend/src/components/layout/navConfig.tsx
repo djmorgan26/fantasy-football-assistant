@@ -11,6 +11,7 @@ import {
   RssIcon,
   SignalIcon,
   Square3Stack3DIcon,
+  ClipboardDocumentCheckIcon,
 } from '@heroicons/react/24/outline';
 
 export interface NavItem {
@@ -34,10 +35,13 @@ export const PRIMARY_NAV: NavItem[] = [
 export const leagueNav = (leagueId: string): NavItem[] => [
   { label: 'Overview', to: `/leagues/${leagueId}`, icon: Squares2X2Icon, end: true },
   { label: 'My Roster', to: `/leagues/${leagueId}/roster`, icon: UserGroupIcon },
-  // Order is the mobile tab bar's order, and it only shows four. Game Day is
-  // the most valuable screen in the app on a Sunday; the board is the reason to
-  // open it the rest of the week. The wire is a weekday read and sits behind More.
+  // Order is the mobile tab bar's order, and it only shows four. The two that
+  // earn a slot are the ones you open to *act*: Game Day while the games are on,
+  // Game Plan when a starter is hurt and the lineup needs fixing. That costs the
+  // board its slot, which is a real trade - the board is the reason to open the
+  // app midweek - but a lineup hole is time-critical and a group chat is not.
   { label: 'Game Day', to: `/leagues/${leagueId}/gameday`, icon: SignalIcon },
+  { label: 'Game Plan', to: `/leagues/${leagueId}/plan`, icon: ClipboardDocumentCheckIcon },
   { label: 'Board', to: `/leagues/${leagueId}/board`, icon: ChatBubbleLeftRightIcon },
   { label: 'News', to: `/leagues/${leagueId}/news`, icon: RssIcon },
   { label: 'Players', to: `/leagues/${leagueId}/players`, icon: MagnifyingGlassIcon },

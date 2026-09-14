@@ -10,6 +10,7 @@ import { RegisterPage } from '@/pages/RegisterPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { LeaguesPage } from '@/pages/LeaguesPage';
 import { ConnectLeaguePage } from '@/pages/ConnectLeaguePage';
+import { GamePlanPage } from '@/pages/GamePlanPage';
 import { LeagueDetailPage } from '@/pages/LeagueDetailPage';
 import { TeamRosterPage } from '@/pages/TeamRosterPage';
 import { TradeAnalyzerPage } from '@/pages/TradeAnalyzerPage';
@@ -165,6 +166,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <BoardPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="leagues/:leagueId/plan"
+                element={
+                  <ProtectedRoute>
+                    <GamePlanPage />
                   </ProtectedRoute>
                 }
               />

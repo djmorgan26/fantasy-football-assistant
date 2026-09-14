@@ -35,13 +35,17 @@ describe('leagueNav', () => {
     expect(overview?.to).toBe('/leagues/42');
   });
 
-  it('spends the tab bar\'s four slots on the screens people open', () => {
-    // MobileTabBar slices the first four. Game Day is the reason to open the
-    // app on a Sunday and the Board is the reason the rest of the week; the
-    // wire is a weekday read and deliberately sits behind More.
+  it('spends the tab bar\'s four slots on the screens you act on', () => {
+    // MobileTabBar slices the first four. Game Day covers the games while they
+    // are on and Game Plan covers a broken lineup, both time-critical. The
+    // board is the midweek draw but it can wait behind More, which is a
+    // deliberate trade rather than an oversight.
     const firstFour = leagueNav('42').slice(0, 4).map((i) => i.label);
-    expect(firstFour).toEqual(['Overview', 'My Roster', 'Game Day', 'Board']);
-    expect(leagueNav('42').map((i) => i.label)).toContain('News');
+    expect(firstFour).toEqual(['Overview', 'My Roster', 'Game Day', 'Game Plan']);
+
+    const all = leagueNav('42').map((i) => i.label);
+    expect(all).toContain('Board');
+    expect(all).toContain('News');
   });
 
   it('gives every item an icon and a unique route', () => {

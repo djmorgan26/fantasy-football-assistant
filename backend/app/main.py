@@ -11,7 +11,7 @@ from app.db.database import engine, Base
 from app.api import (
     auth, leagues, teams, players, trades, suggestions, sleeper_leagues,
     weekly_recap, draft, content, board, news, assistant, health, gameday,
-    portfolio,
+    portfolio, actions,
 )
 from app.core.observability import install_observability
 
@@ -134,6 +134,7 @@ app.include_router(news.router, prefix="/api")
 app.include_router(assistant.router, prefix="/api")
 app.include_router(gameday.router, prefix="/api")
 app.include_router(portfolio.router, prefix="/api")
+app.include_router(actions.router, prefix="/api")
 
 
 # ESPN service health check

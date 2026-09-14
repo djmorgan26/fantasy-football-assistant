@@ -727,3 +727,82 @@ export interface Portfolio {
   exposure: PlayerExposure[];
   totals: { points: number; projected: number; winning: number; alerts: number };
 }
+
+// ---------------------------------------------------------------- action plan
+
+export type ActionUrgency = 'critical' | 'high' | 'medium' | 'low';
+
+export interface LineupHole {
+  player: string;
+  player_id: number | string;
+  position: string;
+  slot: string;
+  status: string;
+  points_lost: number;
+}
+
+export interface BenchOption {
+  player: string;
+  player_id: number | string;
+  position: string;
+  projected: number;
+  last_week: number;
+  team: string | null;
+}
+
+export interface WaiverTarget {
+  player: string;
+  player_id: number | string;
+  position: string;
+  team: string | null;
+  projected: number;
+  added_by: number;
+  contested: boolean;
+}
+
+export interface FaabAdvice {
+  remaining: number;
+  total: number;
+  spent_pct: number;
+  suggested_bid: number;
+  max_sensible: number;
+  note: string | null;
+}
+
+export interface TradeAngle {
+  team: string;
+  they_need: string;
+  they_can_spare: string;
+  your_surplus_points: number;
+}
+
+export interface RosterAction {
+  kind: string;
+  urgency: ActionUrgency;
+  hole: LineupHole;
+  start_instead: BenchOption | null;
+  other_bench: BenchOption[];
+  waiver_targets: WaiverTarget[];
+  faab: FaabAdvice | null;
+  trades: TradeAngle[];
+}
+
+export interface LineupRisk {
+  player: string;
+  slot: string;
+  status: string;
+  projected: number;
+}
+
+export interface ActionPlan {
+  league_id: number;
+  league: string;
+  team: string;
+  week: number;
+  summary: string | null;
+  actions: RosterAction[];
+  risks: LineupRisk[];
+  depth: Record<string, { count: number; starters: number; bench_points: number }>;
+  budget: { remaining: number | null; total: number | null };
+  all_clear: boolean;
+}

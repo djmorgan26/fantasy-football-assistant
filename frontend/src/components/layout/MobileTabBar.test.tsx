@@ -10,7 +10,7 @@ describe('MobileTabBar', () => {
 
     expect(screen.getByText('Overview')).toBeInTheDocument();
     expect(screen.getByText('My Roster')).toBeInTheDocument();
-    expect(screen.getByText('Board')).toBeInTheDocument();
+    expect(screen.getByText('Game Plan')).toBeInTheDocument();
   });
 
   it('falls back to the top-level nav outside a league', () => {
