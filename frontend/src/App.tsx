@@ -9,8 +9,7 @@ import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { LeaguesPage } from '@/pages/LeaguesPage';
-import { LeagueConnectPage } from '@/pages/LeagueConnectPage';
-import { SleeperConnectPage } from '@/pages/SleeperConnectPage';
+import { ConnectLeaguePage } from '@/pages/ConnectLeaguePage';
 import { LeagueDetailPage } from '@/pages/LeagueDetailPage';
 import { TeamRosterPage } from '@/pages/TeamRosterPage';
 import { TradeAnalyzerPage } from '@/pages/TradeAnalyzerPage';
@@ -92,7 +91,7 @@ function App() {
                 path="leagues/connect"
                 element={
                   <ProtectedRoute>
-                    <LeagueConnectPage />
+                    <ConnectLeaguePage />
                   </ProtectedRoute>
                 }
               />
@@ -100,7 +99,7 @@ function App() {
                 path="leagues/sleeper/connect"
                 element={
                   <ProtectedRoute>
-                    <SleeperConnectPage />
+                    <ConnectLeaguePage />
                   </ProtectedRoute>
                 }
               />

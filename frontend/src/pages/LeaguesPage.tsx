@@ -86,20 +86,12 @@ export const LeaguesPage: React.FC = () => {
         title="Your Leagues"
         subtitle="Manage your fantasy football leagues across ESPN and Sleeper"
         actions={
-          <>
-            <Link to="/leagues/connect" className="flex-1 sm:flex-none">
-              <Button variant="secondary" size="sm" fullWidth className="sm:w-auto">
-                <PlusIcon className="h-5 w-5" />
-                ESPN League
-              </Button>
-            </Link>
-            <Link to="/leagues/sleeper/connect" className="flex-1 sm:flex-none">
-              <Button variant="primary" size="sm" fullWidth className="sm:w-auto">
-                <PlusIcon className="h-5 w-5" />
-                Sleeper League
-              </Button>
-            </Link>
-          </>
+          <Link to="/leagues/connect" className="flex-1 sm:flex-none">
+            <Button variant="primary" size="sm" fullWidth className="sm:w-auto">
+              <PlusIcon className="h-5 w-5" />
+              Connect League
+            </Button>
+          </Link>
         }
       />
 
@@ -109,7 +101,7 @@ export const LeaguesPage: React.FC = () => {
           <EmptyState
             icon={TrophyIcon}
             title="No leagues connected yet"
-            description="Connect your ESPN fantasy league to get started with intelligent analysis, trade recommendations, and roster insights."
+            description="Connect an ESPN or Sleeper league to get started with intelligent analysis, trade recommendations, and roster insights."
             action={
               <Link to="/leagues/connect">
                 <Button size="lg">
