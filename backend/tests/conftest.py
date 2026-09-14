@@ -100,11 +100,16 @@ def reset_service_caches():
     """
     from app.services.draft_service import draft_service
     from app.services import news_service
+    from app.services.sleeper_service import clear_request_cache
 
     def clear():
         draft_service._players_cache = None
         draft_service._players_cached_at = None
         draft_service._proj_cache = {}
+        draft_service._locks = {}
+        # Sleeper responses are memoized for 30s; without this a mock-mode test
+        # serves its payloads to the next real-mode one.
+        clear_request_cache()
         draft_service._board_cache = {}
 
         news_service._news_cache.clear()

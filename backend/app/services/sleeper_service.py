@@ -3,8 +3,11 @@ Sleeper Fantasy Football API Service
 Provides async interface to Sleeper API endpoints
 API Documentation: https://docs.sleeper.app/
 """
+import asyncio
+import time
+
 import httpx
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 import structlog
 
@@ -31,6 +34,49 @@ class SleeperConnectionError(SleeperError):
 class SleeperNotFoundError(SleeperError):
     """Exception for 404 errors"""
     pass
+
+
+# Sleeper's reads are public GETs of slowly-changing data, and the app fans out
+# hard over them: building the league-wide ownership map asks for a roster per
+# team, so one /api/news/league request used to pull the same league, rosters
+# and matchups a dozen times each. A short TTL collapses that fan-out into one
+# call without making anything meaningfully staler - Game Day already refetches
+# on a two-minute timer.
+_REQUEST_TTL_SECONDS = 30.0
+_request_cache: Dict[str, Tuple[float, Any]] = {}
+_request_locks: Dict[str, Tuple[Any, asyncio.Lock]] = {}
+
+
+def _request_lock(key: str) -> asyncio.Lock:
+    """A lock per endpoint, rebuilt whenever the event loop changes.
+
+    These live at module scope, so a reused serverless container can hand them
+    a fresh loop; a lock left over from a dead one raises rather than waits.
+    """
+    loop = asyncio.get_running_loop()
+    existing = _request_locks.get(key)
+    if existing is None or existing[0] is not loop:
+        lock = asyncio.Lock()
+        _request_locks[key] = (loop, lock)
+        return lock
+    return existing[1]
+
+
+def _cached_response(key: str) -> Optional[Tuple[Any]]:
+    """The cached value wrapped in a tuple, or None. A bare None is a value."""
+    hit = _request_cache.get(key)
+    if hit is None:
+        return None
+    cached_at, value = hit
+    if time.monotonic() - cached_at >= _REQUEST_TTL_SECONDS:
+        return None
+    return (value,)
+
+
+def clear_request_cache() -> None:
+    """Drop everything. Used between tests, where mock and real must not mix."""
+    _request_cache.clear()
+    _request_locks.clear()
 
 
 class SleeperService:
@@ -60,7 +106,25 @@ class SleeperService:
             "IR": "IR"
         }
 
-    async def _make_request(
+    async def _make_request(self, endpoint: str, max_retries: int = 3) -> Any:
+        """Cached, single-flight wrapper around the real fetch."""
+        hit = _cached_response(endpoint)
+        if hit is not None:
+            return hit[0]
+
+        async with _request_lock(endpoint):
+            # The holder of the lock has almost certainly just filled this.
+            hit = _cached_response(endpoint)
+            if hit is not None:
+                return hit[0]
+
+            value = await self._fetch(endpoint, max_retries)
+            # Only successes are cached; a raise propagates and is retried next
+            # time rather than being remembered as an answer.
+            _request_cache[endpoint] = (time.monotonic(), value)
+            return value
+
+    async def _fetch(
         self,
         endpoint: str,
         max_retries: int = 3

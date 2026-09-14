@@ -123,3 +123,108 @@ class TestLoopSafety:
 
         assert result  # the fetch actually completed on the new loop
         assert svc._locks["players"][1] is not first
+
+
+class TestSleeperRequestMemo:
+    """Every Sleeper read is memoized briefly, because the app fans out on them.
+
+    Building the league-wide ownership map asks for a roster per team, so the
+    same league, rosters and matchups were each fetched a dozen times in one
+    request before this.
+    """
+
+    @pytest.fixture(autouse=True)
+    def clean(self):
+        from app.services.sleeper_service import clear_request_cache
+
+        clear_request_cache()
+        yield
+        clear_request_cache()
+
+    async def test_concurrent_reads_hit_the_network_once(self, monkeypatch):
+        from app.services.sleeper_service import SleeperService
+
+        calls = {"n": 0}
+
+        async def fake_fetch(self, endpoint, max_retries=3):
+            calls["n"] += 1
+            await asyncio.sleep(0.05)
+            return {"endpoint": endpoint}
+
+        monkeypatch.setattr(SleeperService, "_fetch", fake_fetch)
+
+        svc = SleeperService()
+        results = await asyncio.gather(*(svc.get_league("abc") for _ in range(12)))
+
+        assert calls["n"] == 1, f"{calls['n']} fetches for 12 concurrent reads"
+        assert all(r == results[0] for r in results)
+
+    async def test_different_endpoints_are_cached_separately(self, monkeypatch):
+        from app.services.sleeper_service import SleeperService
+
+        calls = {"n": 0}
+
+        async def fake_fetch(self, endpoint, max_retries=3):
+            calls["n"] += 1
+            return {"endpoint": endpoint}
+
+        monkeypatch.setattr(SleeperService, "_fetch", fake_fetch)
+
+        svc = SleeperService()
+        await asyncio.gather(svc.get_league("abc"), svc.get_rosters("abc"))
+        assert calls["n"] == 2
+
+    async def test_a_failure_is_not_remembered_as_an_answer(self, monkeypatch):
+        """A cached error would outlive the outage that caused it."""
+        from app.services.sleeper_service import SleeperService
+
+        calls = {"n": 0}
+
+        async def failing(self, endpoint, max_retries=3):
+            calls["n"] += 1
+            raise RuntimeError("sleeper down")
+
+        monkeypatch.setattr(SleeperService, "_fetch", failing)
+        svc = SleeperService()
+
+        for _ in range(2):
+            with pytest.raises(RuntimeError):
+                await svc.get_league("abc")
+
+        assert calls["n"] == 2, "the failure was cached instead of retried"
+
+    async def test_an_expired_entry_is_refetched(self, monkeypatch):
+        from app.services import sleeper_service as ss
+
+        calls = {"n": 0}
+
+        async def fake_fetch(self, endpoint, max_retries=3):
+            calls["n"] += 1
+            return {"n": calls["n"]}
+
+        monkeypatch.setattr(ss.SleeperService, "_fetch", fake_fetch)
+        monkeypatch.setattr(ss, "_REQUEST_TTL_SECONDS", 0.0)
+
+        svc = ss.SleeperService()
+        await svc.get_league("abc")
+        await svc.get_league("abc")
+
+        assert calls["n"] == 2
+
+    async def test_a_falsy_response_still_counts_as_cached(self, monkeypatch):
+        """An empty matchup list is an answer, not a cache miss."""
+        from app.services.sleeper_service import SleeperService
+
+        calls = {"n": 0}
+
+        async def empty(self, endpoint, max_retries=3):
+            calls["n"] += 1
+            return []
+
+        monkeypatch.setattr(SleeperService, "_fetch", empty)
+
+        svc = SleeperService()
+        await svc.get_matchups("abc", 1)
+        await svc.get_matchups("abc", 1)
+
+        assert calls["n"] == 1
