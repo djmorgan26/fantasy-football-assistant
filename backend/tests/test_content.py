@@ -89,3 +89,35 @@ class TestGeneration:
     async def test_health(self, client: AsyncClient, mock_mode):
         resp = await client.get("/api/content/health")
         assert resp.status_code == 200
+
+
+class TestPlainTextFormat:
+    """Press Box renders the model's reply as raw text.
+
+    PressBoxPage drops it into a whitespace-pre-wrap div with no markdown
+    parser, so a **bold** team name reaches the page as literal asterisks and
+    the copy button shares them that way. The recap prompt learned this once
+    already in weekly_recap.py; these four prompts are a separate code path and
+    did not, which is how it shipped.
+    """
+
+    CONTENT_TYPES = ("weekly_recap", "power_rankings", "awards", "season_recap")
+
+    @pytest.mark.parametrize("content_type", CONTENT_TYPES)
+    def test_every_prompt_forbids_markdown(self, content_type):
+        from app.services.content_service import ContentService
+
+        prompt = ContentService()._build_prompt(
+            content_type, "Test League", 1, None, None, None
+        )
+        assert "FORMAT:" in prompt, f"{content_type} prompt has no format rules"
+        assert "**bold**" in prompt, f"{content_type} does not forbid bold"
+
+    def test_an_unknown_content_type_still_gets_the_rules(self):
+        """The fallback branch is the one a fifth content type lands in first."""
+        from app.services.content_service import ContentService
+
+        prompt = ContentService()._build_prompt(
+            "some_new_thing", "Test League", 1, None, None, None
+        )
+        assert "FORMAT:" in prompt

@@ -35,6 +35,19 @@ DEFAULT_VOICE = (
 )
 
 
+# Press Box drops the model's reply into a whitespace-pre-wrap div with no
+# markdown parser, so "**Mind Goblins**" reaches the page as literal asterisks
+# and the copy button shares them that way too. Fixing it in the prompt costs
+# nothing; adding a renderer would mean sanitizing model output on the page.
+FORMAT_RULES = """FORMAT:
+- Plain text only. Markdown does not render here, it just shows the raw
+  characters, so no **bold**, no *italics*, no # headings, no - bullets and no
+  backticks.
+- Separate paragraphs with a blank line.
+- For a ranked list or an award list, start the line with the number or the
+  award name followed by a period or a colon. That reads fine as plain text."""
+
+
 class ContentService:
     """Generates league-personalized written content from real weekly data."""
 
@@ -395,7 +408,7 @@ class ContentService:
             ),
         }.get(content_type, f"Write fun content for \"{league_name}\".")
 
-        blocks = [voice, "", instructions, ""]
+        blocks = [voice, "", instructions, "", FORMAT_RULES, ""]
         if narrative:
             blocks.append(self._facts_block(narrative))
         if standings:
