@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { StrategicSuggestion, SuggestionFilters, League } from '@/types';
+import { StrategicSuggestion, SuggestionFilters } from '@/types';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -19,7 +19,7 @@ import { cn } from '@/utils';
 import api from '@/services/api';
 
 interface StrategicSuggestionsProps {
-  league: League;
+  leagueId: number;
   userTeamId?: number;
   className?: string;
 }
@@ -124,7 +124,7 @@ const SuggestionCard: React.FC<{ suggestion: StrategicSuggestion }> = ({ suggest
 };
 
 export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
-  league,
+  leagueId,
   userTeamId,
   className
 }) => {
@@ -143,7 +143,7 @@ export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
     setError(null);
 
     try {
-      const response = await api.get(`/suggestions/${league.id}/${userTeamId}`);
+      const response = await api.get(`/suggestions/${leagueId}/${userTeamId}`);
       setSuggestions(response.data);
     } catch (err: any) {
       console.error('Failed to fetch suggestions:', err);
@@ -152,7 +152,7 @@ export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [league.id, userTeamId]);
+  }, [leagueId, userTeamId]);
 
   useEffect(() => {
     fetchSuggestions();

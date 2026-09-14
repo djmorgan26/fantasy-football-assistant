@@ -169,4 +169,16 @@ describe('GamePlanPage', () => {
     expect(screen.queryByText('What to bid')).toBeNull();
     expect(screen.queryByText(/\$20/)).toBeNull();
   });
+
+  it('carries the strategic suggestions, so all the advice is on one page', () => {
+    // They used to live on the league overview, one page away from the plan
+    // they belong with.
+    show(plan());
+    expect(screen.getByText('Strategic Suggestions')).toBeInTheDocument();
+  });
+
+  it('still offers them when the action plan itself failed', () => {
+    show(undefined, { isError: true, error: { detail: 'Upstream is down' } });
+    expect(screen.getByText('Strategic Suggestions')).toBeInTheDocument();
+  });
 });

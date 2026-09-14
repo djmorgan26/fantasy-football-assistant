@@ -15,7 +15,6 @@ import { Skeleton, SkeletonCard } from '@/components/ui/Skeleton';
 import { WeeklyRecap } from '@/components/recap/WeeklyRecap';
 import { MatchupCard } from '@/components/matchups/MatchupCard';
 import { WaiverBudgetCard } from '@/components/budget/WaiverBudgetCard';
-import { StrategicSuggestions } from '@/components/suggestions/StrategicSuggestions';
 import { TeamSelectionModal } from '@/components/team/TeamSelectionModal';
 import {
   TrophyIcon,
@@ -284,12 +283,6 @@ export const LeagueDetailPage: React.FC = () => {
               )}
             </CardContent>
           </Card>
-
-          {/* Strategic Suggestions */}
-          <StrategicSuggestions 
-            league={league} 
-            userTeamId={userTeam?.id}
-          />
 
           {/* Teams */}
           <Card>

@@ -10,11 +10,14 @@ import {
 } from '@heroicons/react/24/outline';
 
 import { PageContainer, PageHeader } from '@/components/layout/Page';
+import { StrategicSuggestions } from '@/components/suggestions/StrategicSuggestions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ToolHeader } from '@/components/ui/ToolHeader';
 import { useActionPlan } from '@/hooks/useActionPlan';
+import { useCurrentUser } from '@/hooks/useAuth';
+import { useLeagueTeams } from '@/hooks/useTeams';
 import { ActionUrgency, RosterAction } from '@/types';
 import { cn } from '@/utils';
 
@@ -182,6 +185,12 @@ export const GamePlanPage: React.FC = () => {
   const id = Number(leagueId);
   const { data, isLoading, isError, error } = useActionPlan(id);
 
+  // The strategic suggestions used to sit on the league overview, which meant
+  // the two halves of "what should I do this week" lived on different pages.
+  const { data: teams } = useLeagueTeams(id);
+  const { data: currentUser } = useCurrentUser();
+  const userTeam = teams?.find((team) => team.owner_user_id === currentUser?.id);
+
   return (
     <PageContainer>
       <PageHeader
@@ -273,6 +282,8 @@ export const GamePlanPage: React.FC = () => {
           )}
         </>
       )}
+
+      <StrategicSuggestions className="mt-6" leagueId={id} userTeamId={userTeam?.id} />
     </PageContainer>
   );
 };
