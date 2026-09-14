@@ -57,38 +57,53 @@ Notes on the edges:
   providing a current one. That is their only recovery path if they ever lose
   access to the Google account.
 
-## One-time setup
+## Google Cloud configuration
 
-Creating the OAuth client is **Console-only**. Google has never exposed it
-through `gcloud` or a public API; the `iap oauth-brands` endpoints are
-IAP-specific and reject projects that do not belong to an organization.
+All of this is already done. Recorded here because none of it lives in the
+repository, so this file is the only record of how production is wired.
 
-A project has already been created: **`fantasy-football-asst`**.
+| Thing | Value |
+| --- | --- |
+| Project | `fantasy-football-asst` (number 446031807254) |
+| Organization | none, it is a personal account |
+| Client type | Web application, "Fantasy Football Assistant Web" |
+| Client id | `446031807254-lakhqujd7p746v7rpgcfg9elaaruhcjm.apps.googleusercontent.com` |
+| Publishing status | Testing |
 
-1. Open the [Google Auth Platform](https://console.cloud.google.com/auth/overview)
-   and select the `fantasy-football-asst` project.
-2. Configure the consent screen: **External** user type, app name
-   "Fantasy Football Assistant", your email for both support and developer
-   contact. No scopes beyond the default `openid`, `email`, `profile` are
-   needed, so the app stays out of verification review.
-3. **Credentials → Create Credentials → OAuth client ID**, type
-   **Web application**.
-4. Under **Authorized JavaScript origins**, add:
-   - `https://fantasy-football-real.vercel.app`
-   - `http://localhost:3000`
-   - `http://localhost:5173`
+Authorized JavaScript origins:
 
-   Leave **Authorized redirect URIs** empty. This flow does not redirect.
-5. Copy the client id (it ends in `.apps.googleusercontent.com`) and set it:
+- `https://fantasy-football-real.vercel.app`
+- `http://localhost:3000`
+- `http://localhost:5173`
 
-   ```
-   vercel env add GOOGLE_CLIENT_ID production
-   echo "GOOGLE_CLIENT_ID=..." >> backend/.env   # for local dev
-   ```
+Authorized redirect URIs: **none**. This flow does not redirect. Origins must
+match exactly, scheme and port included; a mismatch shows up as the button
+silently failing to render, with `origin_mismatch` in the browser console.
 
-Origins must match exactly, scheme and port included. A mismatch shows up as
-the button silently failing to render, with a `origin_mismatch` error in the
-browser console.
+The client id is set as `GOOGLE_CLIENT_ID` on the `fantasy-football-real`
+Vercel project and in `backend/.env` for local work. It is served to the
+frontend from `/api/meta`, so rotating it needs a redeploy but not a rebuild.
+
+Creating the OAuth client is Console-only. Google has never exposed it through
+`gcloud` or a public API: the `iap oauth-brands` endpoint rejects it with
+`"Project must belong to an organization."` and, even with an org, only issues
+IAP-internal clients rather than a general web client.
+
+### Testing mode limits who can sign in
+
+The app is in **Testing**, so only accounts on the test-user list can sign in.
+Everyone else gets `access_denied`. Currently listed:
+
+- `davidjmorgan26@gmail.com`
+
+Add more at [Audience](https://console.cloud.google.com/auth/audience?project=fantasy-football-asst),
+up to 100 over the app's lifetime.
+
+To let anyone sign in, publish the app. The Console requires the
+[Branding](https://console.cloud.google.com/auth/branding?project=fantasy-football-asst)
+page to be completed first (app logo, home page, privacy policy and terms
+URLs). Publishing itself needs no Google verification review, because the only
+scopes requested are `openid`, `email` and `profile`, all non-sensitive.
 
 ## Deploy order
 
