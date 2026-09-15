@@ -4,6 +4,7 @@ import { CheckCircleIcon } from '@heroicons/react/24/solid';
 
 import { EspnConnectForm } from '@/components/connect/EspnConnectForm';
 import { SleeperConnectForm } from '@/components/connect/SleeperConnectForm';
+import { YahooConnectForm } from '@/components/connect/YahooConnectForm';
 import { PageContainer, PageHeader } from '@/components/layout/Page';
 import { Card, CardContent } from '@/components/ui/Card';
 import { cn } from '@/utils';
@@ -17,7 +18,7 @@ import { cn } from '@/utils';
  * link on the Leagues page. Picking is now the first thing the page asks, and
  * switching is one tap rather than a trip back.
  */
-type Platform = 'espn' | 'sleeper';
+type Platform = 'espn' | 'sleeper' | 'yahoo';
 
 const PLATFORMS: {
   key: Platform;
@@ -43,21 +44,31 @@ const PLATFORMS: {
     mark: 'bg-[#4f46e5] text-white',
     ring: 'border-[#4f46e5] bg-[#4f46e5]/5',
   },
+  {
+    key: 'yahoo',
+    name: 'Yahoo',
+    monogram: 'Y!',
+    needs: 'Sign in securely with Yahoo to choose your league',
+    mark: 'bg-[#6001d2] text-white',
+    ring: 'border-[#6001d2] bg-[#6001d2]/5',
+  },
 ];
 
 export const ConnectLeaguePage: React.FC = () => {
   const { pathname } = useLocation();
   // Nothing links to /leagues/sleeper/connect any more, but the route is kept
   // so an old bookmark still works, and it lands on Sleeper as it used to.
-  const [platform, setPlatform] = useState<Platform>(
-    pathname.includes('sleeper') ? 'sleeper' : 'espn'
-  );
+  const [platform, setPlatform] = useState<Platform>(() => {
+    const selected = new URLSearchParams(window.location.search).get('platform');
+    if (selected === 'yahoo') return 'yahoo';
+    return pathname.includes('sleeper') ? 'sleeper' : 'espn';
+  });
 
   return (
     <PageContainer width="narrow">
       <PageHeader
         title="Connect a league"
-        subtitle="Works with ESPN and Sleeper. Connect as many as you like."
+        subtitle="Works with ESPN, Sleeper, and Yahoo. Connect as many as you like."
       />
 
       <fieldset className="mb-6">
@@ -105,16 +116,18 @@ export const ConnectLeaguePage: React.FC = () => {
         <CardContent className="p-4 sm:p-6">
           {/* Keyed so switching platforms resets the other form's state rather
               than leaving a half-filled field behind it. */}
-          {platform === 'espn' ? (
-            <EspnConnectForm key="espn" />
-          ) : (
+            {platform === 'espn' ? (
+              <EspnConnectForm key="espn" />
+            ) : platform === 'sleeper' ? (
             <SleeperConnectForm key="sleeper" />
+          ) : (
+            <YahooConnectForm key="yahoo" />
           )}
         </CardContent>
       </Card>
 
       <p className="mt-6 text-center text-xs text-fg-subtle">
-        We are not affiliated with ESPN or Sleeper. Platform names identify league
+        We are not affiliated with ESPN, Sleeper, or Yahoo. Platform names identify league
         connections only.
       </p>
     </PageContainer>

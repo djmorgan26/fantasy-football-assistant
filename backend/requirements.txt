@@ -4,7 +4,8 @@ uvicorn[standard]==0.24.0
 
 # Database
 sqlalchemy==2.0.23
-greenlet==3.5.1
+# 3.5.1 was never published to PyPI; 3.2.5 is the current compatible release.
+greenlet==3.2.5
 alembic==1.13.1
 asyncpg==0.29.0
 psycopg2-binary==2.9.9

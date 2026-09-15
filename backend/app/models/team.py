@@ -14,6 +14,7 @@ class Team(Base):
     espn_team_id = Column(Integer, nullable=True)
     sleeper_roster_id = Column(Integer, nullable=True)
     sleeper_owner_id = Column(String(255), nullable=True)
+    yahoo_team_key = Column(String(255), nullable=True)
 
     # Team details
     name = Column(String(255), nullable=False)

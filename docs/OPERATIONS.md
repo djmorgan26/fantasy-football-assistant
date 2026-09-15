@@ -85,6 +85,8 @@ value.
 | `LLM_MODEL` | no | **verify it is still live before pinning** — see below |
 | `ESPN_SEASON_YEAR` | no | leave unset; the code derives it (March onward = the upcoming season) |
 | `MOCK_MODE` | no | `true` only for the demo deployment |
+| `YAHOO_CLIENT_ID`, `YAHOO_CLIENT_SECRET` | no | enable Yahoo Fantasy OAuth; the secret must remain server-only |
+| `YAHOO_REDIRECT_URI`, `FRONTEND_URL` | with Yahoo | callback registered with Yahoo, and the browser origin to return to after consent |
 
 ### The model pin
 

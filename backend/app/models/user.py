@@ -29,6 +29,13 @@ class User(Base):
     espn_s2_encrypted = Column(Text, nullable=True)
     espn_swid_encrypted = Column(Text, nullable=True)
 
+    # Yahoo access tokens are short-lived. Refresh tokens stay server-side and
+    # are encrypted with the same application key as ESPN private-league data.
+    yahoo_access_token_encrypted = Column(Text, nullable=True)
+    yahoo_refresh_token_encrypted = Column(Text, nullable=True)
+    yahoo_token_expires_at = Column(DateTime(timezone=True), nullable=True)
+    yahoo_guid = Column(String(255), nullable=True)
+
     # Relationships
     owned_leagues = relationship("League", back_populates="owner", foreign_keys="League.owner_user_id")
     teams = relationship("Team", back_populates="owner", foreign_keys="Team.owner_user_id")

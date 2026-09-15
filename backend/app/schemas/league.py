@@ -25,6 +25,7 @@ class LeagueResponse(LeagueBase):
     id: int
     platform: Optional[str] = None
     sleeper_league_id: Optional[str] = None
+    yahoo_league_key: Optional[str] = None
     size: int
     scoring_type: str
     current_week: int
@@ -50,3 +51,14 @@ class LeagueConnectionResponse(BaseModel):
     message: str
     league: Optional[LeagueResponse] = None
     teams: Optional[List[Dict[str, Any]]] = None
+
+
+class YahooLeagueSummary(BaseModel):
+    league_key: str
+    name: str
+    season: int
+    num_teams: int = 0
+
+
+class YahooConnectRequest(BaseModel):
+    league_key: str = Field(min_length=1, max_length=255)

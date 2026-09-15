@@ -286,6 +286,36 @@ async def sync_league(
                 league=LeagueResponse.from_orm(league),
             )
 
+        if league.platform == PlatformType.YAHOO:
+            from app.services.yahoo_service import YahooError, YahooService
+
+            try:
+                data, teams_data = await YahooService().league_and_teams(current_user, league.yahoo_league_key)
+            except YahooError as exc:
+                return LeagueConnectionResponse(success=False, message=f"Yahoo sync failed: {exc}")
+
+            league.name = data.get("name") or league.name
+            league.season_year = int(data.get("season") or league.season_year)
+            league.size = int(data.get("num_teams") or len(teams_data) or league.size)
+            league.last_synced = datetime.now(timezone.utc)
+            existing = {
+                team.yahoo_team_key: team
+                for team in (await db.execute(select(Team).where(Team.league_id == league.id))).scalars().all()
+            }
+            for team_data in teams_data:
+                team = existing.get(team_data["id"])
+                if team is None:
+                    team = Team(league_id=league.id, yahoo_team_key=team_data["id"], name=team_data["name"])
+                    db.add(team)
+                team.name, team.abbreviation, team.logo_url = team_data["name"], team_data["abbreviation"], team_data["logo_url"]
+                team.wins, team.losses, team.ties = team_data["wins"], team_data["losses"], team_data["ties"]
+                team.points_for, team.points_against = team_data["points_for"], team_data["points_against"]
+            await db.commit()
+            await db.refresh(league)
+            return LeagueConnectionResponse(
+                success=True, message=f"Synced {len(teams_data)} Yahoo teams", league=LeagueResponse.from_orm(league), teams=teams_data,
+            )
+
         espn_service = ESPNService()
         
         # Get stored credentials if available
@@ -473,6 +503,11 @@ async def get_league_matchups(
                 league.sleeper_league_id, week or league.current_week or 1
             )
             team_column = Team.sleeper_roster_id
+        elif league.platform == PlatformType.YAHOO:
+            raise HTTPException(
+                status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                detail="Yahoo matchup sync is not available yet.",
+            )
         else:
             espn_service = ESPNService()
             cookies = None
@@ -586,6 +621,11 @@ async def get_league_waiver_budgets(
 
             budgets_data = await sleeper_budgets(league.sleeper_league_id)
             team_column = Team.sleeper_roster_id
+        elif league.platform == PlatformType.YAHOO:
+            raise HTTPException(
+                status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                detail="Yahoo waiver-budget sync is not available yet.",
+            )
         else:
             espn_service = ESPNService()
             cookies = None

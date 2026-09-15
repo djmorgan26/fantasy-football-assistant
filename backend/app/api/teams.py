@@ -134,6 +134,15 @@ async def get_team_roster(
                 roster=roster,
             )
 
+        if league.platform == PlatformType.YAHOO:
+            # Yahoo league discovery and standings are normalized today. Its
+            # roster payload has a separate, deeply nested player schema and
+            # must not accidentally be sent to ESPN while that adapter lands.
+            raise HTTPException(
+                status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                detail="Yahoo roster sync is not available yet; league and standings sync are available.",
+            )
+
         # Get roster from ESPN API
         espn_service = ESPNService()
 

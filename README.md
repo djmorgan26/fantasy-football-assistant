@@ -1,6 +1,6 @@
 # Fantasy Football Assistant
 
-A companion app for ESPN and Sleeper fantasy leagues that knows your **whole
+A companion app for ESPN, Sleeper, and Yahoo fantasy leagues that knows your **whole
 league**, not just your team — and spends that on the things a national fantasy
 site cannot do.
 
@@ -55,8 +55,12 @@ scoring settings, so they reflect positional scarcity rather than generic
 rankings. Live pick tracking for Sleeper; a scoring-adjusted big board for ESPN,
 which has no public draft feed.
 
-**Roster, trades, players, waiver budgets** across both platforms, with a
+**Roster, trades, players, waiver budgets** across ESPN and Sleeper, with a
 mobile-first interface that works on a 320px screen.
+
+**Yahoo Fantasy.** Secure OAuth connection, league selection, standings/team
+sync, and re-sync are available. Yahoo's roster, matchup, and waiver adapters
+are intentionally not presented as complete yet.
 
 ## Stack
 

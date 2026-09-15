@@ -56,6 +56,7 @@ optional and degrades independently:
 | `DATABASE_URL` | Postgres instead of SQLite | SQLite file in `backend/` |
 | `GROQ_API_KEY` | all generated writing | content falls back to a facts summary |
 | `LLM_MODEL` | which model to use | the code default |
+| `YAHOO_CLIENT_ID`, `YAHOO_CLIENT_SECRET` | Yahoo Fantasy connection | Yahoo stays visibly unavailable; ESPN and Sleeper continue to work |
 
 **Sleeper needs nothing at all.** Its API is public and read-only; connecting a
 league takes a username, and the app looks up which leagues that username is in.
@@ -63,6 +64,11 @@ league takes a username, and the app looks up which leagues that username is in.
 Private ESPN leagues need the `espn_s2` and `SWID` cookies, entered per-user in
 Profile Settings and stored encrypted — see
 [ESPN API](ESPN_API_INTEGRATION.md).
+
+Yahoo Fantasy uses server-side OAuth, not copied browser cookies. Register the
+exact `YAHOO_REDIRECT_URI` with Yahoo, set the client id/secret plus
+`FRONTEND_URL`, and use the Yahoo option on Connect League. Access and refresh
+tokens are encrypted at rest and refresh automatically before a sync.
 
 > **Groq retires models regularly.** A retired model id returns
 > `404 model_not_found` and every generated feature silently falls back. Check

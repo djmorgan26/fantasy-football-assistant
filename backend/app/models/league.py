@@ -9,6 +9,7 @@ class PlatformType(str, enum.Enum):
     """Supported fantasy football platforms"""
     ESPN = "espn"
     SLEEPER = "sleeper"
+    YAHOO = "yahoo"
 
 
 class League(Base):
@@ -22,6 +23,7 @@ class League(Base):
     # Platform-specific IDs (only one should be populated based on platform)
     espn_league_id = Column(Integer, nullable=True, index=True)
     sleeper_league_id = Column(String(255), nullable=True, index=True)
+    yahoo_league_key = Column(String(255), nullable=True, index=True)
 
     # Common league information
     name = Column(String(255), nullable=False)
@@ -39,6 +41,7 @@ class League(Base):
     espn_swid_encrypted = Column(Text, nullable=True)
     # Sleeper doesn't require auth but we store the user_id for reference
     sleeper_user_id = Column(String(255), nullable=True)
+    yahoo_user_guid = Column(String(255), nullable=True)
 
     # League metadata
     current_week = Column(Integer, default=1)
@@ -67,4 +70,6 @@ class League(Base):
             return str(self.espn_league_id) if self.espn_league_id else None
         elif self.platform == PlatformType.SLEEPER:
             return self.sleeper_league_id
+        elif self.platform == PlatformType.YAHOO:
+            return self.yahoo_league_key
         return None

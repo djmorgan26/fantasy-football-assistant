@@ -59,6 +59,14 @@ class Settings(BaseSettings):
     # than half-enabling it.
     google_client_id: str = ""
 
+    # Yahoo Fantasy uses a server-side OAuth authorization-code flow. These
+    # remain empty until an approved Yahoo developer application exists; the
+    # UI detects that state and explains how to enable the connector.
+    yahoo_client_id: str = ""
+    yahoo_client_secret: str = ""
+    yahoo_redirect_uri: str = "http://localhost:8000/api/yahoo/callback"
+    frontend_url: str = "http://localhost:3000"
+
     # CORS
     allowed_origins: str = "http://localhost:3000,http://localhost:5173"
 

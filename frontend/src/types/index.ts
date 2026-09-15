@@ -33,7 +33,7 @@ export interface RegisterRequest {
 }
 
 // Platform types
-export type PlatformType = 'espn' | 'sleeper';
+export type PlatformType = 'espn' | 'sleeper' | 'yahoo';
 
 // League types
 export interface League {
@@ -42,6 +42,7 @@ export interface League {
   espn_league_id?: number;
   sleeper_league_id?: string;
   sleeper_user_id?: string;
+  yahoo_league_key?: string;
   name: string;
   season_year: number;
   size: number;
