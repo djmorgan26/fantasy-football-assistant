@@ -64,9 +64,9 @@ export const YahooConnectForm: React.FC = () => {
   return <div className="space-y-5">
     <Card className="border-[#6001d2]/30 bg-[#6001d2]/5"><CardContent className="p-4"><div className="flex gap-3 text-sm text-fg-muted">
       <InformationCircleIcon className="h-5 w-5 shrink-0 text-[#6001d2]" />
-      <div><p className="font-semibold text-fg">Connect your Yahoo Fantasy account</p><p className="mt-1">Your Yahoo account can use a different email from your Fantasy Hub (Google) login. Yahoo will ask you to sign in, then we securely save the connection to this Fantasy Hub account for future visits.</p></div>
+      <div><p className="font-semibold text-fg">Sign in to Yahoo to add this league to your account</p><p className="mt-1">This is not another Fantasy Hub login. Sign in with the Yahoo account that owns your Fantasy league—it can use a different email from your Fantasy Hub (Google) login. After you approve Yahoo, we securely save its leagues to this Fantasy Hub account for future visits.</p></div>
     </div></CardContent></Card>
-    {!connected ? <Button className="w-full" disabled={busy} onClick={authorize}>{busy ? 'Opening Yahoo…' : 'Continue with Yahoo'}</Button> : (
+    {!connected ? <Button className="w-full" disabled={busy} onClick={authorize}>{busy ? 'Opening Yahoo…' : 'Sign in to Yahoo'}</Button> : (
       <><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium text-fg">Choose a Yahoo Fantasy Football league</p><Button type="button" variant="ghost" size="sm" disabled={busy} onClick={authorize}>Use another Yahoo account</Button></div>
       {leagues.length ? <div className="space-y-2">{leagues.map((league) => <button key={league.league_key} disabled={busy} onClick={() => void connect(league.league_key)} className="w-full rounded-lg border border-border p-3 text-left hover:border-[#6001d2] hover:bg-[#6001d2]/5 disabled:opacity-50"><div className="font-semibold text-fg">{league.name}</div><div className="text-xs text-fg-subtle">{league.season} · {league.num_teams} teams</div></button>)}</div> : <p className="text-sm text-fg-muted">No Yahoo Fantasy Football leagues were found for this account.</p>}</>
     )}
