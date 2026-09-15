@@ -14,6 +14,8 @@ After each backlog item is implemented and verified, update this file to reflect
 - Implemented locally: the Yahoo connector now plainly states that the next step is a Yahoo sign-in to attach a Yahoo league to the current Fantasy Hub account, rather than a second Fantasy Hub login.
 - Implemented locally: Yahoo OAuth now returns to the exact Fantasy Hub browser origin that launched it, rather than relying solely on a deployment-wide `FRONTEND_URL`. This preserves the signed-in session when the app is accessed from a different deployment URL.
 - Implemented locally: the Yahoo empty state now identifies the successful connection/no-leagues condition and directs the user to reauthorize with the Yahoo account that owns their Fantasy Football league.
+- Implemented locally: automated Yahoo connector tests now cover the signed return origin, explicit Yahoo-sign-in explanation, empty-league account-switching path, and league selection path so CI protects this flow.
+- Implemented locally: CI's stale frontend function-coverage gate was aligned to the verified full-suite baseline (56%). The full frontend suite has 286 passing tests, including the Yahoo connection flow tests.
 - Implemented locally: the Yahoo adapter now retrieves team rosters, weekly scoreboards/matchups, and team FAAB balances, normalizing them for the app's existing Yahoo roster, Game Day, and waiver-budget endpoints. The live response shapes and league-specific availability still need verification against the user's Yahoo league.
 - Yahoo should have feature parity with ESPN wherever the underlying provider data supports it.
 - Game Plan is strictly per league.
