@@ -16,6 +16,7 @@ After each backlog item is implemented and verified, update this file to reflect
 - Implemented locally: the Yahoo empty state now identifies the successful connection/no-leagues condition and directs the user to reauthorize with the Yahoo account that owns their Fantasy Football league.
 - Implemented locally: automated Yahoo connector tests now cover the signed return origin, explicit Yahoo-sign-in explanation, empty-league account-switching path, and league selection path so CI protects this flow.
 - Implemented locally: CI's stale frontend function-coverage gate was aligned to the verified full-suite baseline (56%). The full frontend suite has 286 passing tests, including the Yahoo connection flow tests.
+- Implemented locally: mock-mode CORS accepts the localhost URL served to users (`127.0.0.1:3000`) as well as `localhost:3000`, so the demo sign-in and all local API routes work from the provided URL.
 - Implemented locally: the Yahoo adapter now retrieves team rosters, weekly scoreboards/matchups, and team FAAB balances, normalizing them for the app's existing Yahoo roster, Game Day, and waiver-budget endpoints. The live response shapes and league-specific availability still need verification against the user's Yahoo league.
 - Yahoo should have feature parity with ESPN wherever the underlying provider data supports it.
 - Game Plan is strictly per league.
