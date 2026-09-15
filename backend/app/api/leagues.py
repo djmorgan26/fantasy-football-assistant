@@ -504,10 +504,11 @@ async def get_league_matchups(
             )
             team_column = Team.sleeper_roster_id
         elif league.platform == PlatformType.YAHOO:
-            raise HTTPException(
-                status_code=status.HTTP_501_NOT_IMPLEMENTED,
-                detail="Yahoo matchup sync is not available yet.",
+            from app.services.yahoo_service import YahooService
+            matchups_data = await YahooService().matchups(
+                current_user, league.yahoo_league_key, week or league.current_week or 1
             )
+            team_column = Team.yahoo_team_key
         else:
             espn_service = ESPNService()
             cookies = None
@@ -622,10 +623,9 @@ async def get_league_waiver_budgets(
             budgets_data = await sleeper_budgets(league.sleeper_league_id)
             team_column = Team.sleeper_roster_id
         elif league.platform == PlatformType.YAHOO:
-            raise HTTPException(
-                status_code=status.HTTP_501_NOT_IMPLEMENTED,
-                detail="Yahoo waiver-budget sync is not available yet.",
-            )
+            from app.services.yahoo_service import YahooService
+            budgets_data = await YahooService().waiver_budgets(current_user, league.yahoo_league_key)
+            team_column = Team.yahoo_team_key
         else:
             espn_service = ESPNService()
             cookies = None

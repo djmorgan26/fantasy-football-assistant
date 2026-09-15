@@ -61,6 +61,56 @@ def _resource_records(data: Any, resource: str) -> List[Dict[str, Any]]:
     return records
 
 
+def _value(value: Any, default: Any = None) -> Any:
+    """Extract Yahoo's scalar values from its list-or-dict resource shape."""
+    if isinstance(value, (list, dict)):
+        value = _flatten(value)
+        if isinstance(value, dict):
+            return value.get("value", default)
+    return value if value is not None else default
+
+
+def _number(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(_value(value, default) or default)
+    except (TypeError, ValueError):
+        return default
+
+
+def _player_name(record: Dict[str, Any]) -> str:
+    name = _flatten(record.get("name"))
+    return str(name.get("full") or record.get("name") or record.get("player_key") or "Unknown player")
+
+
+def _injury_status(record: Dict[str, Any]) -> str | None:
+    raw = str(_value(record.get("status"), "") or "").upper()
+    if not raw:
+        return None
+    if raw in {"IR", "INJURED_RESERVE", "PUP"}:
+        return "INJURY_RESERVE"
+    if raw in {"O", "OUT"}:
+        return "OUT"
+    if raw in {"D", "DOUBTFUL"}:
+        return "DOUBTFUL"
+    if raw in {"Q", "QUESTIONABLE", "GTD"}:
+        return "QUESTIONABLE"
+    return raw
+
+
+def _values_for_key(data: Any, key: str) -> List[Any]:
+    """Find scalar values in Yahoo's recursively wrapped collections."""
+    found: List[Any] = []
+    if isinstance(data, dict):
+        for name, value in data.items():
+            if name == key:
+                found.append(_value(value))
+            found.extend(_values_for_key(value, key))
+    elif isinstance(data, list):
+        for item in data:
+            found.extend(_values_for_key(item, key))
+    return found
+
+
 class YahooService:
     def configured(self) -> bool:
         return bool(settings.yahoo_client_id and settings.yahoo_client_secret)
@@ -68,7 +118,18 @@ class YahooService:
     def authorization_url(self, state: str) -> str:
         if not self.configured():
             raise YahooConfigurationError("Yahoo Fantasy is not configured on this deployment")
-        return f"{AUTHORIZE_URL}?{urlencode({'client_id': settings.yahoo_client_id, 'redirect_uri': settings.yahoo_redirect_uri, 'response_type': 'code', 'state': state})}"
+        # Fantasy Hub and Yahoo authentication are deliberately separate. A
+        # user may sign in here with Gmail, then connect leagues owned by a
+        # different Yahoo account. Without this prompt, Yahoo can silently
+        # reuse whichever account is active in the browser session.
+        params = {
+            "client_id": settings.yahoo_client_id,
+            "redirect_uri": settings.yahoo_redirect_uri,
+            "response_type": "code",
+            "state": state,
+            "prompt": "login",
+        }
+        return f"{AUTHORIZE_URL}?{urlencode(params)}"
 
     async def exchange_code(self, code: str) -> Dict[str, Any]:
         return await self._token_request({"grant_type": "authorization_code", "code": code, "redirect_uri": settings.yahoo_redirect_uri})
@@ -167,3 +228,76 @@ class YahooService:
                 "points_for": float(points.get("value") or 0), "points_against": 0.0,
             })
         return league, teams
+
+    async def team_roster(self, user: Any, team_key: str, week: int | None = None) -> List[Dict[str, Any]]:
+        """Return Yahoo players in the roster shape consumed by the UI."""
+        suffix = f";week={week}" if week else ""
+        raw = await self._get(user, f"team/{team_key}/roster{suffix}")
+        roster: List[Dict[str, Any]] = []
+        for record in _resource_records(raw, "player"):
+            selected = _flatten(record.get("selected_position"))
+            slot = str(selected.get("position") or "BN")
+            on_ir = slot.upper() in {"IR", "IR+", "IL", "NA", "PUP"}
+            is_starter = slot.upper() not in {"BN", "BENCH", "IR", "IR+", "IL", "NA", "PUP"}
+            positions = [str(value) for value in _values_for_key(record.get("eligible_positions"), "position") if value]
+            roster.append({
+                # Yahoo's player id is provider-specific, just as Sleeper's is.
+                "player_id": str(record.get("player_id") or record.get("player_key") or ""),
+                "full_name": _player_name(record),
+                "position_id": 0,
+                "position_name": str(_value(record.get("display_position"), "UNKNOWN")),
+                "lineup_slot_id": 21 if on_ir else (0 if is_starter else 20),
+                "lineup_slot_name": "IR" if on_ir else (slot if is_starter else "BENCH"),
+                "is_starter": is_starter and not on_ir,
+                "on_injured_reserve": on_ir,
+                "pro_team_id": 0,
+                "pro_team_abbr": str(_value(record.get("editorial_team_abbr"), "")),
+                "eligible_slots": positions,
+                "projected_points": 0.0,
+                "applied_points": 0.0,
+                "season_points": 0.0,
+                "stats": {"actual": {}, "projected": {}},
+                "injury_status": _injury_status(record),
+            })
+        return roster
+
+    async def matchups(self, user: Any, league_key: str, week: int) -> List[Dict[str, Any]]:
+        """Normalize Yahoo's scoreboard pairings to the shared matchup shape."""
+        raw = await self._get(user, f"league/{league_key}/scoreboard;week={week}")
+        normalized: List[Dict[str, Any]] = []
+        for index, record in enumerate(_resource_records(raw, "matchup"), start=1):
+            teams = _resource_records(record.get("teams"), "team")
+            if not teams:
+                continue
+            def team_key(row: Dict[str, Any]) -> str | None:
+                return row.get("team_key")
+            def score(row: Dict[str, Any]) -> float:
+                return _number(_flatten(row.get("team_points")).get("total"))
+            home, away = teams[0], teams[1] if len(teams) > 1 else None
+            home_score, away_score = score(home), score(away) if away else 0.0
+            winner = "UNDECIDED" if not away else ("HOME" if home_score > away_score else "AWAY" if away_score > home_score else "TIE")
+            normalized.append({
+                "matchup_id": index,
+                "week": int(_number(record.get("week"), week)),
+                "home_team_id": team_key(home), "away_team_id": team_key(away) if away else None,
+                "home_score": home_score, "away_score": away_score,
+                "home_projected_score": None, "away_projected_score": None,
+                "is_playoff": str(_value(record.get("is_playoffs"), "0")) == "1",
+                "winner": winner,
+            })
+        return normalized
+
+    async def waiver_budgets(self, user: Any, league_key: str) -> List[Dict[str, Any]]:
+        """Fetch the live Yahoo FAAB balance for every team in a league."""
+        settings_raw, teams_raw = await self._get(user, f"league/{league_key}/settings"), await self._get(user, f"league/{league_key}/teams")
+        league_records = _resource_records(settings_raw, "league")
+        league = league_records[0] if league_records else {}
+        total = _number(league.get("faab_budget"), 100.0)
+        budgets: List[Dict[str, Any]] = []
+        for team in _resource_records(teams_raw, "team"):
+            key = team.get("team_key")
+            if not key:
+                continue
+            current = _number(team.get("faab_balance"), total)
+            budgets.append({"team_id": key, "total_budget": total, "current_budget": current, "spent_budget": max(total - current, 0.0)})
+        return budgets

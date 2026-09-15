@@ -1,4 +1,7 @@
 """Yahoo Fantasy parsing and OAuth configuration guards."""
+import pytest
+from urllib.parse import parse_qs, urlparse
+
 from app.services.yahoo_service import YahooService, _resource_records
 
 
@@ -6,6 +9,23 @@ def test_yahoo_requires_both_oauth_credentials(monkeypatch):
     monkeypatch.setattr("app.services.yahoo_service.settings.yahoo_client_id", "client")
     monkeypatch.setattr("app.services.yahoo_service.settings.yahoo_client_secret", "")
     assert YahooService().configured() is False
+
+
+def test_yahoo_authorization_forces_a_fresh_yahoo_login(monkeypatch):
+    """The Fantasy Hub login must not dictate which Yahoo account is linked."""
+    monkeypatch.setattr("app.services.yahoo_service.settings.yahoo_client_id", "client")
+    monkeypatch.setattr("app.services.yahoo_service.settings.yahoo_client_secret", "secret")
+    monkeypatch.setattr("app.services.yahoo_service.settings.yahoo_redirect_uri", "https://app.example/api/yahoo/callback")
+
+    query = parse_qs(urlparse(YahooService().authorization_url("signed-state")).query)
+
+    assert query == {
+        "client_id": ["client"],
+        "redirect_uri": ["https://app.example/api/yahoo/callback"],
+        "response_type": ["code"],
+        "state": ["signed-state"],
+        "prompt": ["login"],
+    }
 
 
 def test_yahoo_resource_records_unwrap_count_keyed_data():
@@ -34,7 +54,6 @@ def test_yahoo_resource_records_unwrap_count_keyed_data():
 # code and reintroduced two bugs that had already been fixed for ESPN and
 # Sleeper, so both get a test here rather than only in test_league_membership.
 # --------------------------------------------------------------------------
-import pytest
 from httpx import AsyncClient
 
 from app.models.league import League, PlatformType
@@ -139,3 +158,29 @@ async def test_connecting_yahoo_puts_you_in_the_league(
     assert posted.status_code == 201, posted.text
     feed = await client.get(f"/api/board/{league_id}/posts", headers=first)
     assert [p["id"] for p in feed.json()] == [posted.json()["id"]]
+
+
+@pytest.mark.asyncio
+async def test_yahoo_roster_normalizes_player_and_lineup_data(monkeypatch):
+    payload = {"fantasy_content": {"team": {"roster": {"0": {"players": {"0": {"player": [
+        {"player_key": "nfl.p.1"}, {"player_id": "1"}, {"name": {"full": "A Player"}},
+        {"display_position": "WR"}, {"editorial_team_abbr": "PHI"}, {"status": "IR"},
+        {"selected_position": [{"coverage_type": "week"}, {"position": "IR"}]},
+        {"eligible_positions": [{"position": "WR"}, {"position": "W/R/T"}]},
+    ]}}}}}}}
+
+    service = YahooService()
+    async def get(_user, _path):
+        return payload
+    monkeypatch.setattr(service, "_get", get)
+
+    roster = await service.team_roster(object(), "nfl.l.1.t.1", 3)
+
+    assert roster == [{
+        "player_id": "1", "full_name": "A Player", "position_id": 0, "position_name": "WR",
+        "lineup_slot_id": 21, "lineup_slot_name": "IR", "is_starter": False,
+        "on_injured_reserve": True, "pro_team_id": 0, "pro_team_abbr": "PHI",
+        "eligible_slots": ["WR", "W/R/T"], "projected_points": 0.0, "applied_points": 0.0,
+        "season_points": 0.0, "stats": {"actual": {}, "projected": {}},
+        "injury_status": "INJURY_RESERVE",
+    }]

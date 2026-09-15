@@ -47,6 +47,12 @@ async def _get_sleeper_team_roster(
         )
 
 
+async def _get_yahoo_team_roster(league: League, team: Team, user: User, week: Optional[int] = None) -> List[dict]:
+    from app.services.yahoo_service import YahooService
+
+    return await YahooService().team_roster(user, team.yahoo_team_key, week)
+
+
 @router.get("/league/{league_id}", response_model=List[TeamResponse])
 async def get_league_teams(
     league_id: int,
@@ -135,13 +141,10 @@ async def get_team_roster(
             )
 
         if league.platform == PlatformType.YAHOO:
-            # Yahoo league discovery and standings are normalized today. Its
-            # roster payload has a separate, deeply nested player schema and
-            # must not accidentally be sent to ESPN while that adapter lands.
-            raise HTTPException(
-                status_code=status.HTTP_501_NOT_IMPLEMENTED,
-                detail="Yahoo roster sync is not available yet; league and standings sync are available.",
+            roster = await _get_yahoo_team_roster(
+                league, team, current_user, week=week or league.current_week
             )
+            return RosterResponse(team_id=team_id, week=week or league.current_week or 1, roster=roster)
 
         # Get roster from ESPN API
         espn_service = ESPNService()

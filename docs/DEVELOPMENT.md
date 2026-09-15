@@ -68,7 +68,11 @@ Profile Settings and stored encrypted — see
 Yahoo Fantasy uses server-side OAuth, not copied browser cookies. Register the
 exact `YAHOO_REDIRECT_URI` with Yahoo, set the client id/secret plus
 `FRONTEND_URL`, and use the Yahoo option on Connect League. Access and refresh
-tokens are encrypted at rest and refresh automatically before a sync.
+tokens are encrypted at rest and refresh automatically before a sync. Fantasy
+Hub's Google login and Yahoo account are intentionally independent: Yahoo is
+always asked to authenticate, so a user can choose an account with a different
+email. The resulting connection is saved against the currently signed-in
+Fantasy Hub user for future Gmail sign-ins.
 
 > **Groq retires models regularly.** A retired model id returns
 > `404 model_not_found` and every generated feature silently falls back. Check
