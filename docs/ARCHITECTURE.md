@@ -138,6 +138,30 @@ Where they genuinely differ, the difference is resolved once:
 Sleeper needs no credentials at all — the whole API is public and read-only, so
 connecting a league needs only a username.
 
+### Yahoo is a third of a platform, on purpose
+
+Yahoo is **not** interchangeable with the other two yet, and
+`test_platform_parity.py` deliberately does not cover it. What works today is
+OAuth, league discovery, standings and re-sync. What does not:
+
+| | State | Where |
+| --- | --- | --- |
+| Roster | 501 | `api/teams.py` `get_team_roster` |
+| Matchups | 501 | `api/leagues.py` `get_league_matchups` |
+| Waiver budgets | 501 | `api/leagues.py` `get_league_waiver_budgets` |
+| Points against | always `0.0` | `yahoo_service.league_and_teams` |
+
+The 501s are honest. The trap is `league_context.roster_for`, which fails soft
+by design and has no Yahoo branch, so it returns `[]` rather than raising.
+Every feature built on a roster — Game Plan, Game Day, the assistant, the news
+feed, the cross-league view — therefore renders a Yahoo team as a team with
+nobody on it rather than saying it cannot load one. That reads as a bug and is
+the first thing to fix when the Yahoo roster adapter lands.
+
+Yahoo also needs an approved developer app: every Fantasy API resource returns
+401 without OAuth, credentials are not self-serve, and Yahoo reviews the
+application before issuing them.
+
 ## Matching players across platforms
 
 ESPN and Sleeper number the same human differently, so anything that has to
