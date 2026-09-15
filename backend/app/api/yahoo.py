@@ -2,12 +2,13 @@
 from datetime import datetime, timedelta, timezone
 import secrets
 from typing import List
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
 from jose import JWTError, jwt
 from pydantic import BaseModel
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +21,8 @@ from app.models.user import User
 from app.schemas.league import YahooConnectRequest, YahooLeagueSummary
 from app.services.league_access import ensure_member
 from app.services.yahoo_service import YahooAuthenticationError, YahooConfigurationError, YahooError, YahooService
+
+logger = structlog.get_logger()
 
 router = APIRouter(prefix="/yahoo", tags=["yahoo"])
 
@@ -91,7 +94,12 @@ async def yahoo_callback(
 ):
     destination = _return_destination()
     if error or not code or not state:
-        return RedirectResponse(f"{destination}&yahoo=cancelled", status_code=303)
+        # Yahoo's own refusals arrive here as ?error=..., and they are the most
+        # common way this flow ends: an unapproved scope or a callback URL that
+        # does not match the one registered with Yahoo.
+        logger.warning("Yahoo callback did not carry an authorization code", yahoo_error=error, has_code=bool(code), has_state=bool(state))
+        reason = error or ("missing_state" if code else "no_code")
+        return RedirectResponse(f"{destination}&yahoo=cancelled&yahoo_reason={quote(str(reason)[:120], safe='')}", status_code=303)
     try:
         payload = jwt.decode(state, settings.secret_key, algorithms=[settings.algorithm])
         if payload.get("purpose") != "yahoo_oauth" or not payload.get("sub"):
@@ -103,9 +111,15 @@ async def yahoo_callback(
         service = YahooService()
         service.store_tokens(user, await service.exchange_code(code))
         await db.commit()
-    except (JWTError, ValueError, YahooError):
+    except JWTError as exc:
         await db.rollback()
-        return RedirectResponse(f"{destination}&yahoo=failed", status_code=303)
+        logger.warning("Yahoo callback state was not usable", error=str(exc))
+        return RedirectResponse(f"{destination}&yahoo=failed&yahoo_reason={quote('sign-in took too long or was started in another browser; try again', safe='')}", status_code=303)
+    except (ValueError, YahooError) as exc:
+        await db.rollback()
+        logger.error("Yahoo token exchange failed", error=str(exc))
+        return RedirectResponse(f"{destination}&yahoo=failed&yahoo_reason={quote(str(exc)[:200], safe='')}", status_code=303)
+    logger.info("Yahoo account connected", user_id=int(payload["sub"]))
     return RedirectResponse(f"{destination}&yahoo=connected", status_code=303)
 
 

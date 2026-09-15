@@ -11,6 +11,7 @@ from typing import Any, Dict, List
 from urllib.parse import urlencode
 
 import httpx
+import structlog
 
 from app.core.config import settings
 from app.utils.encryption import decrypt_data, encrypt_data
@@ -18,6 +19,13 @@ from app.utils.encryption import decrypt_data, encrypt_data
 AUTHORIZE_URL = "https://api.login.yahoo.com/oauth2/request_auth"
 TOKEN_URL = "https://api.login.yahoo.com/oauth2/get_token"
 FANTASY_URL = "https://fantasysports.yahooapis.com/fantasy/v2"
+# Yahoo grants Fantasy data only when the read scope is requested. Omitting
+# it yields tokens that authenticate fine and then 401 on every fantasy
+# endpoint, which is indistinguishable from a broken connection.
+FANTASY_READ_SCOPE = "fspt-r"
+
+
+logger = structlog.get_logger()
 
 
 class YahooError(Exception):
@@ -30,6 +38,24 @@ class YahooConfigurationError(YahooError):
 
 class YahooAuthenticationError(YahooError):
     pass
+
+
+def _yahoo_detail(response: httpx.Response) -> str:
+    """Summarize a Yahoo error body so the cause survives to the UI and logs."""
+    try:
+        data = response.json()
+    except ValueError:
+        return " ".join(response.text.split())[:200] or "no response body"
+    if isinstance(data, dict):
+        for key in ("error_description", "error", "detail", "description"):
+            value = data.get(key)
+            if isinstance(value, str) and value:
+                return value[:200]
+            if isinstance(value, dict):
+                nested = value.get("description") or value.get("detail")
+                if isinstance(nested, str) and nested:
+                    return nested[:200]
+    return " ".join(str(data).split())[:200]
 
 
 def _flatten(value: Any) -> Dict[str, Any]:
@@ -128,6 +154,7 @@ class YahooService:
             "response_type": "code",
             "state": state,
             "prompt": "login",
+            "scope": FANTASY_READ_SCOPE,
         }
         return f"{AUTHORIZE_URL}?{urlencode(params)}"
 
@@ -148,7 +175,9 @@ class YahooService:
         except httpx.HTTPError as exc:
             raise YahooAuthenticationError("Could not reach Yahoo authorization") from exc
         if response.status_code >= 400:
-            raise YahooAuthenticationError("Yahoo rejected the authorization request")
+            detail = _yahoo_detail(response)
+            logger.error("Yahoo token request rejected", grant_type=payload.get("grant_type"), status=response.status_code, detail=detail)
+            raise YahooAuthenticationError(f"Yahoo rejected the authorization request ({response.status_code}): {detail}")
         try:
             data = response.json()
         except ValueError as exc:
@@ -185,10 +214,17 @@ class YahooService:
                 response = await client.get(f"{FANTASY_URL}/{path}", params={"format": "json"}, headers={"Authorization": f"Bearer {token}"})
         except httpx.HTTPError as exc:
             raise YahooError("Could not reach Yahoo Fantasy") from exc
-        if response.status_code == 401:
-            raise YahooAuthenticationError("Yahoo authorization expired; reconnect Yahoo and try again")
+        if response.status_code in {401, 403}:
+            detail = _yahoo_detail(response)
+            logger.error("Yahoo denied a fantasy request", path=path, status=response.status_code, detail=detail)
+            raise YahooAuthenticationError(
+                "Yahoo would not authorize this request. Disconnect and sign in to Yahoo again; "
+                f"if it keeps happening the Yahoo app is missing Fantasy Sports read permission ({response.status_code}): {detail}"
+            )
         if response.status_code >= 400:
-            raise YahooError("Yahoo Fantasy could not load this data")
+            detail = _yahoo_detail(response)
+            logger.error("Yahoo fantasy request failed", path=path, status=response.status_code, detail=detail)
+            raise YahooError(f"Yahoo Fantasy could not load this data ({response.status_code}): {detail}")
         try:
             return response.json()
         except ValueError as exc:
@@ -202,25 +238,29 @@ class YahooService:
             if key and key not in seen:
                 seen.add(key)
                 leagues.append({"league_key": key, "name": record.get("name") or key, "season": int(record.get("season") or 0), "num_teams": int(record.get("num_teams") or 0)})
+        # Yahoo returns every NFL season this account has ever played, oldest
+        # first. The league someone wants to connect is almost always current.
+        leagues.sort(key=lambda league: (-league["season"], league["name"]))
+        logger.info("Yahoo leagues discovered", count=len(leagues), seasons=sorted({league["season"] for league in leagues}, reverse=True)[:5])
         return leagues
 
     async def league_and_teams(self, user: Any, league_key: str) -> tuple[Dict[str, Any], List[Dict[str, Any]]]:
         metadata = await self._get(user, f"league/{league_key}")
-        standings = await self._get(user, f"league/{league_key}/standings")
+        standings_raw = await self._get(user, f"league/{league_key}/standings")
         leagues = _resource_records(metadata, "league")
         if not leagues:
             raise YahooError("Yahoo did not return that league")
         league = leagues[0]
         teams = []
         seen = set()
-        for record in _resource_records(standings, "team"):
+        for record in _resource_records(standings_raw, "team"):
             team_key = record.get("team_key")
             if not team_key or team_key in seen:
                 continue
             seen.add(team_key)
-            standings = _flatten(record.get("team_standings"))
-            outcome = _flatten(standings.get("outcome_totals"))
-            points = _flatten(standings.get("points_for"))
+            team_standings = _flatten(record.get("team_standings"))
+            outcome = _flatten(team_standings.get("outcome_totals"))
+            points = _flatten(team_standings.get("points_for"))
             teams.append({
                 "id": team_key, "name": record.get("name") or team_key,
                 "abbreviation": record.get("team_key", "")[-10:], "logo_url": _flatten(_flatten(record.get("team_logos")).get("team_logo")).get("url"),

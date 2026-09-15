@@ -81,6 +81,27 @@ describe('YahooConnectForm', () => {
     }));
   });
 
+  it('shows why Yahoo sign-in failed instead of silently returning to the button', async () => {
+    // The callback redirects here with the outcome. Before this, nothing read
+    // those params, so a rejected Yahoo authorization looked exactly like
+    // never having pressed the button.
+    Object.defineProperty(window, 'location', {
+      writable: true,
+      value: {
+        origin: 'https://current.fantasy-hub.test',
+        pathname: '/leagues/connect',
+        search: '?platform=yahoo&yahoo=failed&yahoo_reason=Yahoo%20rejected%20the%20authorization%20request%20(400)%3A%20invalid%20scope',
+        assign: vi.fn(),
+      },
+    });
+    mockedGet.mockResolvedValue({ data: { configured: true, connected: false } });
+
+    renderWithProviders(<YahooConnectForm />);
+
+    expect(await screen.findByText(/Yahoo sign-in did not finish/)).toBeInTheDocument();
+    expect(screen.getByText(/invalid scope/)).toBeInTheDocument();
+  });
+
   it('connects the selected Yahoo league', async () => {
     mockedGet
       .mockResolvedValueOnce({ data: { configured: true, connected: true } })

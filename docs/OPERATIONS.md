@@ -88,6 +88,32 @@ value.
 | `YAHOO_CLIENT_ID`, `YAHOO_CLIENT_SECRET` | no | enable Yahoo Fantasy OAuth; the secret must remain server-only |
 | `YAHOO_REDIRECT_URI`, `FRONTEND_URL` | with Yahoo | callback registered with Yahoo, and the browser origin to return to after consent |
 
+### Yahoo Fantasy OAuth
+
+Yahoo fails differently from ESPN and Sleeper: the sign-in succeeds and the
+league data is what gets refused. Three things must line up in the Yahoo
+developer app at <https://developer.yahoo.com/apps/>, and only the third one
+announces itself.
+
+1. **API permission must include Fantasy Sports, Read.** This is the one that
+   bites. An app registered with only OpenID Connect permissions still issues
+   working access tokens, so the connection looks fine — and then every league
+   call comes back `401`. The app requests `scope=fspt-r`; if the registered
+   app cannot grant it, Yahoo refuses at the consent screen and the reason now
+   lands on the connect page instead of being swallowed.
+2. **Redirect URI must match `YAHOO_REDIRECT_URI` exactly**, including scheme
+   and trailing path — `https://<domain>/api/yahoo/callback`. Yahoo rejects
+   `http://` and bare `localhost` for OAuth2 apps, so local Yahoo work needs a
+   tunnel (or use the deployed callback).
+3. **`FRONTEND_URL`** is only the fallback origin. The browser origin that
+   started the flow is signed into the OAuth state and wins, so a stale value
+   here no longer strands anyone on the wrong deployment.
+
+To see where a failed attempt actually stopped, look for `Yahoo token exchange
+failed`, `Yahoo denied a fantasy request`, or `Yahoo callback did not carry an
+authorization code` in the server logs — each carries Yahoo's own status and
+error text.
+
 ### The model pin
 
 Groq retires models regularly. A retired id returns `404 model_not_found` and

@@ -16,6 +16,7 @@ export const YahooConnectForm: React.FC = () => {
   const [connected, setConnected] = useState(false);
   const [leagues, setLeagues] = useState<YahooLeague[]>([]);
   const [busy, setBusy] = useState(false);
+  const [oauthError, setOauthError] = useState<string | null>(null);
 
   // This form mounts after the platform chooser changes views. Supply the
   // persisted token at request time rather than relying solely on Axios's
@@ -40,14 +41,38 @@ export const YahooConnectForm: React.FC = () => {
         setLeagues(result.data);
       }
     } catch (error: any) {
-      toast.error(error.detail || 'Could not load Yahoo leagues');
+      const detail = error.detail || error?.response?.data?.detail || 'Could not load Yahoo leagues';
+      setOauthError(detail);
+      toast.error(detail);
     }
   }, [getYahoo]);
+
+  // The OAuth callback returns to this screen with ?yahoo=connected|failed|
+  // cancelled and a reason. Nothing read those, so a failed Yahoo sign-in
+  // looked identical to never having pressed the button.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const outcome = params.get('yahoo');
+    if (!outcome) return;
+    const reason = params.get('yahoo_reason');
+    if (outcome === 'connected') {
+      toast.success('Yahoo account connected. Choose your league below.');
+    } else {
+      setOauthError(reason || (outcome === 'cancelled'
+        ? 'Yahoo sign-in was cancelled before it finished.'
+        : 'Yahoo sign-in did not complete.'));
+    }
+    params.delete('yahoo');
+    params.delete('yahoo_reason');
+    const query = params.toString();
+    window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+  }, []);
 
   useEffect(() => { void load(); }, [load]);
 
   const authorize = async () => {
     setBusy(true);
+    setOauthError(null);
     try {
       const body = {
         // Yahoo must return to this exact frontend origin: it is where the
@@ -91,6 +116,10 @@ export const YahooConnectForm: React.FC = () => {
       <InformationCircleIcon className="h-5 w-5 shrink-0 text-[#6001d2]" />
       <div><p className="font-semibold text-fg">Sign in to Yahoo to add this league to your account</p><p className="mt-1">This is not another Fantasy Hub login. Sign in with the Yahoo account that owns your Fantasy league—it can use a different email from your Fantasy Hub (Google) login. After you approve Yahoo, we securely save its leagues to this Fantasy Hub account for future visits.</p></div>
     </div></CardContent></Card>
+    {oauthError && <Card className="border-error-300 bg-error-50 dark:border-error-900/40 dark:bg-error-900/20"><CardContent className="p-4 text-sm">
+      <p className="font-semibold text-fg">Yahoo sign-in did not finish</p>
+      <p className="mt-1 break-words text-fg-muted">{oauthError}</p>
+    </CardContent></Card>}
     {!connected ? <Button className="w-full" disabled={busy} onClick={authorize}>{busy ? 'Opening Yahoo…' : 'Sign in to Yahoo'}</Button> : (
       <><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium text-fg">Choose a Yahoo Fantasy Football league</p><Button type="button" variant="ghost" size="sm" disabled={busy} onClick={authorize}>Use another Yahoo account</Button></div>
       {leagues.length ? <div className="space-y-2">{leagues.map((league) => <button key={league.league_key} disabled={busy} onClick={() => void connect(league.league_key)} className="w-full rounded-lg border border-border p-3 text-left hover:border-[#6001d2] hover:bg-[#6001d2]/5 disabled:opacity-50"><div className="font-semibold text-fg">{league.name}</div><div className="text-xs text-fg-subtle">{league.season} · {league.num_teams} teams</div></button>)}</div> : <Card className="border-warning-300 bg-warning-50 dark:border-warning-900/40 dark:bg-warning-900/20"><CardContent className="p-4 text-sm text-fg-muted"><p className="font-semibold text-fg">Yahoo is connected, but this Yahoo account has no Fantasy Football leagues.</p><p className="mt-1">This usually means a different Yahoo account owns the league. Select <span className="font-medium text-fg">Use another Yahoo account</span> above, then sign in to the Yahoo account you use at fantasy.yahoo.com.</p></CardContent></Card>}</>

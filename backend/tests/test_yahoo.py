@@ -5,7 +5,7 @@ from urllib.parse import parse_qs, urlparse
 
 from app.api.yahoo import _return_destination, _state_for
 from app.core.config import settings
-from app.services.yahoo_service import YahooService, _resource_records
+from app.services.yahoo_service import YahooAuthenticationError, YahooService, _resource_records
 
 
 def test_yahoo_requires_both_oauth_credentials(monkeypatch):
@@ -28,6 +28,9 @@ def test_yahoo_authorization_forces_a_fresh_yahoo_login(monkeypatch):
         "response_type": ["code"],
         "state": ["signed-state"],
         "prompt": ["login"],
+        # Without the fantasy read scope Yahoo hands back a token that
+        # authenticates and then 401s on every league endpoint.
+        "scope": ["fspt-r"],
     }
 
 
@@ -196,3 +199,59 @@ async def test_yahoo_roster_normalizes_player_and_lineup_data(monkeypatch):
         "season_points": 0.0, "stats": {"actual": {}, "projected": {}},
         "injury_status": "INJURY_RESERVE",
     }]
+
+
+@pytest.mark.asyncio
+async def test_yahoo_leagues_put_the_current_season_first(monkeypatch):
+    """Yahoo returns every season ever played, oldest first."""
+    payload = {"fantasy_content": {"users": {"0": {"user": [{"games": {
+        "0": {"game": [{"leagues": {"0": {"league": [
+            {"league_key": "nfl.l.old", "name": "Old League", "season": "2019", "num_teams": "10"},
+        ]}, "1": {"league": [
+            {"league_key": "nfl.l.new", "name": "Current League", "season": "2026", "num_teams": "12"},
+        ]}, "count": 2}}]},
+    }}]}, "count": 1}}}
+
+    service = YahooService()
+    async def get(_user, _path):
+        return payload
+    monkeypatch.setattr(service, "_get", get)
+
+    leagues = await service.leagues_for_user(object())
+
+    assert [league["league_key"] for league in leagues] == ["nfl.l.new", "nfl.l.old"]
+
+
+@pytest.mark.asyncio
+async def test_yahoo_denial_names_the_missing_fantasy_permission(monkeypatch):
+    """A 401 from Yahoo must say what to do, not just that something failed.
+
+    Silently flattening this to "could not load this data" is what made a
+    missing Fantasy Sports read scope impossible to tell apart from an
+    expired token or a wrong Yahoo account.
+    """
+    class Response:
+        status_code = 401
+        text = '{"error": {"description": "Please provide valid credentials"}}'
+        def json(self):
+            return {"error": {"description": "Please provide valid credentials"}}
+
+    service = YahooService()
+    async def token(_user):
+        return "token"
+    monkeypatch.setattr(service, "access_token_for", token)
+
+    class Client:
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *_args):
+            return False
+        async def get(self, *_args, **_kwargs):
+            return Response()
+    monkeypatch.setattr("app.services.yahoo_service.httpx.AsyncClient", lambda **_kwargs: Client())
+
+    with pytest.raises(YahooAuthenticationError) as raised:
+        await service.leagues_for_user(object())
+
+    assert "Fantasy Sports read permission" in str(raised.value)
+    assert "Please provide valid credentials" in str(raised.value)
