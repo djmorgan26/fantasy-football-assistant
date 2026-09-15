@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from sqlalchemy import text
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -36,6 +37,43 @@ structlog.configure(
 logger = structlog.get_logger()
 
 
+async def ensure_additive_schema(conn) -> None:
+    """Bridge deployments originally created with ``create_all`` to new columns.
+
+    Early production databases predate Alembic being usable and therefore have
+    no revision history. ``create_all`` creates missing tables but deliberately
+    never alters existing ones, which made a Google sign-in try to read
+    ``users.google_sub`` from an older database and return 500. These are all
+    additive, idempotent PostgreSQL operations. Alembic remains the canonical
+    schema history; this makes a rolling serverless deployment safe until it
+    has been stamped and migrated.
+    """
+    if conn.dialect.name != "postgresql":
+        return
+
+    statements = (
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub VARCHAR(255)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT",
+        "ALTER TABLE users ALTER COLUMN hashed_password DROP NOT NULL",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_sub ON users (google_sub)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS yahoo_access_token_encrypted TEXT",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS yahoo_refresh_token_encrypted TEXT",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS yahoo_token_expires_at TIMESTAMP WITH TIME ZONE",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS yahoo_guid VARCHAR(255)",
+        "ALTER TABLE leagues ADD COLUMN IF NOT EXISTS yahoo_league_key VARCHAR(255)",
+        "ALTER TABLE leagues ADD COLUMN IF NOT EXISTS yahoo_user_guid VARCHAR(255)",
+        "CREATE INDEX IF NOT EXISTS ix_leagues_yahoo_league_key ON leagues (yahoo_league_key)",
+        "ALTER TABLE teams ADD COLUMN IF NOT EXISTS yahoo_team_key VARCHAR(255)",
+    )
+    for statement in statements:
+        await conn.execute(text(statement))
+
+    # The enum already exists in the legacy database, so SQLAlchemy cannot add
+    # this value. PostgreSQL 12+ supports IF NOT EXISTS, making the statement
+    # safe across cold starts and concurrent Vercel instances.
+    await conn.execute(text("ALTER TYPE platformtype ADD VALUE IF NOT EXISTS 'YAHOO'"))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -45,6 +83,7 @@ async def lifespan(app: FastAPI):
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await ensure_additive_schema(conn)
         logger.info("Database tables created successfully")
     except Exception as e:
         logger.error("Failed to create database tables", error=str(e))
