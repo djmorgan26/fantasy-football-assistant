@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Union
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import HTTPException, status, Depends, Header
+from fastapi import HTTPException, status, Depends, Cookie, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -120,6 +120,7 @@ async def create_user(
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     fantasy_session: Optional[str] = Header(default=None, alias="X-Fantasy-Session"),
+    yahoo_session: Optional[str] = Cookie(default=None, alias="fantasy_yahoo_session"),
     db: AsyncSession = Depends(get_database)
 ) -> User:
     credentials_exception = HTTPException(
@@ -132,7 +133,7 @@ async def get_current_user(
     # on Yahoo's nested routes. The app sends this equivalent bearer token only
     # for those routes; it is verified exactly as an Authorization bearer token
     # and never persisted or logged.
-    token = credentials.credentials if credentials else fantasy_session
+    token = credentials.credentials if credentials else fantasy_session or yahoo_session
     if not token:
         raise credentials_exception
 

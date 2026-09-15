@@ -18,11 +18,16 @@ const getAuthToken = (): string | null => {
 
 const setAuthToken = (token: string): void => {
   localStorage.setItem('access_token', token);
+  // Vercel's Yahoo rewrite has rejected the Authorization header even while
+  // the same session works on the rest of the API. Keep an equivalent token
+  // scoped only to Yahoo API paths as a same-site transport fallback.
+  document.cookie = `fantasy_yahoo_session=${token}; Path=/api/yahoo; Secure; SameSite=Strict`;
   api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 };
 
 const removeAuthToken = (): void => {
   localStorage.removeItem('access_token');
+  document.cookie = 'fantasy_yahoo_session=; Path=/api/yahoo; Max-Age=0; Secure; SameSite=Strict';
   delete api.defaults.headers.common['Authorization'];
 };
 

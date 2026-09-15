@@ -134,6 +134,18 @@ class TestAuth:
         assert response.status_code == 200
         assert response.json()["email"] == "yahoo-header@example.com"
 
+    async def test_get_current_user_accepts_yahoo_scoped_session_cookie(self, client: AsyncClient):
+        registered = await client.post(
+            "/api/auth/register",
+            json={"email": "yahoo-cookie@example.com", "password": "testpassword123"},
+        )
+        client.cookies.set("fantasy_yahoo_session", registered.json()["access_token"])
+
+        response = await client.get("/api/auth/me")
+
+        assert response.status_code == 200
+        assert response.json()["email"] == "yahoo-cookie@example.com"
+
     @pytest.mark.asyncio
     async def test_get_current_user_unauthorized(self, client: AsyncClient):
         response = await client.get("/api/auth/me")
