@@ -17,6 +17,7 @@ from app.models.league import League, PlatformType
 from app.models.team import Team
 from app.models.user import User
 from app.schemas.league import YahooConnectRequest, YahooLeagueSummary
+from app.services.league_access import ensure_member
 from app.services.yahoo_service import YahooAuthenticationError, YahooConfigurationError, YahooError, YahooService
 
 router = APIRouter(prefix="/yahoo", tags=["yahoo"])
@@ -111,9 +112,18 @@ async def connect_yahoo_league(
             db.add(league)
             await db.flush()
         else:
-            league.platform, league.owner_user_id, league.is_active = PlatformType.YAHOO, current_user.id, True
+            league.platform, league.is_active = PlatformType.YAHOO, True
+            # Ownership is not up for grabs. See the same note in api/leagues.py:
+            # reassigning it here is what locked the first manager out of their
+            # own league on ESPN, and a Yahoo league is shared the same way.
+            if league.owner_user_id is None:
+                league.owner_user_id = current_user.id
             league.name, league.size = data.get("name") or league.name, int(data.get("num_teams") or len(teams) or league.size)
-            league.season_year, league.yahoo_user_guid = int(data.get("season") or league.season_year), current_user.yahoo_guid
+            league.season_year = int(data.get("season") or league.season_year)
+            # Likewise the Yahoo account on the row: it is the owner's, and
+            # every other manager's lands on their membership below.
+            if league.owner_user_id == current_user.id or not league.yahoo_user_guid:
+                league.yahoo_user_guid = current_user.yahoo_guid
 
         existing = {team.yahoo_team_key: team for team in (await db.execute(select(Team).where(Team.league_id == league.id))).scalars()}
         for team_data in teams:
@@ -125,6 +135,15 @@ async def connect_yahoo_league(
             team.wins, team.losses, team.ties = team_data["wins"], team_data["losses"], team_data["ties"]
             team.points_for, team.points_against = team_data["points_for"], team_data["points_against"]
         league.last_synced = datetime.now(timezone.utc)
+
+        # Whoever connected it belongs in it, first manager or fifth. Without
+        # this a Yahoo league would be the one platform whose members cannot
+        # reach the board, and every access check would fall back to ownership.
+        membership = await ensure_member(
+            db, league.id, current_user.id,
+            role="owner" if league.owner_user_id == current_user.id else "member",
+        )
+        membership.yahoo_guid = current_user.yahoo_guid
         await db.commit()
         return YahooConnectionResponse(success=True, message=f"Connected to {league.name}", league_id=league.id)
     except YahooAuthenticationError as exc:

@@ -36,6 +36,9 @@ class LeagueMember(Base):
     # recommendations need the id of whoever is asking.
     sleeper_user_id = Column(String(255), nullable=True)
 
+    # Same story for Yahoo: `leagues.yahoo_user_guid` is the owner's.
+    yahoo_guid = Column(String(255), nullable=True)
+
     # The team this manager runs. It lives here rather than on
     # `Team.owner_user_id` because that column holds one user, so two people who
     # co-own a team (common in a real league) fought over it: the second to

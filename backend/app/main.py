@@ -64,6 +64,7 @@ async def ensure_additive_schema(conn) -> None:
         "ALTER TABLE leagues ADD COLUMN IF NOT EXISTS yahoo_user_guid VARCHAR(255)",
         "CREATE INDEX IF NOT EXISTS ix_leagues_yahoo_league_key ON leagues (yahoo_league_key)",
         "ALTER TABLE teams ADD COLUMN IF NOT EXISTS yahoo_team_key VARCHAR(255)",
+        "ALTER TABLE league_members ADD COLUMN IF NOT EXISTS yahoo_guid VARCHAR(255)",
     )
     for statement in statements:
         await conn.execute(text(statement))
