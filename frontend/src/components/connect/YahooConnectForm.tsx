@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { InformationCircleIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 
-import api from '@/services/api';
+import api, { getAuthToken } from '@/services/api';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -17,13 +17,26 @@ export const YahooConnectForm: React.FC = () => {
   const [leagues, setLeagues] = useState<YahooLeague[]>([]);
   const [busy, setBusy] = useState(false);
 
+  // This form mounts after the platform chooser changes views. Supply the
+  // persisted token at request time rather than relying solely on Axios's
+  // in-memory default header, which can be missing after that transition.
+  const sessionConfig = () => {
+    const token = getAuthToken();
+    return token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
+  };
+
+  const getYahoo = <T,>(path: string) => {
+    const config = sessionConfig();
+    return config ? api.get<T>(path, config) : api.get<T>(path);
+  };
+
   const load = async () => {
     try {
-      const status = await api.get<{ configured: boolean; connected: boolean }>('/yahoo/status');
+      const status = await getYahoo<{ configured: boolean; connected: boolean }>('/yahoo/status');
       setConfigured(status.data.configured);
       setConnected(status.data.connected);
       if (status.data.connected) {
-        const result = await api.get<YahooLeague[]>('/yahoo/leagues');
+        const result = await getYahoo<YahooLeague[]>('/yahoo/leagues');
         setLeagues(result.data);
       }
     } catch (error: any) {
@@ -36,11 +49,15 @@ export const YahooConnectForm: React.FC = () => {
   const authorize = async () => {
     setBusy(true);
     try {
-      const result = await api.post<{ authorization_url: string }>('/yahoo/authorize', {
+      const body = {
         // Yahoo must return to this exact frontend origin: it is where the
         // active Fantasy Hub session is stored, even on a preview deployment.
         return_to: window.location.origin,
-      });
+      };
+      const config = sessionConfig();
+      const result = config
+        ? await api.post<{ authorization_url: string }>('/yahoo/authorize', body, config)
+        : await api.post<{ authorization_url: string }>('/yahoo/authorize', body);
       window.location.assign(result.data.authorization_url);
     } catch (error: any) {
       setBusy(false);
@@ -51,7 +68,11 @@ export const YahooConnectForm: React.FC = () => {
   const connect = async (leagueKey: string) => {
     setBusy(true);
     try {
-      const result = await api.post('/yahoo/connect', { league_key: leagueKey });
+      const body = { league_key: leagueKey };
+      const config = sessionConfig();
+      const result = config
+        ? await api.post('/yahoo/connect', body, config)
+        : await api.post('/yahoo/connect', body);
       toast.success(result.data.message);
       navigate('/dashboard');
     } catch (error: any) {

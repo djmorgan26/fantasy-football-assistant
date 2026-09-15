@@ -2,25 +2,39 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 
 import { renderWithProviders, screen, waitFor } from '@/test/render';
-import api from '@/services/api';
+import api, { getAuthToken } from '@/services/api';
 import { YahooConnectForm } from './YahooConnectForm';
 
 vi.mock('@/services/api', () => ({
   default: { get: vi.fn(), post: vi.fn() },
+  getAuthToken: vi.fn(),
 }));
 
 const mockedGet = vi.mocked(api.get);
 const mockedPost = vi.mocked(api.post);
+const mockedGetAuthToken = vi.mocked(getAuthToken);
 const realLocation = window.location;
 
 describe('YahooConnectForm', () => {
   beforeEach(() => {
     mockedGet.mockReset();
     mockedPost.mockReset();
+    mockedGetAuthToken.mockReset();
     Object.defineProperty(window, 'location', {
       writable: true,
       value: { origin: 'https://current.fantasy-hub.test', assign: vi.fn() },
     });
+  });
+
+  it('sends the saved Fantasy Hub token when the Yahoo form mounts after a platform switch', async () => {
+    mockedGetAuthToken.mockReturnValue('fresh-session-token');
+    mockedGet.mockResolvedValue({ data: { configured: true, connected: false } });
+
+    renderWithProviders(<YahooConnectForm />);
+
+    await waitFor(() => expect(mockedGet).toHaveBeenCalledWith('/yahoo/status', {
+      headers: { Authorization: 'Bearer fresh-session-token' },
+    }));
   });
 
   afterEach(() => {
