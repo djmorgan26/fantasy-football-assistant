@@ -1,7 +1,10 @@
 """Yahoo Fantasy parsing and OAuth configuration guards."""
 import pytest
+from jose import jwt
 from urllib.parse import parse_qs, urlparse
 
+from app.api.yahoo import _return_destination, _state_for
+from app.core.config import settings
 from app.services.yahoo_service import YahooService, _resource_records
 
 
@@ -26,6 +29,15 @@ def test_yahoo_authorization_forces_a_fresh_yahoo_login(monkeypatch):
         "state": ["signed-state"],
         "prompt": ["login"],
     }
+
+
+def test_yahoo_callback_returns_to_the_origin_that_started_oauth(monkeypatch):
+    monkeypatch.setattr(settings, "frontend_url", "https://stale.example")
+    state = _state_for(7, "https://current.example")
+    payload = jwt.decode(state, settings.secret_key, algorithms=[settings.algorithm])
+
+    assert _return_destination(payload["return_to"]) == "https://current.example/leagues/connect?platform=yahoo"
+    assert _return_destination("https://current.example/not-an-origin") == "https://stale.example/leagues/connect?platform=yahoo"
 
 
 def test_yahoo_resource_records_unwrap_count_keyed_data():

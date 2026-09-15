@@ -36,7 +36,11 @@ export const YahooConnectForm: React.FC = () => {
   const authorize = async () => {
     setBusy(true);
     try {
-      const result = await api.post<{ authorization_url: string }>('/yahoo/authorize');
+      const result = await api.post<{ authorization_url: string }>('/yahoo/authorize', {
+        // Yahoo must return to this exact frontend origin: it is where the
+        // active Fantasy Hub session is stored, even on a preview deployment.
+        return_to: window.location.origin,
+      });
       window.location.assign(result.data.authorization_url);
     } catch (error: any) {
       setBusy(false);

@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta, timezone
 import secrets
 from typing import List
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
@@ -27,15 +28,40 @@ class AuthorizationResponse(BaseModel):
     authorization_url: str
 
 
+class AuthorizationRequest(BaseModel):
+    # The browser origin that owns the current Fantasy Hub session. This is
+    # signed into OAuth state and used only after Yahoo returns, preventing a
+    # deployment's stale FRONTEND_URL from sending the user to a second app
+    # origin where localStorage has no login token.
+    return_to: str | None = None
+
+
 class YahooConnectionResponse(BaseModel):
     success: bool
     message: str
     league_id: int | None = None
 
 
-def _state_for(user_id: int) -> str:
+def _return_destination(return_to: str | None = None) -> str:
+    """Return a safe browser origin followed by the Yahoo connection screen."""
+    candidate = return_to or settings.frontend_url
+    parsed = urlsplit(candidate)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.netloc
+        or parsed.username
+        or parsed.password
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+    ):
+        candidate = settings.frontend_url
+    return f"{candidate.rstrip('/')}/leagues/connect?platform=yahoo"
+
+
+def _state_for(user_id: int, return_to: str | None = None) -> str:
     return jwt.encode(
-        {"sub": str(user_id), "purpose": "yahoo_oauth", "nonce": secrets.token_urlsafe(18), "exp": datetime.now(timezone.utc) + timedelta(minutes=10)},
+        {"sub": str(user_id), "purpose": "yahoo_oauth", "return_to": return_to, "nonce": secrets.token_urlsafe(18), "exp": datetime.now(timezone.utc) + timedelta(minutes=10)},
         settings.secret_key,
         algorithm=settings.algorithm,
     )
@@ -48,9 +74,12 @@ async def yahoo_status(current_user: User = Depends(get_current_active_user)):
 
 
 @router.post("/authorize", response_model=AuthorizationResponse)
-async def yahoo_authorize(current_user: User = Depends(get_current_active_user)):
+async def yahoo_authorize(request: AuthorizationRequest, current_user: User = Depends(get_current_active_user)):
     try:
-        return AuthorizationResponse(authorization_url=YahooService().authorization_url(_state_for(current_user.id)))
+        # Reject malformed values before putting them into the signed state.
+        destination = _return_destination(request.return_to)
+        return_to = destination.removesuffix("/leagues/connect?platform=yahoo")
+        return AuthorizationResponse(authorization_url=YahooService().authorization_url(_state_for(current_user.id, return_to)))
     except YahooConfigurationError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
@@ -60,13 +89,14 @@ async def yahoo_callback(
     code: str | None = Query(default=None), state: str | None = Query(default=None),
     error: str | None = Query(default=None), db: AsyncSession = Depends(get_database),
 ):
-    destination = f"{settings.frontend_url.rstrip('/')}/leagues/connect?platform=yahoo"
+    destination = _return_destination()
     if error or not code or not state:
         return RedirectResponse(f"{destination}&yahoo=cancelled", status_code=303)
     try:
         payload = jwt.decode(state, settings.secret_key, algorithms=[settings.algorithm])
         if payload.get("purpose") != "yahoo_oauth" or not payload.get("sub"):
             raise JWTError("invalid state")
+        destination = _return_destination(payload.get("return_to"))
         user = await db.get(User, int(payload["sub"]))
         if not user or not user.is_active:
             raise JWTError("user unavailable")
