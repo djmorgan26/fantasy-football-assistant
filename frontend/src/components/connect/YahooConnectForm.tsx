@@ -22,7 +22,7 @@ export const YahooConnectForm: React.FC = () => {
   // in-memory default header, which can be missing after that transition.
   const sessionConfig = useCallback(() => {
     const token = getAuthToken();
-    return token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
+    return token ? { headers: { 'X-Fantasy-Session': token } } : undefined;
   }, []);
 
   const getYahoo = useCallback(<T,>(path: string) => {

@@ -33,7 +33,7 @@ describe('YahooConnectForm', () => {
     renderWithProviders(<YahooConnectForm />);
 
     await waitFor(() => expect(mockedGet).toHaveBeenCalledWith('/yahoo/status', {
-      headers: { Authorization: 'Bearer fresh-session-token' },
+      headers: { 'X-Fantasy-Session': 'fresh-session-token' },
     }));
   });
 

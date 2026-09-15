@@ -119,6 +119,21 @@ class TestAuth:
         assert data["full_name"] == "Current User"
         assert data["is_active"] is True
 
+    async def test_get_current_user_accepts_yahoo_proxy_session_header(self, client: AsyncClient):
+        registered = await client.post(
+            "/api/auth/register",
+            json={"email": "yahoo-header@example.com", "password": "testpassword123"},
+        )
+        token = registered.json()["access_token"]
+
+        response = await client.get(
+            "/api/auth/me",
+            headers={"X-Fantasy-Session": token},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["email"] == "yahoo-header@example.com"
+
     @pytest.mark.asyncio
     async def test_get_current_user_unauthorized(self, client: AsyncClient):
         response = await client.get("/api/auth/me")
