@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { InformationCircleIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
@@ -20,17 +20,17 @@ export const YahooConnectForm: React.FC = () => {
   // This form mounts after the platform chooser changes views. Supply the
   // persisted token at request time rather than relying solely on Axios's
   // in-memory default header, which can be missing after that transition.
-  const sessionConfig = () => {
+  const sessionConfig = useCallback(() => {
     const token = getAuthToken();
     return token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
-  };
+  }, []);
 
-  const getYahoo = <T,>(path: string) => {
+  const getYahoo = useCallback(<T,>(path: string) => {
     const config = sessionConfig();
     return config ? api.get<T>(path, config) : api.get<T>(path);
-  };
+  }, [sessionConfig]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const status = await getYahoo<{ configured: boolean; connected: boolean }>('/yahoo/status');
       setConfigured(status.data.configured);
@@ -42,9 +42,9 @@ export const YahooConnectForm: React.FC = () => {
     } catch (error: any) {
       toast.error(error.detail || 'Could not load Yahoo leagues');
     }
-  };
+  }, [getYahoo]);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [load]);
 
   const authorize = async () => {
     setBusy(true);
