@@ -36,6 +36,15 @@ class SleeperNotFoundError(SleeperError):
     pass
 
 
+class SleeperAuthError(SleeperError):
+    """The stored user token was rejected.
+
+    Distinct from every other failure because it is the one the user can fix,
+    and because it must not be mistaken for "there are no pending trades".
+    """
+    pass
+
+
 # Sleeper's reads are public GETs of slowly-changing data, and the app fans out
 # hard over them: building the league-wide ownership map asks for a roster per
 # team, so one /api/news/league request used to pull the same league, rosters
@@ -589,8 +598,11 @@ class SleeperService:
           the one still being asked, which is how incoming and outgoing offers
           are told apart.
 
-        Returns [] rather than raising when the token is missing or rejected:
-        a stale token should degrade the Offers tab, not break the page.
+        Raises `SleeperAuthError` when the token is rejected, and returns []
+        only when there genuinely are no proposed trades. The distinction
+        matters: a stale token that silently returned [] rendered as "nobody
+        has offered you a trade", which is a different and wrong statement.
+        Other failures still degrade to [] rather than breaking the page.
         """
         if not token:
             return []
@@ -622,6 +634,8 @@ class SleeperService:
             logger.warning("Sleeper GraphQL unreachable", error=str(e))
             return []
 
+        if response.status_code in (401, 403):
+            raise SleeperAuthError("Sleeper rejected the stored token")
         if response.status_code != 200:
             logger.warning(
                 "Sleeper GraphQL rejected the request", status=response.status_code
@@ -629,10 +643,17 @@ class SleeperService:
             return []
 
         payload = response.json()
-        if payload.get("errors"):
+        errors = payload.get("errors")
+        if errors:
+            # GraphQL reports auth failures in the body with a 200 status.
+            if any(
+                (e.get("code") == "unauthorized")
+                or "unauthorized" in str(e.get("message", "")).lower()
+                for e in errors
+            ):
+                raise SleeperAuthError("Sleeper rejected the stored token")
             logger.warning(
-                "Sleeper GraphQL returned errors",
-                errors=str(payload["errors"])[:300],
+                "Sleeper GraphQL returned errors", errors=str(errors)[:300]
             )
             return []
 

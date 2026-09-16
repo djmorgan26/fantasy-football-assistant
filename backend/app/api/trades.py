@@ -25,6 +25,7 @@ from app.schemas.trade import (
 )
 from app.core.auth import get_current_active_user
 from app.services.espn_service import ESPNService, ESPNCookies, ESPNError
+from app.services.sleeper_service import SleeperAuthError
 from app.services.llm_service import llm_service
 from app.services import league_context, player_intel, trade_engine, trade_feed
 from app.utils.encryption import ESPNCredentialManager, decrypt_data, encrypt_data
@@ -463,22 +464,35 @@ async def get_league_offers(
     context = await _load_context(league_id, current_user, db)
     token = _sleeper_token(context.league)
 
-    trades = await trade_feed.fetch_trades(
-        context.league,
-        context.teams,
-        context.my_team,
-        context.rosters,
-        cookies=league_context.espn_cookies(context.league),
-        sleeper_token=token,
-    )
+    # Say plainly why pending offers might be missing, because on Sleeper it is
+    # a thing the user can fix and on ESPN it is not.
+    available, notice = True, None
+    trades: List[trade_feed.NormalizedTrade] = []
+
+    try:
+        trades = await trade_feed.fetch_trades(
+            context.league,
+            context.teams,
+            context.my_team,
+            context.rosters,
+            cookies=league_context.espn_cookies(context.league),
+            sleeper_token=token,
+        )
+    except SleeperAuthError:
+        # A stale token silently returning nothing rendered as "nobody has
+        # offered you a trade", which is a different and wrong statement.
+        logger.info("Stored Sleeper token rejected", league_id=league_id)
+        available = False
+        notice = (
+            "Sleeper rejected your saved token, so pending offers cannot be "
+            "read. Tokens expire when you sign out of Sleeper. Paste a fresh "
+            "one to see offers waiting on you."
+        )
 
     pending = [t.to_dict() for t in trades if t.status == "proposed"]
     history = [t.to_dict() for t in trades if t.status != "proposed"][:20]
 
-    # Say plainly why pending offers might be missing, because on Sleeper it is
-    # a thing the user can fix and on ESPN it is not.
-    available, notice = True, None
-    if context.league.platform == PlatformType.SLEEPER and not token:
+    if available and context.league.platform == PlatformType.SLEEPER and not token:
         available = False
         notice = (
             "Sleeper's public API only returns completed trades. Connect your "

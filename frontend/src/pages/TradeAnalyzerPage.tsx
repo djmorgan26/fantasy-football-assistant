@@ -508,6 +508,9 @@ const SleeperConnectCard: React.FC<{ leagueId: number; notice: string }> = ({
   leagueId,
   notice,
 }) => {
+  // A rejected token and a missing one need different headings: one is "set
+  // this up", the other is "the thing you set up has expired".
+  const expired = /rejected/i.test(notice);
   const [token, setToken] = useState('');
   const connect = useConnectSleeperToken(leagueId);
   const disconnect = useDisconnectSleeperToken(leagueId);
@@ -517,7 +520,9 @@ const SleeperConnectCard: React.FC<{ leagueId: number; notice: string }> = ({
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <LinkIcon className="h-5 w-5 text-brand" aria-hidden="true" />
-          Connect Sleeper to see pending offers
+          {expired
+            ? 'Reconnect Sleeper to see pending offers'
+            : 'Connect Sleeper to see pending offers'}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -550,7 +555,13 @@ const SleeperConnectCard: React.FC<{ leagueId: number; notice: string }> = ({
             onClick={() => connect.mutate(token.trim())}
             disabled={token.trim().length < 10 || connect.isLoading}
           >
-            {connect.isLoading ? <LoadingSpinner size="sm" /> : 'Connect'}
+            {connect.isLoading ? (
+              <LoadingSpinner size="sm" />
+            ) : expired ? (
+              'Reconnect'
+            ) : (
+              'Connect'
+            )}
           </Button>
           <Button variant="ghost" onClick={() => disconnect.mutate()}>
             Remove

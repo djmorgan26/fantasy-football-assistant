@@ -864,3 +864,36 @@ class TestCounterOffers:
             assert "worse off" in body["summary"], body["summary"]
         else:
             assert "leave their lineup better off" in body["summary"]
+
+    async def test_a_rejected_token_says_so_instead_of_showing_no_offers(
+        self, client: AsyncClient, auth_headers, sleeper_league, monkeypatch
+    ):
+        """A stale token must not read as "nobody has offered you a trade".
+
+        Those are different statements, and only one of them is something the
+        user can act on. Sleeper tokens expire when you sign out, so this is
+        the normal end state of a connected league, not an edge case.
+        """
+        from app.services.sleeper_service import SleeperAuthError, SleeperService
+
+        league_id = sleeper_league["league"]["id"]
+        await client.post(
+            f"/api/trades/league/{league_id}/sleeper-token",
+            json={"token": "a-token-that-has-since-expired"},
+            headers=auth_headers,
+        )
+
+        async def rejected(self, league, token, limit=25):
+            raise SleeperAuthError("Sleeper rejected the stored token")
+
+        monkeypatch.setattr(SleeperService, "get_proposed_trades", rejected)
+
+        resp = await client.get(
+            f"/api/trades/league/{league_id}/offers", headers=auth_headers
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["pending_available"] is False
+        assert body["pending"] == []
+        assert "rejected" in (body["pending_notice"] or "").lower()
+        assert "fresh" in (body["pending_notice"] or "").lower()

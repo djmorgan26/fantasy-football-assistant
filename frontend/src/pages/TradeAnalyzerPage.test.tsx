@@ -322,6 +322,22 @@ describe('Offers tab', () => {
     expect(screen.getByText(/only returns completed trades/)).toBeInTheDocument();
   });
 
+  it('says a token expired rather than repeating the setup prompt', () => {
+    state.offers.data = offers({
+      pending: [],
+      pending_available: false,
+      pending_notice:
+        'Sleeper rejected your saved token, so pending offers cannot be read. Tokens expire when you sign out of Sleeper. Paste a fresh one to see offers waiting on you.',
+    });
+    show();
+    expect(
+      screen.getByText(/Reconnect Sleeper to see pending offers/)
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
+    // And it must not read as "nobody has offered you a trade".
+    expect(screen.queryByText(/No offers on the table/)).not.toBeInTheDocument();
+  });
+
   it('saves a pasted Sleeper token', async () => {
     const user = userEvent.setup();
     state.offers.data = offers({

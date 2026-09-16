@@ -30,7 +30,11 @@ from app.models.league import League, PlatformType
 from app.models.team import Team
 from app.services.espn_service import ESPNCookies, ESPNError, ESPNService
 from app.services import mock_data
-from app.services.sleeper_service import SleeperError, SleeperService
+from app.services.sleeper_service import (
+    SleeperAuthError,
+    SleeperError,
+    SleeperService,
+)
 
 logger = structlog.get_logger()
 
@@ -123,9 +127,10 @@ async def fetch_trades(
     found falls back to the platform's own player index rather than rendering a
     numeric id at the user.
 
-    Never raises: a platform that will not answer yields an empty list, because
-    an Offers tab that shows nothing is a far better failure than a page that
-    will not load.
+    Raises only `SleeperAuthError`, which the caller turns into a message
+    telling the user to reconnect. Every other failure yields an empty list,
+    because an Offers tab that shows nothing is a far better failure than a
+    page that will not load.
     """
     try:
         if league.platform == PlatformType.SLEEPER and league.sleeper_league_id:
@@ -134,6 +139,8 @@ async def fetch_trades(
             )
         if league.espn_league_id:
             return await _espn_trades(league, teams, my_team, rosters, cookies)
+    except SleeperAuthError:
+        raise  # the one failure the user can fix; the caller reports it
     except (ESPNError, SleeperError) as e:
         logger.warning("Trade feed unavailable", league_id=league.id, error=str(e))
     except Exception as e:  # noqa: BLE001 - one bad feed must not break the page
@@ -191,6 +198,8 @@ async def _sleeper_trades(
     raw: List[Dict[str, Any]] = []
 
     if token:
+        # A rejected token propagates: the caller turns it into a message the
+        # user can act on rather than an empty list that reads as "no offers".
         raw.extend(await service.get_proposed_trades(league.sleeper_league_id, token))
 
     current_week = int(league.current_week or 1)
