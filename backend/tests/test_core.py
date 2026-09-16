@@ -1,5 +1,7 @@
 """Core utilities: JWT, password hashing, encryption, config."""
+import re
 from datetime import timedelta
+from pathlib import Path
 
 import pytest
 from httpx import AsyncClient
@@ -76,3 +78,65 @@ class TestConfig:
             assert settings.effective_database_url == settings.database_url
         finally:
             settings.mock_mode = original
+
+
+class TestAdditiveSchemaBridge:
+    """Every migration column must also be in `ensure_additive_schema`.
+
+    Production's schema was created by `create_all` and has no Alembic history
+    (see NEXT_SESSION.md), so `alembic upgrade` never runs there. `create_all`
+    creates missing *tables* but never alters existing ones, which means a new
+    column reaches production only through the additive bridge in `main.py`.
+
+    Getting this wrong is not a degraded feature. SQLAlchemy names every column
+    in its SELECT, so one missing column on `leagues` turns every league query
+    into a 500. This test derives the requirement from the migrations
+    themselves rather than restating a list that would drift.
+    """
+
+    ADD_COLUMN = re.compile(
+        r"""op\.add_column\(\s*["'](?P<table>\w+)["']\s*,\s*sa\.Column\(\s*["'](?P<column>\w+)["']""",
+        re.VERBOSE,
+    )
+
+    def _migration_columns(self) -> set:
+        versions = Path(__file__).resolve().parents[1] / "alembic" / "versions"
+        found = set()
+        for path in versions.glob("*.py"):
+            # The baseline creates tables outright, so `create_all` covers it.
+            if path.name.startswith("0001"):
+                continue
+            for match in self.ADD_COLUMN.finditer(path.read_text()):
+                found.add((match.group("table"), match.group("column")))
+        return found
+
+    def _bridge_columns(self) -> set:
+        source = (Path(__file__).resolve().parents[1] / "app" / "main.py").read_text()
+        pattern = re.compile(
+            r"ALTER TABLE (?P<table>\w+) ADD COLUMN IF NOT EXISTS (?P<column>\w+)"
+        )
+        return {(m.group("table"), m.group("column")) for m in pattern.finditer(source)}
+
+    def test_every_migration_column_is_bridged(self):
+        missing = self._migration_columns() - self._bridge_columns()
+        assert not missing, (
+            "These columns are added by a migration but not by "
+            "ensure_additive_schema, so production (which has no Alembic "
+            f"history) would 500 on any query naming them: {sorted(missing)}"
+        )
+
+    def test_bridge_has_no_columns_the_models_dropped(self):
+        """A stale ALTER would recreate a column nothing reads."""
+        from app.db.database import Base
+
+        known = {
+            (table.name, column.name)
+            for table in Base.metadata.sorted_tables
+            for column in table.columns
+        }
+        stale = {
+            (table, column)
+            for table, column in self._bridge_columns()
+            if (table, column) not in known
+        }
+        assert not stale, f"bridge adds columns no model defines: {sorted(stale)}"
