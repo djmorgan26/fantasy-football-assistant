@@ -568,6 +568,77 @@ class SleeperService:
 
         raise SleeperNotFoundError(f"Roster {roster_id} not found in league {league_id}")
 
+    # ==================== AUTHENTICATED (GraphQL) ====================
+
+    async def get_proposed_trades(
+        self, league_id: str, token: str, limit: int = 25
+    ) -> List[Dict[str, Any]]:
+        """Trade offers that have been made but not yet accepted.
+
+        Sleeper's public v1 API only ever returns *completed* transactions, so
+        an offer sitting in your inbox is invisible to it, which is why the
+        app could not see a trade the website was showing. Pending offers live
+        behind `sleeper.com/graphql`, which needs the user's own bearer token.
+
+        Two details cost an afternoon each and are worth stating plainly:
+
+        - The status is **"proposed"**, not "pending". Every sensible guess
+          returns an empty list rather than an error.
+        - `consenter_ids` holds the *roster ids* that have agreed so far. The
+          proposing roster is always in it, so a roster missing from the list is
+          the one still being asked, which is how incoming and outgoing offers
+          are told apart.
+
+        Returns [] rather than raising when the token is missing or rejected:
+        a stale token should degrade the Offers tab, not break the page.
+        """
+        if not token:
+            return []
+        if settings.mock_mode:
+            return mock_data.sleeper_proposed_trades()
+
+        query = (
+            "query {"
+            f'  league_transactions_filtered(league_id: "{league_id}", '
+            f'type_filters: ["trade"], limit: {int(limit)}) {{'
+            "    transaction_id status type leg roster_ids adds drops"
+            "    draft_picks creator created consenter_ids"
+            "  }"
+            "}"
+        )
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    "https://sleeper.com/graphql",
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": token,
+                        "User-Agent": "Mozilla/5.0 (compatible; FantasyFootballAssistant/1.0)",
+                    },
+                    json={"query": query},
+                )
+        except httpx.RequestError as e:
+            logger.warning("Sleeper GraphQL unreachable", error=str(e))
+            return []
+
+        if response.status_code != 200:
+            logger.warning(
+                "Sleeper GraphQL rejected the request", status=response.status_code
+            )
+            return []
+
+        payload = response.json()
+        if payload.get("errors"):
+            logger.warning(
+                "Sleeper GraphQL returned errors",
+                errors=str(payload["errors"])[:300],
+            )
+            return []
+
+        rows = (payload.get("data") or {}).get("league_transactions_filtered") or []
+        return [row for row in rows if row.get("status") == "proposed"]
+
     async def validate_league_access(self, league_id: str, user_id: str) -> bool:
         """
         Check if a user has access to a league

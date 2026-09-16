@@ -813,3 +813,156 @@ export interface ActionPlan {
   budget: { remaining: number | null; total: number | null };
   all_clear: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Trade workbench
+//
+// Mirrors backend/app/schemas/trade.py. Everything here addresses teams and
+// players by our own ids, so the UI never asks anyone for an ESPN player id
+// (which is what the old analyzer did).
+// ---------------------------------------------------------------------------
+
+export interface TradePlayer {
+  player_id: string;
+  full_name: string;
+  position: string;
+  pro_team?: string | null;
+  projected_points: number;
+  injury_status?: string | null;
+}
+
+export interface MarketPlayer extends TradePlayer {
+  value: number;
+  is_starter: boolean;
+  on_injured_reserve: boolean;
+}
+
+export interface MarketTeam {
+  team_id: number;
+  team_name: string;
+  is_mine: boolean;
+  record: string;
+  lineup_points: number;
+  needs: string[];
+  surplus: string[];
+  players: MarketPlayer[];
+}
+
+export interface TradeMarket {
+  league_id: number;
+  my_team_id: number | null;
+  replacement_levels: Record<string, number>;
+  starting_slots: Record<string, number>;
+  teams: MarketTeam[];
+}
+
+export interface TradeParty {
+  team_id: number | null;
+  team_name: string;
+  platform_team_id?: number | string | null;
+  sends: TradePlayer[];
+  has_consented: boolean;
+}
+
+export type TradeDirection = 'incoming' | 'outgoing' | 'other';
+
+export interface LeagueTrade {
+  trade_id: string;
+  status: 'proposed' | 'executed' | 'rejected' | 'vetoed';
+  direction: TradeDirection;
+  parties: TradeParty[];
+  proposed_at?: string | null;
+  week?: number | null;
+  source: string;
+}
+
+export interface TradeOffers {
+  league_id: number;
+  platform: string;
+  my_team_id: number | null;
+  pending: LeagueTrade[];
+  history: LeagueTrade[];
+  pending_available: boolean;
+  pending_notice?: string | null;
+}
+
+export interface PositionDepth {
+  rostered: number;
+  startable: number;
+  required: number;
+  surplus: number;
+  best: number;
+}
+
+export interface TradeSide {
+  team_id: number;
+  team_name: string;
+  lineup_before: number;
+  lineup_after: number;
+  lineup_delta: number;
+  value_out: number;
+  value_in: number;
+  value_delta: number;
+  depth_before: Record<string, PositionDepth>;
+  depth_after: Record<string, PositionDepth>;
+}
+
+export interface PlayoffOdds {
+  before: number;
+  after: number;
+  delta: number;
+  iterations: number;
+  weeks_simulated: number;
+  playoff_spots: number;
+  schedule_source: string;
+}
+
+export type TradeVerdict =
+  | 'accept'
+  | 'lean_accept'
+  | 'neutral'
+  | 'lean_reject'
+  | 'reject';
+
+export interface TradeEvaluation {
+  verdict: TradeVerdict;
+  headline: string;
+  fairness_score: number;
+  you: TradeSide;
+  them: TradeSide;
+  playoff_odds?: PlayoffOdds | null;
+  risks: string[];
+  ai_summary?: string | null;
+  ai_points: string[];
+  counter_suggestion?: string | null;
+  players_you_send: TradePlayer[];
+  players_you_get: TradePlayer[];
+}
+
+export interface TradeEvaluationRequest {
+  team_a_id: number;
+  team_b_id: number;
+  team_a_sends: string[];
+  team_b_sends: string[];
+  include_odds?: boolean;
+  include_ai?: boolean;
+}
+
+export interface TradeIdea {
+  partner_team_id: number;
+  partner_team_name: string;
+  give: TradePlayer[];
+  receive: TradePlayer[];
+  my_lineup_delta: number;
+  their_lineup_delta: number;
+  mutual_gain: number;
+  fairness: number;
+}
+
+export interface TradeFinderResult {
+  league_id: number;
+  my_team_id: number;
+  ideas: TradeIdea[];
+  needs: string[];
+  surplus: string[];
+}

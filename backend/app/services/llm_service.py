@@ -140,6 +140,54 @@ class LLMService:
             logger.error("LLM trade analysis failed", error=str(e))
             return self._fallback_trade_analysis(give_players, receive_players)
 
+    async def trade_verdict(
+        self,
+        *,
+        context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Narrate a trade the engine has already scored.
+
+        The division of labour is the point. Every number here (lineup deltas,
+        playoff odds, value over replacement, depth) is computed by
+        `trade_engine` from real projections *before* the model is called. The
+        model's only job is to explain what those numbers mean and suggest a
+        counter. It is told, in as many words, that the numbers are given and
+        that inventing any others is the failure mode.
+
+        This matters because an earlier version of this app let a model reason
+        about a trade from raw rosters and it confidently described a league
+        that did not exist. Grounding it in pre-computed figures is what keeps
+        the write-up honest.
+
+        Returns {} when the model is unavailable or misbehaves; the caller
+        renders the engine's own verdict and nothing is lost but prose.
+        """
+        if not self.is_available():
+            return {}
+
+        try:
+            return self.complete_json(
+                system=(
+                    "You are a fantasy football trade analyst writing for the manager "
+                    "deciding on this trade. Every figure you need has already been "
+                    "computed and is given in the prompt. Use ONLY those figures. Do not "
+                    "invent statistics, rankings, injuries, news, or anything about a "
+                    "player not listed. Do not recompute or contradict the given numbers; "
+                    "explain what they mean. If something a manager would weigh is absent "
+                    "from the data, say it is not covered rather than guessing. "
+                    'Return JSON: {"summary": "2-3 sentences of plain assessment", '
+                    '"points": ["3-5 short bullets, each tied to a given number"], '
+                    '"counter": "one concrete counter-offer or next step, or null"}'
+                ),
+                prompt=json.dumps(context, indent=2, default=str),
+                temperature=0.3,
+                max_tokens=2000,
+                purpose="trade_verdict",
+            )
+        except Exception as e:
+            logger.warning("LLM trade verdict failed", error=str(e))
+            return {}
+
     async def generate_strategic_suggestions(
         self,
         roster: List[Dict[str, Any]],

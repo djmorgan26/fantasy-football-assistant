@@ -39,8 +39,12 @@ class League(Base):
     # ESPN requires cookies for private leagues
     espn_s2_encrypted = Column(Text, nullable=True)
     espn_swid_encrypted = Column(Text, nullable=True)
-    # Sleeper doesn't require auth but we store the user_id for reference
+    # Sleeper's public API needs no auth, but it also never returns a *pending*
+    # trade offer. Those only exist behind sleeper.com/graphql, which wants the
+    # manager's own bearer token. Optional: without it the Offers tab falls back
+    # to completed trade history.
     sleeper_user_id = Column(String(255), nullable=True)
+    sleeper_token_encrypted = Column(Text, nullable=True)
     yahoo_user_guid = Column(String(255), nullable=True)
 
     # League metadata

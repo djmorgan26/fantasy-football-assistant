@@ -812,6 +812,105 @@ def sleeper_transactions(week: int) -> List[Dict[str, Any]]:
     return out
 
 
+def _best_at(team_id: int, position: str, sleeper: bool = False) -> str:
+    """That team's highest-projected player at a position.
+
+    Used to build demo trades that actually move the needle. Picking a roster
+    slot by index gave two benched backup quarterbacks, so every figure on the
+    verdict panel came out as zero and the demo demonstrated nothing.
+    """
+    source = _SLEEPER_TEAM_ROSTERS if sleeper else _TEAM_ROSTERS
+    candidates = [p for p in source[team_id] if _PLAYERS[p]["position"] == position]
+    candidates.sort(key=lambda p: _PLAYERS[p]["_base_ppr"], reverse=True)
+    return candidates[0]
+
+
+def espn_trade_views() -> tuple:
+    """(mPendingTransactions, mTransactions2) payloads, in ESPN's raw shape.
+
+    Returned raw rather than pre-normalized so the mock exercises the same
+    parsing the live API goes through, including the detail that ESPN marks
+    each traded player with `fromTeamId`/`toTeamId` rather than grouping by side.
+
+    Addressed to team 5, `mock_seed.DEMO_ESPN_TEAM_ID`, so the demo league shows
+    a real incoming offer rather than one between two teams the user is not on.
+    """
+    # A running back for a receiver, each side's best at that position, so the
+    # trade genuinely changes both starting lineups.
+    proposer, receiver = 1, 5
+    theirs = _best_at(proposer, "RB")
+    mine = _best_at(receiver, "WR")
+    pending = {
+        "pendingTransactions": [
+            {
+                "id": "mock-espn-pending-1",
+                "type": "TRADE_PROPOSAL",
+                "status": "PENDING",
+                "teamId": proposer,
+                "scoringPeriodId": MOCK_CURRENT_WEEK,
+                "proposedDate": 1788885506839,
+                "items": [
+                    {"playerId": theirs, "fromTeamId": proposer, "toTeamId": receiver},
+                    {"playerId": mine, "fromTeamId": receiver, "toTeamId": proposer},
+                ],
+            }
+        ]
+    }
+
+    older_a = _best_at(3, "TE")
+    older_b = _best_at(4, "TE")
+    history = {
+        "transactions": [
+            {
+                "id": "mock-espn-executed-1",
+                "type": "TRADE",
+                "status": "EXECUTED",
+                "teamId": 3,
+                "scoringPeriodId": max(1, MOCK_CURRENT_WEEK - 2),
+                "proposedDate": 1788285506839,
+                "items": [
+                    {"playerId": older_a, "fromTeamId": 3, "toTeamId": 4},
+                    {"playerId": older_b, "fromTeamId": 4, "toTeamId": 3},
+                ],
+            }
+        ]
+    }
+    return pending, history
+
+
+def sleeper_proposed_trades() -> List[Dict[str, Any]]:
+    """One incoming trade offer, in the shape Sleeper's GraphQL returns.
+
+    Mirrors a real proposed trade exactly: status "proposed" (not "pending",
+    a spelling that returns nothing from Sleeper), and `consenter_ids` holding
+    only the proposing roster, which is what marks the offer as still awaiting
+    the other side.
+
+    Addressed to roster 8 because that is `mock_seed.DEMO_SLEEPER_ROSTER_ID`,
+    the team the demo user actually owns. An offer aimed anywhere else is
+    correct but reads as "other" and never exercises the incoming UI.
+    """
+    proposer, receiver = 3, 8
+    theirs = _best_at(proposer, "RB", sleeper=True)
+    mine = _best_at(receiver, "WR", sleeper=True)
+    return [
+        {
+            "transaction_id": "mock_trade_proposed_1",
+            "status": "proposed",
+            "type": "trade",
+            "leg": MOCK_CURRENT_WEEK,
+            "roster_ids": [proposer, receiver],
+            # adds maps player -> roster receiving him; drops the reverse.
+            "adds": {mine: proposer, theirs: receiver},
+            "drops": {mine: receiver, theirs: proposer},
+            "draft_picks": [],
+            "creator": f"bot_{proposer}",
+            "created": 1788885506839,
+            "consenter_ids": [proposer],
+        }
+    ]
+
+
 def nfl_scoreboard() -> List[Dict[str, Any]]:
     """The canned slate, in the shape news_service.fetch_scoreboard returns."""
     def side(abbr: str, score: int) -> Dict[str, Any]:

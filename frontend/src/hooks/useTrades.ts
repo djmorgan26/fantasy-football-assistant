@@ -1,6 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from 'react-query';
-import { TradeAnalysisRequest, TradeAnalysisResponse, Trade, ApiError } from '@/types';
+import {
+  ApiError,
+  Trade,
+  TradeAnalysisRequest,
+  TradeAnalysisResponse,
+  TradeEvaluation,
+  TradeEvaluationRequest,
+  TradeFinderResult,
+  TradeMarket,
+  TradeOffers,
+} from '@/types';
 import { tradesService } from '@/services/trades';
+import { tradeWorkbenchService } from '@/services/tradeWorkbench';
 import toast from 'react-hot-toast';
 
 export const useAnalyzeTrade = () => {
@@ -59,6 +70,73 @@ export const useTrade = (tradeId: number) => {
       staleTime: 2 * 60 * 1000, // 2 minutes
       onError: (error: ApiError) => {
         toast.error(error.detail || 'Failed to fetch trade');
+      },
+    }
+  );
+};
+// ---------------------------------------------------------------------------
+// Trade workbench
+// ---------------------------------------------------------------------------
+
+export const useTradeOffers = (leagueId: number) =>
+  useQuery<TradeOffers, ApiError>(
+    ['trade-offers', leagueId],
+    () => tradeWorkbenchService.getOffers(leagueId),
+    { enabled: !!leagueId, staleTime: 60 * 1000 }
+  );
+
+export const useTradeMarket = (leagueId: number) =>
+  useQuery<TradeMarket, ApiError>(
+    ['trade-market', leagueId],
+    () => tradeWorkbenchService.getMarket(leagueId),
+    { enabled: !!leagueId, staleTime: 5 * 60 * 1000 }
+  );
+
+/**
+ * The finder walks every roster and scores thousands of candidate swaps, so it
+ * is deliberately opt-in (`enabled`) rather than firing when the page mounts.
+ */
+export const useTradeFinder = (leagueId: number, enabled: boolean) =>
+  useQuery<TradeFinderResult, ApiError>(
+    ['trade-finder', leagueId],
+    () => tradeWorkbenchService.findTrades(leagueId),
+    { enabled: !!leagueId && enabled, staleTime: 5 * 60 * 1000 }
+  );
+
+export const useEvaluateTrade = (leagueId: number) =>
+  useMutation<TradeEvaluation, ApiError, TradeEvaluationRequest>(
+    (request) => tradeWorkbenchService.evaluate(leagueId, request),
+    {
+      onError: (error) => {
+        toast.error(error.detail || 'Could not evaluate this trade');
+      },
+    }
+  );
+
+export const useConnectSleeperToken = (leagueId: number) => {
+  const queryClient = useQueryClient();
+  return useMutation<void, ApiError, string>(
+    (token) => tradeWorkbenchService.connectSleeperToken(leagueId, token),
+    {
+      onSuccess: () => {
+        toast.success('Sleeper connected. Pending offers should appear now.');
+        queryClient.invalidateQueries(['trade-offers', leagueId]);
+      },
+      onError: (error) => {
+        toast.error(error.detail || 'Could not save that Sleeper token');
+      },
+    }
+  );
+};
+
+export const useDisconnectSleeperToken = (leagueId: number) => {
+  const queryClient = useQueryClient();
+  return useMutation<void, ApiError, void>(
+    () => tradeWorkbenchService.disconnectSleeperToken(leagueId),
+    {
+      onSuccess: () => {
+        toast.success('Sleeper token removed');
+        queryClient.invalidateQueries(['trade-offers', leagueId]);
       },
     }
   );

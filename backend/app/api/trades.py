@@ -1,16 +1,31 @@
+import asyncio
+from dataclasses import dataclass
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from typing import List
+from typing import Any, Dict, List, Optional
 from app.db.database import get_database
 from app.models.user import User
-from app.models.league import League
+from app.models.league import League, PlatformType
+from app.models.team import Team
 from app.models.trade import Trade, TradeStatus
-from app.schemas.trade import TradeAnalysisRequest, TradeAnalysisResponse, TradeCreate, TradeResponse
+from app.schemas.trade import (
+    PlayoffOdds,
+    SleeperTokenRequest,
+    TradeAnalysisRequest,
+    TradeAnalysisResponse,
+    TradeCreate,
+    TradeEvaluation,
+    TradeEvaluationRequest,
+    TradeFinderResponse,
+    TradeOffersResponse,
+    TradeResponse,
+)
 from app.core.auth import get_current_active_user
 from app.services.espn_service import ESPNService, ESPNCookies, ESPNError
 from app.services.llm_service import llm_service
-from app.utils.encryption import ESPNCredentialManager
+from app.services import league_context, trade_engine, trade_feed
+from app.utils.encryption import ESPNCredentialManager, decrypt_data, encrypt_data
 from app.services.league_access import visible_to
 import structlog
 from datetime import datetime, timedelta
@@ -332,3 +347,550 @@ async def get_trade(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve trade"
         )
+
+# ===========================================================================
+# The trade workbench
+#
+# Everything below addresses teams and players by *our* ids, works for ESPN and
+# Sleeper alike, and is what the rebuilt Trades page consumes. The /analyze
+# endpoint above predates it: ESPN-only, player ids typed in by hand.
+# ===========================================================================
+
+
+@dataclass
+class TradeContext:
+    """Everything the trade endpoints need about a league, loaded once."""
+
+    league: League
+    teams: List[Team]
+    my_team: Optional[Team]
+    rosters: Dict[int, List[dict]]
+    slots: trade_engine.LineupSlots
+    levels: Dict[str, float]
+
+    def team(self, team_id: int) -> Team:
+        found = next((t for t in self.teams if t.id == team_id), None)
+        if not found:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Team {team_id} is not in this league",
+            )
+        return found
+
+    def roster(self, team_id: int) -> List[dict]:
+        return self.rosters.get(team_id, [])
+
+    @property
+    def team_names(self) -> Dict[int, str]:
+        return {t.id: t.name for t in self.teams}
+
+
+async def _load_context(
+    league_id: int, user: User, db: AsyncSession
+) -> TradeContext:
+    """Load the league, its teams and every roster, then derive the baselines.
+
+    Rosters are fetched concurrently: a 12-team league is 12 platform calls and
+    doing them in series is the difference between a page that feels instant and
+    one that times out on a cold cache.
+
+    Replacement levels are computed across *every rostered player in the
+    league*, not just the two teams trading. That is the whole point of a
+    replacement baseline: what a player is worth depends on what else exists.
+    """
+    league = await league_context.load_league(league_id, user, db)
+    teams = await league_context.all_teams(league, db)
+    if not teams:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This league has no synced teams yet. Sync the league and try again.",
+        )
+    mine = await league_context.my_team(league, user, db)
+
+    loaded = await asyncio.gather(
+        *(league_context.roster_for(league, t) for t in teams)
+    )
+    rosters = {team.id: entries for team, entries in zip(teams, loaded)}
+
+    settings_blob = league.roster_settings or {}
+    slots = trade_engine.lineup_slots_from_settings(
+        settings_blob, settings_blob.get("roster_positions")
+    )
+    every_player = [p for entries in rosters.values() for p in entries]
+    levels = trade_engine.replacement_levels(every_player, slots, len(teams))
+
+    return TradeContext(
+        league=league,
+        teams=teams,
+        my_team=mine,
+        rosters=rosters,
+        slots=slots,
+        levels=levels,
+    )
+
+
+def _sleeper_token(league: League) -> Optional[str]:
+    if not league.sleeper_token_encrypted:
+        return None
+    return decrypt_data(league.sleeper_token_encrypted)
+
+
+def _playoff_spots(league: League) -> int:
+    """How many teams make the playoffs, defaulting to the usual half-ish."""
+    raw = (league.roster_settings or {}).get("playoff_teams")
+    try:
+        spots = int(raw)
+    except (TypeError, ValueError):
+        spots = 0
+    if spots <= 0:
+        spots = max(2, round((league.size or 10) / 2))
+    return min(spots, max(1, (league.size or 10) - 1))
+
+
+@router.get("/league/{league_id}/offers", response_model=TradeOffersResponse)
+async def get_league_offers(
+    league_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_database),
+):
+    """Pending trade offers and recent trade history for a league.
+
+    The headline feature: until now the app could not see that somebody had
+    offered you a trade at all.
+    """
+    context = await _load_context(league_id, current_user, db)
+    token = _sleeper_token(context.league)
+
+    trades = await trade_feed.fetch_trades(
+        context.league,
+        context.teams,
+        context.my_team,
+        context.rosters,
+        cookies=league_context.espn_cookies(context.league),
+        sleeper_token=token,
+    )
+
+    pending = [t.to_dict() for t in trades if t.status == "proposed"]
+    history = [t.to_dict() for t in trades if t.status != "proposed"][:20]
+
+    # Say plainly why pending offers might be missing, because on Sleeper it is
+    # a thing the user can fix and on ESPN it is not.
+    available, notice = True, None
+    if context.league.platform == PlatformType.SLEEPER and not token:
+        available = False
+        notice = (
+            "Sleeper's public API only returns completed trades. Connect your "
+            "Sleeper token to see offers waiting on you."
+        )
+
+    return TradeOffersResponse(
+        league_id=league_id,
+        platform=context.league.platform.value,
+        my_team_id=context.my_team.id if context.my_team else None,
+        pending=pending,
+        history=history,
+        pending_available=available,
+        pending_notice=notice,
+    )
+
+
+@router.post("/league/{league_id}/sleeper-token", status_code=status.HTTP_204_NO_CONTENT)
+async def connect_sleeper_token(
+    league_id: int,
+    body: SleeperTokenRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_database),
+):
+    """Store a Sleeper bearer token for this league, encrypted.
+
+    Encrypted at rest with the same Fernet key that protects the ESPN cookies
+    on the same row. Only ever read back to ask Sleeper for this league's
+    pending trades.
+    """
+    league = await league_context.load_league(league_id, current_user, db)
+    if league.platform != PlatformType.SLEEPER:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only Sleeper leagues use a Sleeper token",
+        )
+
+    league.sleeper_token_encrypted = encrypt_data(body.token.strip())
+    await db.commit()
+    logger.info("Sleeper token stored", league_id=league_id, user_id=current_user.id)
+
+
+@router.delete("/league/{league_id}/sleeper-token", status_code=status.HTTP_204_NO_CONTENT)
+async def disconnect_sleeper_token(
+    league_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_database),
+):
+    league = await league_context.load_league(league_id, current_user, db)
+    league.sleeper_token_encrypted = None
+    await db.commit()
+
+
+@router.post("/league/{league_id}/evaluate", response_model=TradeEvaluation)
+async def evaluate_trade(
+    league_id: int,
+    body: TradeEvaluationRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_database),
+):
+    """Score a trade properly: lineup impact, depth, playoff odds, AI read.
+
+    `team_a_id` is treated as "you" throughout. The verdict, the odds delta and
+    the AI summary are all written from that team's point of view.
+    """
+    context = await _load_context(league_id, current_user, db)
+    team_a, team_b = context.team(body.team_a_id), context.team(body.team_b_id)
+    roster_a, roster_b = context.roster(team_a.id), context.roster(team_b.id)
+
+    a_sends = _players_on(roster_a, body.team_a_sends, team_a.name)
+    b_sends = _players_on(roster_b, body.team_b_sends, team_b.name)
+
+    side_a = trade_engine.evaluate_side(
+        team_id=team_a.id,
+        team_name=team_a.name,
+        roster=roster_a,
+        outgoing_ids=body.team_a_sends,
+        incoming=b_sends,
+        slots=context.slots,
+        levels=context.levels,
+    )
+    side_b = trade_engine.evaluate_side(
+        team_id=team_b.id,
+        team_name=team_b.name,
+        roster=roster_b,
+        outgoing_ids=body.team_b_sends,
+        incoming=a_sends,
+        slots=context.slots,
+        levels=context.levels,
+    )
+    fairness = trade_engine.fairness_score(side_a, side_b)
+
+    odds = None
+    if body.include_odds:
+        odds = await _playoff_odds(context, side_a, side_b)
+
+    odds_delta = odds.delta if odds else None
+    verdict, headline = trade_engine.verdict_label(
+        side_a.lineup_delta, odds_delta, fairness
+    )
+    risks = _risks(a_sends, b_sends, side_a)
+
+    ai_summary, ai_points, counter = None, [], None
+    if body.include_ai and llm_service.is_available():
+        result = await llm_service.trade_verdict(
+            context=_ai_context(
+                context, team_a, team_b, a_sends, b_sends, side_a, side_b,
+                fairness, odds, verdict, risks,
+            )
+        )
+        ai_summary = result.get("summary")
+        points = result.get("points")
+        ai_points = [str(p) for p in points][:5] if isinstance(points, list) else []
+        counter = result.get("counter") or None
+
+    return TradeEvaluation(
+        verdict=verdict,
+        headline=headline,
+        fairness_score=fairness,
+        you=side_a.to_dict(),
+        them=side_b.to_dict(),
+        playoff_odds=odds,
+        risks=risks,
+        ai_summary=ai_summary,
+        ai_points=ai_points,
+        counter_suggestion=counter,
+        players_you_send=[trade_feed._brief(p) for p in a_sends],
+        players_you_get=[trade_feed._brief(p) for p in b_sends],
+    )
+
+
+def _players_on(
+    roster: List[dict], player_ids: List[str], team_name: str
+) -> List[dict]:
+    """Resolve ids against a roster, refusing anything not actually on it.
+
+    A 400 here rather than silently dropping the player: a trade evaluated
+    against the wrong set of players is worse than no answer, because it looks
+    like an answer.
+    """
+    index = {str(p.get("player_id")): p for p in roster}
+    resolved, missing = [], []
+    for pid in player_ids:
+        found = index.get(str(pid))
+        if found:
+            resolved.append(found)
+        else:
+            missing.append(str(pid))
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Not on {team_name}'s roster: {', '.join(missing)}",
+        )
+    return resolved
+
+
+async def _playoff_odds(
+    context: TradeContext,
+    side_a: trade_engine.SideImpact,
+    side_b: trade_engine.SideImpact,
+) -> Optional[PlayoffOdds]:
+    """Run the season twice: as things stand, and as they would be post-trade.
+
+    Only the two trading teams' weekly means change between the runs; everyone
+    else is held fixed, so the delta isolates the trade. Both runs share a seed
+    so the difference is the trade rather than simulation noise, which matters
+    when the true effect is under a point.
+    """
+    league = context.league
+    week = int(league.current_week or 1)
+    last_week = _last_regular_week(league)
+    if week > last_week:
+        return None
+
+    schedule = await trade_feed.remaining_schedule(
+        league,
+        context.teams,
+        from_week=week,
+        through_week=last_week,
+        cookies=league_context.espn_cookies(league),
+    )
+    if not schedule:
+        return None
+
+    changed = {side_a.team_id: side_a, side_b.team_id: side_b}
+
+    def sim_teams(after: bool) -> List[trade_engine.SimTeam]:
+        out = []
+        for team in context.teams:
+            impact = changed.get(team.id)
+            if impact is not None:
+                mean = impact.lineup_after if after else impact.lineup_before
+            else:
+                mean, _ = trade_engine.optimal_lineup(
+                    context.roster(team.id), context.slots
+                )
+            out.append(
+                trade_engine.SimTeam(
+                    team_id=team.id,
+                    name=team.name,
+                    wins=float(team.wins or 0),
+                    losses=float(team.losses or 0),
+                    points_for=float(team.points_for or 0.0),
+                    weekly_mean=max(mean, 1.0),
+                )
+            )
+        return out
+
+    spots = _playoff_spots(league)
+    seed = 20260916
+    before = trade_engine.simulate_season(
+        sim_teams(False), schedule, spots, seed=seed
+    )
+    after = trade_engine.simulate_season(
+        sim_teams(True), schedule, spots, seed=seed
+    )
+
+    mine_before = before.get(side_a.team_id, 0.0)
+    mine_after = after.get(side_a.team_id, 0.0)
+    return PlayoffOdds(
+        before=mine_before,
+        after=mine_after,
+        delta=round(mine_after - mine_before, 1),
+        iterations=trade_engine.DEFAULT_ITERATIONS,
+        weeks_simulated=len(schedule),
+        playoff_spots=spots,
+        schedule_source="platform",
+    )
+
+
+def _last_regular_week(league: League) -> int:
+    raw = (league.roster_settings or {}).get("playoff_week_start")
+    try:
+        return max(1, int(raw) - 1)
+    except (TypeError, ValueError):
+        return 14
+
+
+def _risks(
+    outgoing: List[dict], incoming: List[dict], side: trade_engine.SideImpact
+) -> List[str]:
+    """Flags drawn from the data, never guessed.
+
+    Only things the roster payload actually carries: injury designations and
+    positions a trade leaves short. Anything else a manager would weigh (a
+    player's playoff schedule, a coaching change) is not in this data, and
+    inventing it is precisely what the AI grounding rules forbid.
+    """
+    flags: List[str] = []
+    for player in incoming:
+        status_text = (player.get("injury_status") or "").strip()
+        if status_text and status_text.upper() not in ("ACTIVE", "NA", "NONE"):
+            flags.append(
+                f"{player.get('full_name')} is listed {status_text}."
+            )
+
+    for position, after in side.depth_after.items():
+        before = side.depth_before.get(position, {})
+        if after["startable"] < after["required"] <= before.get("startable", 0):
+            flags.append(
+                f"Leaves you short at {position}: "
+                f"{after['startable']} startable for {after['required']} slot(s)."
+            )
+    return flags
+
+
+def _ai_context(
+    context: TradeContext,
+    team_a: Team,
+    team_b: Team,
+    a_sends: List[dict],
+    b_sends: List[dict],
+    side_a: trade_engine.SideImpact,
+    side_b: trade_engine.SideImpact,
+    fairness: float,
+    odds: Optional[PlayoffOdds],
+    verdict: str,
+    risks: List[str],
+) -> Dict[str, Any]:
+    """The pre-computed facts handed to the model. Nothing it must derive."""
+    return {
+        "league": {
+            "name": context.league.name,
+            "scoring": context.league.scoring_type,
+            "teams": len(context.teams),
+            "week": context.league.current_week,
+            "starting_slots": {
+                **context.slots.counts,
+                "FLEX": context.slots.flex,
+                "SUPER_FLEX": context.slots.superflex,
+            },
+        },
+        "you": {
+            "team": team_a.name,
+            "record": f"{team_a.wins}-{team_a.losses}",
+            "you_send": [trade_feed._brief(p) for p in a_sends],
+            "you_receive": [trade_feed._brief(p) for p in b_sends],
+            "weekly_lineup_points_before": side_a.lineup_before,
+            "weekly_lineup_points_after": side_a.lineup_after,
+            "weekly_lineup_change": side_a.lineup_delta,
+            "value_over_replacement_given_up": side_a.value_out,
+            "value_over_replacement_received": side_a.value_in,
+            "position_depth_after": side_a.depth_after,
+        },
+        "them": {
+            "team": team_b.name,
+            "record": f"{team_b.wins}-{team_b.losses}",
+            "weekly_lineup_change": side_b.lineup_delta,
+            "value_over_replacement_received": side_b.value_in,
+        },
+        "fairness_score_0_100": fairness,
+        "playoff_odds": odds.model_dump() if odds else "not simulated",
+        "engine_verdict": verdict,
+        "data_flags": risks,
+        "note": (
+            "Projections are weekly expected points. 'Value over replacement' is "
+            "points above a freely available starter at that position in this "
+            "league. These numbers are already computed; do not recompute them."
+        ),
+    }
+
+
+@router.get("/league/{league_id}/finder", response_model=TradeFinderResponse)
+async def find_trades(
+    league_id: int,
+    limit: int = 10,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_database),
+):
+    """Trades worth proposing: ones that improve both teams' starting lineups.
+
+    A trade only happens if the other manager says yes, so ranking by your own
+    gain alone surfaces offers nobody accepts. These are filtered to deals where
+    both lineups improve, then sorted by your gain first.
+    """
+    context = await _load_context(league_id, current_user, db)
+    if not context.my_team:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Claim your team in this league to get trade suggestions",
+        )
+
+    mine = context.my_team.id
+    ideas = trade_engine.find_opportunities(
+        my_team_id=mine,
+        my_roster=context.roster(mine),
+        other_rosters={t.id: context.roster(t.id) for t in context.teams if t.id != mine},
+        team_names=context.team_names,
+        slots=context.slots,
+        levels=context.levels,
+        limit=max(1, min(limit, 25)),
+    )
+
+    depth = trade_engine.position_depth(
+        context.roster(mine), context.slots, context.levels
+    )
+    needs = [pos for pos, d in depth.items() if d["required"] and d["surplus"] < 0]
+    surplus = [pos for pos, d in depth.items() if d["surplus"] > 0]
+
+    return TradeFinderResponse(
+        league_id=league_id,
+        my_team_id=mine,
+        ideas=[i.to_dict() for i in ideas],
+        needs=needs,
+        surplus=surplus,
+    )
+
+
+@router.get("/league/{league_id}/market")
+async def trade_market(
+    league_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_database),
+):
+    """Every rostered player with a trade value, plus each team's shape.
+
+    Backs the player pickers in the trade machine, so the UI never has to ask
+    anyone for a platform player id again.
+    """
+    context = await _load_context(league_id, current_user, db)
+
+    teams = []
+    for team in context.teams:
+        roster = context.roster(team.id)
+        depth = trade_engine.position_depth(roster, context.slots, context.levels)
+        teams.append({
+            "team_id": team.id,
+            "team_name": team.name,
+            "is_mine": bool(context.my_team and team.id == context.my_team.id),
+            "record": f"{team.wins}-{team.losses}",
+            "lineup_points": trade_engine.optimal_lineup(roster, context.slots)[0],
+            "needs": [p for p, d in depth.items() if d["required"] and d["surplus"] < 0],
+            "surplus": [p for p, d in depth.items() if d["surplus"] > 0],
+            "players": [
+                {
+                    **trade_feed._brief(player),
+                    "value": trade_engine.value_over_replacement(player, context.levels),
+                    "is_starter": bool(player.get("is_starter")),
+                    "on_injured_reserve": bool(player.get("on_injured_reserve")),
+                }
+                for player in sorted(
+                    roster, key=trade_engine.player_points, reverse=True
+                )
+            ],
+        })
+
+    return {
+        "league_id": league_id,
+        "my_team_id": context.my_team.id if context.my_team else None,
+        "replacement_levels": context.levels,
+        "starting_slots": {
+            **context.slots.counts,
+            "FLEX": context.slots.flex,
+            "SUPER_FLEX": context.slots.superflex,
+        },
+        "teams": teams,
+    }

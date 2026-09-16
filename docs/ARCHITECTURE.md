@@ -134,9 +134,11 @@ Where they genuinely differ, the difference is resolved once:
 | Current week | on the league | authoritative at `/v1/state/nfl` | `sleeper_sync.current_week` |
 | FAAB | on the team | split across league, roster and transactions | `sleeper_service.get_waiver_budgets` |
 | Sync | `/leagues/{id}/sync` | same endpoint, `sleeper_sync.refresh_league` | `api/leagues.py` |
+| Pending trades | `view=mPendingTransactions`, public | GraphQL only, needs a user token | `trade_feed.fetch_trades` |
 
 Sleeper needs no credentials at all — the whole API is public and read-only, so
-connecting a league needs only a username.
+connecting a league needs only a username. The one exception is pending trade
+offers, which the public API does not carry at all; see below.
 
 ### Yahoo is a third of a platform, on purpose
 
@@ -161,6 +163,62 @@ the first thing to fix when the Yahoo roster adapter lands.
 Yahoo also needs an approved developer app: every Fantasy API resource returns
 401 without OAuth, credentials are not self-serve, and Yahoo reviews the
 application before issuing them.
+
+## Trades
+
+The one feature where a platform's public API is not enough.
+
+### Seeing a trade at all
+
+A trade offer sitting in your inbox is a different thing from a completed
+transaction, and the two platforms disagree about whether you may read it:
+
+- **ESPN** answers `?view=mPendingTransactions` for a public league with no
+  credentials, alongside `mTransactions2` for history.
+- **Sleeper's** public `/v1/league/{id}/transactions/{week}` returns **completed
+  transactions only**. A proposed trade is absent from it entirely. Pending
+  offers live behind `sleeper.com/graphql`, which requires the manager's own
+  bearer token, stored Fernet-encrypted in `leagues.sleeper_token_encrypted`
+  and optional: without it the Offers tab degrades to trade history and says
+  why.
+
+Two details about Sleeper's GraphQL cost real time to find and are easy to
+re-lose:
+
+1. A pending trade's status is **`"proposed"`**, not `"pending"`. Querying the
+   obvious spelling returns an empty list rather than an error.
+2. `consenter_ids` holds the *roster ids* that have agreed so far, and the
+   proposer is always among them. A roster in the trade but absent from that
+   list is the one being asked, which is how `trade_feed._direction`
+   distinguishes an incoming offer from an outgoing one.
+
+`trade_feed` flattens both platforms into one `NormalizedTrade`, so nothing
+above the service layer branches on platform.
+
+### Deciding whether to accept
+
+`trade_engine` is pure (no I/O, no database, no network), so the whole model is
+unit-testable from plain dicts (`tests/test_trade_engine.py`). Three ideas:
+
+| Idea | Function | Why it exists |
+| --- | --- | --- |
+| Value over replacement | `replacement_levels`, `value_over_replacement` | 12 points a week is a great TE and a bad RB. What matters is the margin over the last startable player at that position, which depends on league size and slots. |
+| Lineup impact | `optimal_lineup`, `evaluate_side` | Value is theoretical; points scored come from the best *legal* lineup. This is what notices that a third good RB adds nothing when you start two. |
+| Playoff odds | `simulate_season` | The number a manager actually wants. Monte Carlo over the **real** remaining schedule, both platforms publishing it up front (`trade_feed.remaining_schedule`). |
+
+The odds are run twice, before and after, under the **same seed**, so the
+delta is the trade rather than simulation noise. That matters when the true
+effect is under a point.
+
+`find_opportunities` inverts the usual framing: it ranks swaps where *both*
+starting lineups improve, because a trade only happens if the other manager
+says yes. Ranking by your own gain alone surfaces offers nobody accepts.
+
+### Grounding
+
+Every figure on the verdict panel is computed by `trade_engine` before the
+model is called. `llm_service.trade_verdict` receives those numbers and is told
+to explain them, not to derive or contradict them. See [Grounding](#grounding).
 
 ## Matching players across platforms
 
