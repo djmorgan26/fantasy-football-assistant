@@ -1,5 +1,6 @@
 import api from './api';
 import {
+  CounterResult,
   TradeEvaluation,
   TradeEvaluationRequest,
   TradeFinderResult,
@@ -37,6 +38,22 @@ export const tradeWorkbenchService = {
     const { data } = await api.get<TradeFinderResult>(
       `/trades/league/${leagueId}/finder`,
       { params: { limit } }
+    );
+    return data;
+  },
+
+  /**
+   * Counter-offers to an offer already on the table. Its own call rather than
+   * part of the evaluation because the user triggers it deliberately, and it
+   * is worth running whatever the verdict was.
+   */
+  async counters(
+    leagueId: number,
+    request: TradeEvaluationRequest & { limit?: number }
+  ): Promise<CounterResult> {
+    const { data } = await api.post<CounterResult>(
+      `/trades/league/${leagueId}/counters`,
+      request
     );
     return data;
   },

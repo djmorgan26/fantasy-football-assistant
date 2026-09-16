@@ -190,6 +190,9 @@ class TradeEvaluation(BaseModel):
     counter_suggestion: Optional[str] = None
     players_you_send: List[TradePlayer] = []
     players_you_get: List[TradePlayer] = []
+    # Sourced facts per player id: depth-chart role, injury detail, recent
+    # headlines. Empty when the wire and the player index are both unavailable.
+    intel: Dict[str, Any] = {}
 
 
 class TradeIdeaSchema(BaseModel):
@@ -215,3 +218,49 @@ class SleeperTokenRequest(BaseModel):
     """Connect a Sleeper token so pending offers become visible."""
 
     token: str = Field(min_length=10, max_length=4096)
+
+
+class CounterOfferSchema(BaseModel):
+    """An alternative package, scored against the offer already on the table."""
+
+    kind: str  # ask_for_more | different_target | give_less | different_piece | swap_both
+    give: List[TradePlayer]
+    receive: List[TradePlayer]
+    my_lineup_delta: float
+    their_lineup_delta: float
+    fairness: float
+    # What separates a counter from a fresh idea: both are measured against
+    # the original offer rather than against nothing.
+    gain_vs_original: float
+    cost_to_them: float
+    likelihood: str  # easy_ask | fair_ask | big_ask | unlikely
+    likelihood_reason: str
+    rationale: str
+
+
+class CounterRequest(BaseModel):
+    """Explore counters to an offer. The offer itself is the baseline."""
+
+    team_a_id: int = Field(gt=0, description="Your team")
+    team_b_id: int = Field(gt=0, description="The team that made the offer")
+    team_a_sends: List[str] = Field(min_length=1, max_length=10)
+    team_b_sends: List[str] = Field(min_length=1, max_length=10)
+    limit: int = Field(default=6, ge=1, le=12)
+    include_ai: bool = True
+
+    def model_post_init(self, __context):
+        if self.team_a_id == self.team_b_id:
+            raise ValueError("Cannot counter yourself")
+
+
+class CounterResponse(BaseModel):
+    league_id: int
+    # The verdict on the offer as written, so the counters have a baseline the
+    # user can see rather than one they have to remember.
+    original_verdict: str
+    original_lineup_delta: float
+    original_headline: str
+    counters: List[CounterOfferSchema] = []
+    # Said plainly when there is nothing better, which is itself an answer.
+    summary: str
+    ai_summary: Optional[str] = None

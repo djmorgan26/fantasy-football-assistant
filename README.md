@@ -1,7 +1,7 @@
 # Fantasy Football Assistant
 
-A companion app for ESPN, Sleeper, and Yahoo fantasy leagues that knows your **whole
-league**, not just your team — and spends that on the things a national fantasy
+A companion app for ESPN and Sleeper fantasy leagues that knows your **whole
+league**, not just your team, and spends that on the things a national fantasy
 site cannot do.
 
 ```bash
@@ -58,9 +58,12 @@ which has no public draft feed.
 **Roster, trades, players, waiver budgets** across ESPN and Sleeper, with a
 mobile-first interface that works on a 320px screen.
 
-**Yahoo Fantasy.** Secure OAuth connection, league selection, standings/team
-sync, and re-sync are available. Yahoo's roster, matchup, and waiver adapters
-are intentionally not presented as complete yet.
+**Yahoo Fantasy is not available yet**, and the app says so rather than
+offering it. The OAuth flow, league discovery and standings sync are written and
+tested, but Yahoo issues Fantasy API credentials only to a developer app they
+have reviewed, and that approval is still outstanding. Until it lands, a
+connected Yahoo league would render with no roster, no matchups and no waiver
+budget, so the connect screen shows Yahoo greyed out as "Coming soon".
 
 ## Stack
 

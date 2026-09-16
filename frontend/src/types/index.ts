@@ -937,6 +937,8 @@ export interface TradeEvaluation {
   counter_suggestion?: string | null;
   players_you_send: TradePlayer[];
   players_you_get: TradePlayer[];
+  /** Sourced facts per player id: depth-chart role, injury detail, headlines. */
+  intel: Record<string, PlayerIntel>;
 }
 
 export interface TradeEvaluationRequest {
@@ -965,4 +967,65 @@ export interface TradeFinderResult {
   ideas: TradeIdea[];
   needs: string[];
   surplus: string[];
+}
+
+// --- Counter-offers and player intel -------------------------------------
+
+export type CounterKind =
+  | 'ask_for_more'
+  | 'different_target'
+  | 'give_less'
+  | 'different_piece'
+  | 'swap_both';
+
+export type CounterLikelihood = 'easy_ask' | 'fair_ask' | 'big_ask' | 'unlikely';
+
+export interface CounterOffer {
+  kind: CounterKind;
+  give: TradePlayer[];
+  receive: TradePlayer[];
+  my_lineup_delta: number;
+  their_lineup_delta: number;
+  fairness: number;
+  /** Weekly points above simply accepting the offer as written. */
+  gain_vs_original: number;
+  /** How much worse this is for them than the deal they themselves proposed. */
+  cost_to_them: number;
+  likelihood: CounterLikelihood;
+  likelihood_reason: string;
+  rationale: string;
+}
+
+export interface CounterResult {
+  league_id: number;
+  original_verdict: TradeVerdict;
+  original_lineup_delta: number;
+  original_headline: string;
+  counters: CounterOffer[];
+  summary: string;
+  ai_summary?: string | null;
+}
+
+export interface PlayerHeadline {
+  headline: string;
+  description?: string | null;
+  published?: string | null;
+  category?: string | null;
+  url?: string | null;
+}
+
+export interface PlayerIntel {
+  full_name: string;
+  /** "Starting RB" or "RB2 on the depth chart". Null when unknown. */
+  role?: string | null;
+  injury?: {
+    status: string;
+    body_part?: string | null;
+    notes?: string | null;
+    practice?: string | null;
+  } | null;
+  age?: number | null;
+  years_exp?: number | null;
+  nfl_team?: string | null;
+  headlines: PlayerHeadline[];
 }

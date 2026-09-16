@@ -135,6 +135,7 @@ Where they genuinely differ, the difference is resolved once:
 | FAAB | on the team | split across league, roster and transactions | `sleeper_service.get_waiver_budgets` |
 | Sync | `/leagues/{id}/sync` | same endpoint, `sleeper_sync.refresh_league` | `api/leagues.py` |
 | Pending trades | `view=mPendingTransactions`, public | GraphQL only, needs a user token | `trade_feed.fetch_trades` |
+| Player news / depth chart | wire articles carry athlete tags | player index carries role and injury detail | `player_intel.gather` |
 
 Sleeper needs no credentials at all — the whole API is public and read-only, so
 connecting a league needs only a username. The one exception is pending trade
@@ -214,11 +215,54 @@ effect is under a point.
 starting lineups improve, because a trade only happens if the other manager
 says yes. Ranking by your own gain alone surfaces offers nobody accepts.
 
+### Countering
+
+`counter_offers` answers the question the verdict cannot: if not this, then
+what? It enumerates small edits to the offer on the table (ask for one more
+player, ask for a different one, send a cheaper piece, swap both sides) and
+scores each with the same machinery, against two baselines that only exist
+because an offer was made:
+
+- `gain_vs_original` is weekly lineup points above simply accepting. A counter
+  that does not beat accepting is discarded.
+- `cost_to_them` is how much worse the counter is than the deal *they wrote*.
+
+Likelihood is graded on whether their own starting lineup still improves, not
+on `cost_to_them` alone. Grading on the gap was wrong in the case that matters
+most: when someone lowballs you, their opening ask is worth a great deal to
+them, so every fair counter looked "much worse than what they proposed" and the
+whole list came back labelled unlikely. A fair trade is not a long shot.
+
+Results sort by plausibility first and gain second, because "ask for their best
+player as well" always wins the most points and is never accepted. The endpoint
+is separate from the evaluation and runs on demand, whatever the verdict: a
+trade worth accepting may still be worth improving.
+
+### What the numbers cannot say
+
+`player_intel` gathers the context a projection has no way to carry, from
+sources that state it as fact:
+
+| Fact | Source |
+| --- | --- |
+| Depth-chart role ("Starting RB" vs "RB2") | Sleeper player index |
+| Injury status, body part, practice participation | Sleeper player index |
+| Age and experience (it is a keeper league) | Sleeper player index |
+| Recent headlines, tagged per athlete | ESPN news wire |
+
+Two traps. ESPN's per-athlete news endpoint (`/athletes/{id}/news`) looks like
+the right tool and returns an empty list for every athlete tried, including
+players on the wire's front page the same minute; the league-wide wire's
+athlete tags are what actually work. And ESPN writes "Aaron Jones Sr" where
+Sleeper writes "Aaron Jones", so `player_intel._base_name_key` drops
+generational suffixes that `news_service._name_key` keeps.
+
 ### Grounding
 
 Every figure on the verdict panel is computed by `trade_engine` before the
-model is called. `llm_service.trade_verdict` receives those numbers and is told
-to explain them, not to derive or contradict them. See [Grounding](#grounding).
+model is called. `llm_service.trade_verdict` receives those numbers, plus the
+sourced `player_intel` facts, and is told to explain them, not to derive or
+contradict them. See [Grounding](#grounding).
 
 ## Matching players across platforms
 

@@ -18,6 +18,38 @@ describe('ConnectLeaguePage', () => {
     expect(screen.getByRole('button', { name: /Sleeper/ })).toBeInTheDocument();
   });
 
+  it('shows Yahoo as coming soon rather than offering something that fails', async () => {
+    // The OAuth flow works, but Yahoo has not approved the Fantasy API
+    // credentials, so a connected league would have no roster, matchups or
+    // waiver budget. Saying so beats letting someone connect and find out.
+    const user = userEvent.setup();
+    renderWithProviders(<ConnectLeaguePage />, { route: '/leagues/connect' });
+
+    const yahoo = screen.getByRole('button', { name: /Yahoo/ });
+    expect(yahoo).toBeDisabled();
+    expect(screen.getByText('Coming soon')).toBeInTheDocument();
+    expect(screen.getByText(/Waiting on Yahoo to approve/)).toBeInTheDocument();
+
+    // Clicking it must not switch the form over to Yahoo.
+    await user.click(yahoo);
+    expect(yahoo).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('does not claim Yahoo works in the page subtitle', () => {
+    renderWithProviders(<ConnectLeaguePage />, { route: '/leagues/connect' });
+    expect(screen.getByText(/Works with ESPN and Sleeper/)).toBeInTheDocument();
+  });
+
+  it('?platform=yahoo lands on a usable platform instead of a dead card', () => {
+    renderWithProviders(<ConnectLeaguePage />, {
+      route: '/leagues/connect?platform=yahoo',
+    });
+    expect(screen.getByRole('button', { name: /ESPN/ })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+  });
+
   it('starts on ESPN and says so', () => {
     renderWithProviders(<ConnectLeaguePage />, { route: '/leagues/connect' });
 

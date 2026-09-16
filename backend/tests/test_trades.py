@@ -600,3 +600,267 @@ class TestTradeFinder:
         )
         assert resp.status_code == 200, resp.text
         assert resp.json()["my_team_id"]
+
+
+class TestPlayerIntel:
+    """Sourced facts about the players in a trade, never inferred ones."""
+
+    async def test_evaluation_carries_intel_for_both_sides(
+        self, client: AsyncClient, auth_headers, espn_league
+    ):
+        league_id = espn_league["league"]["id"]
+        market, mine, other = await _claimed_market(client, auth_headers, espn_league)
+
+        resp = await client.post(
+            f"/api/trades/league/{league_id}/evaluate",
+            json={
+                "team_a_id": mine, "team_b_id": other,
+                "team_a_sends": _pick(market, mine),
+                "team_b_sends": _pick(market, other),
+                "include_ai": False,
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+
+        intel = body["intel"]
+        assert intel, "expected intel for the players in the trade"
+        sent = body["players_you_send"][0]["player_id"]
+        got = body["players_you_get"][0]["player_id"]
+        assert sent in intel and got in intel
+
+        entry = intel[got]
+        assert entry["full_name"]
+        # Depth-chart role is the fact a projection cannot express: whether he
+        # actually starts for his NFL team.
+        assert "role" in entry
+        assert "injury" in entry
+        assert isinstance(entry["headlines"], list)
+
+    async def test_a_backup_is_flagged_as_a_risk(
+        self, client: AsyncClient, auth_headers, espn_league
+    ):
+        """Receiving a player who is not his team's starter is worth saying."""
+        league_id = espn_league["league"]["id"]
+        market, mine, other = await _claimed_market(client, auth_headers, espn_league)
+        their_team = next(t for t in market["teams"] if t["team_id"] == other)
+
+        # Walk their roster until we find someone the intel calls a backup.
+        for candidate in their_team["players"]:
+            resp = await client.post(
+                f"/api/trades/league/{league_id}/evaluate",
+                json={
+                    "team_a_id": mine, "team_b_id": other,
+                    "team_a_sends": _pick(market, mine),
+                    "team_b_sends": [candidate["player_id"]],
+                    "include_ai": False,
+                },
+                headers=auth_headers,
+            )
+            body = resp.json()
+            entry = body["intel"].get(candidate["player_id"]) or {}
+            role = entry.get("role") or ""
+            if role and not role.startswith("Starting"):
+                assert any(
+                    "depth chart" in risk for risk in body["risks"]
+                ), f"backup not flagged: {body['risks']}"
+                return
+        pytest.skip("no backup found on the mock roster")
+
+    async def test_intel_survives_a_dead_news_wire(
+        self, client: AsyncClient, auth_headers, espn_league, monkeypatch
+    ):
+        """Headlines are one source of three; losing them keeps the rest.
+
+        Patched at the real boundary (`news_service.fetch_news`) rather than at
+        `player_intel._wire`, because `_wire` is where the guard lives and
+        replacing it would test the mock instead of the handling.
+        """
+        from app.services import news_service
+
+        async def broken_wire(*args, **kwargs):
+            raise RuntimeError("wire down")
+
+        monkeypatch.setattr(news_service, "fetch_news", broken_wire)
+
+        league_id = espn_league["league"]["id"]
+        market, mine, other = await _claimed_market(client, auth_headers, espn_league)
+        resp = await client.post(
+            f"/api/trades/league/{league_id}/evaluate",
+            json={
+                "team_a_id": mine, "team_b_id": other,
+                "team_a_sends": _pick(market, mine),
+                "team_b_sends": _pick(market, other),
+                "include_ai": False,
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        intel = resp.json()["intel"]
+        assert intel
+        assert all(e["headlines"] == [] for e in intel.values())
+        # The depth-chart facts come from the player index, not the wire.
+        assert any(e.get("role") for e in intel.values())
+
+
+class TestCounterOffers:
+    async def test_counters_are_offered_and_beat_accepting(
+        self, client: AsyncClient, auth_headers, espn_league
+    ):
+        league_id = espn_league["league"]["id"]
+        market, mine, other = await _claimed_market(client, auth_headers, espn_league)
+        my_team = next(t for t in market["teams"] if t["team_id"] == mine)
+        their_team = next(t for t in market["teams"] if t["team_id"] == other)
+
+        # A lopsided offer against me: my best for their worst. There should be
+        # something better to propose back.
+        resp = await client.post(
+            f"/api/trades/league/{league_id}/counters",
+            json={
+                "team_a_id": mine, "team_b_id": other,
+                "team_a_sends": [my_team["players"][0]["player_id"]],
+                "team_b_sends": [their_team["players"][-1]["player_id"]],
+                "include_ai": False,
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+
+        assert body["original_verdict"] in (
+            "accept", "lean_accept", "neutral", "lean_reject", "reject"
+        )
+        assert body["summary"]
+        assert body["counters"], "a bad offer should have a better version"
+
+        for counter in body["counters"]:
+            # The defining property: every counter beats simply accepting.
+            assert counter["gain_vs_original"] > 0
+            assert counter["give"] and counter["receive"]
+            assert counter["rationale"]
+            assert counter["likelihood"] in (
+                "easy_ask", "fair_ask", "big_ask", "unlikely"
+            )
+            assert counter["likelihood_reason"]
+            assert counter["kind"] in (
+                "ask_for_more", "different_target", "give_less",
+                "different_piece", "swap_both",
+            )
+
+    async def test_counters_are_available_even_on_a_good_offer(
+        self, client: AsyncClient, auth_headers, espn_league
+    ):
+        """The user asked to explore whatever the verdict was.
+
+        A trade worth accepting may still be worth improving, so the endpoint
+        must answer rather than refuse.
+        """
+        league_id = espn_league["league"]["id"]
+        market, mine, other = await _claimed_market(client, auth_headers, espn_league)
+        my_team = next(t for t in market["teams"] if t["team_id"] == mine)
+        their_team = next(t for t in market["teams"] if t["team_id"] == other)
+
+        resp = await client.post(
+            f"/api/trades/league/{league_id}/counters",
+            json={
+                "team_a_id": mine, "team_b_id": other,
+                "team_a_sends": [my_team["players"][-1]["player_id"]],
+                "team_b_sends": [their_team["players"][0]["player_id"]],
+                "include_ai": False,
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        # Either counters, or a plain sentence saying why there are none.
+        assert body["counters"] or "Nothing" in body["summary"]
+
+    async def test_counter_rejects_a_player_not_on_the_roster(
+        self, client: AsyncClient, auth_headers, espn_league
+    ):
+        league_id = espn_league["league"]["id"]
+        market, mine, other = await _claimed_market(client, auth_headers, espn_league)
+        resp = await client.post(
+            f"/api/trades/league/{league_id}/counters",
+            json={
+                "team_a_id": mine, "team_b_id": other,
+                "team_a_sends": ["ghost-player"],
+                "team_b_sends": _pick(market, other),
+                "include_ai": False,
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 400
+
+    async def test_counters_work_on_sleeper(
+        self, client: AsyncClient, auth_headers, sleeper_league
+    ):
+        league_id = sleeper_league["league"]["id"]
+        market, mine, other = await _claimed_market(
+            client, auth_headers, sleeper_league
+        )
+        my_team = next(t for t in market["teams"] if t["team_id"] == mine)
+        their_team = next(t for t in market["teams"] if t["team_id"] == other)
+        resp = await client.post(
+            f"/api/trades/league/{league_id}/counters",
+            json={
+                "team_a_id": mine, "team_b_id": other,
+                "team_a_sends": [my_team["players"][0]["player_id"]],
+                "team_b_sends": [their_team["players"][-1]["player_id"]],
+                "include_ai": False,
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["original_verdict"]
+
+    async def test_countering_yourself_rejected(
+        self, client: AsyncClient, auth_headers, espn_league
+    ):
+        league_id = espn_league["league"]["id"]
+        market, mine, _o = await _claimed_market(client, auth_headers, espn_league)
+        resp = await client.post(
+            f"/api/trades/league/{league_id}/counters",
+            json={
+                "team_a_id": mine, "team_b_id": mine,
+                "team_a_sends": _pick(market, mine),
+                "team_b_sends": _pick(market, mine),
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 422
+
+    async def test_summary_does_not_call_a_long_shot_realistic(
+        self, client: AsyncClient, auth_headers, espn_league
+    ):
+        """When nothing is an easy ask, the sentence has to say so.
+
+        Describing the leading counter as "the most realistic" reads as an
+        endorsement, and it is wrong when every option leaves the other team
+        worse off than the deal they wrote.
+        """
+        league_id = espn_league["league"]["id"]
+        market, mine, other = await _claimed_market(client, auth_headers, espn_league)
+        my_team = next(t for t in market["teams"] if t["team_id"] == mine)
+        their_team = next(t for t in market["teams"] if t["team_id"] == other)
+
+        resp = await client.post(
+            f"/api/trades/league/{league_id}/counters",
+            json={
+                "team_a_id": mine, "team_b_id": other,
+                "team_a_sends": [my_team["players"][-1]["player_id"]],
+                "team_b_sends": [their_team["players"][0]["player_id"]],
+                "include_ai": False,
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        if not body["counters"]:
+            return
+        bands = {c["likelihood"] for c in body["counters"]}
+        if bands <= {"big_ask", "unlikely"}:
+            assert "worse off" in body["summary"], body["summary"]
+        else:
+            assert "leave their lineup better off" in body["summary"]

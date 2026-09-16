@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from 'react-query';
 import {
   ApiError,
+  CounterResult,
   Trade,
   TradeAnalysisRequest,
   TradeAnalysisResponse,
@@ -141,3 +142,17 @@ export const useDisconnectSleeperToken = (leagueId: number) => {
     }
   );
 };
+
+/**
+ * Counter-offers. A mutation rather than a query because the user asks for it,
+ * which is the behaviour requested: explore on demand, whatever the verdict.
+ */
+export const useCounterOffers = (leagueId: number) =>
+  useMutation<CounterResult, ApiError, TradeEvaluationRequest & { limit?: number }>(
+    (request) => tradeWorkbenchService.counters(leagueId, request),
+    {
+      onError: (error) => {
+        toast.error(error.detail || 'Could not work out a counter');
+      },
+    }
+  );

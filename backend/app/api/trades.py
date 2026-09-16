@@ -10,6 +10,8 @@ from app.models.league import League, PlatformType
 from app.models.team import Team
 from app.models.trade import Trade, TradeStatus
 from app.schemas.trade import (
+    CounterRequest,
+    CounterResponse,
     PlayoffOdds,
     SleeperTokenRequest,
     TradeAnalysisRequest,
@@ -24,7 +26,7 @@ from app.schemas.trade import (
 from app.core.auth import get_current_active_user
 from app.services.espn_service import ESPNService, ESPNCookies, ESPNError
 from app.services.llm_service import llm_service
-from app.services import league_context, trade_engine, trade_feed
+from app.services import league_context, player_intel, trade_engine, trade_feed
 from app.utils.encryption import ESPNCredentialManager, decrypt_data, encrypt_data
 from app.services.league_access import visible_to
 import structlog
@@ -569,22 +571,27 @@ async def evaluate_trade(
     )
     fairness = trade_engine.fairness_score(side_a, side_b)
 
-    odds = None
-    if body.include_odds:
-        odds = await _playoff_odds(context, side_a, side_b)
+    # Odds and intel are independent lookups, so they run together.
+    odds_task = (
+        _playoff_odds(context, side_a, side_b) if body.include_odds
+        else asyncio.sleep(0, result=None)
+    )
+    odds, intel = await asyncio.gather(
+        odds_task, player_intel.gather(a_sends + b_sends)
+    )
 
     odds_delta = odds.delta if odds else None
     verdict, headline = trade_engine.verdict_label(
         side_a.lineup_delta, odds_delta, fairness
     )
-    risks = _risks(a_sends, b_sends, side_a)
+    risks = _risks(a_sends, b_sends, side_a, intel)
 
     ai_summary, ai_points, counter = None, [], None
     if body.include_ai and llm_service.is_available():
         result = await llm_service.trade_verdict(
             context=_ai_context(
                 context, team_a, team_b, a_sends, b_sends, side_a, side_b,
-                fairness, odds, verdict, risks,
+                fairness, odds, verdict, risks, intel,
             )
         )
         ai_summary = result.get("summary")
@@ -605,6 +612,7 @@ async def evaluate_trade(
         counter_suggestion=counter,
         players_you_send=[trade_feed._brief(p) for p in a_sends],
         players_you_get=[trade_feed._brief(p) for p in b_sends],
+        intel=intel,
     )
 
 
@@ -716,22 +724,29 @@ def _last_regular_week(league: League) -> int:
 
 
 def _risks(
-    outgoing: List[dict], incoming: List[dict], side: trade_engine.SideImpact
+    outgoing: List[dict],
+    incoming: List[dict],
+    side: trade_engine.SideImpact,
+    intel: Optional[Dict[str, Any]] = None,
 ) -> List[str]:
     """Flags drawn from the data, never guessed.
 
-    Only things the roster payload actually carries: injury designations and
-    positions a trade leaves short. Anything else a manager would weigh (a
-    player's playoff schedule, a coaching change) is not in this data, and
-    inventing it is precisely what the AI grounding rules forbid.
+    Three sources, all of which state their facts rather than infer them: the
+    roster payload's injury designation, `player_intel` (depth-chart role,
+    injury detail, and headlines the wire itself categorised as injury or
+    transaction), and the recomputed depth table. Anything a manager would
+    weigh that is not in one of those is absent on purpose.
     """
     flags: List[str] = []
-    for player in incoming:
-        status_text = (player.get("injury_status") or "").strip()
-        if status_text and status_text.upper() not in ("ACTIVE", "NA", "NONE"):
-            flags.append(
-                f"{player.get('full_name')} is listed {status_text}."
-            )
+    incoming_ids = [p.get("player_id") for p in incoming]
+
+    if intel:
+        flags.extend(player_intel.flags_from_intel(intel, incoming_ids))
+    else:
+        for player in incoming:
+            status_text = (player.get("injury_status") or "").strip()
+            if status_text and status_text.upper() not in ("ACTIVE", "NA", "NONE"):
+                flags.append(f"{player.get('full_name')} is listed {status_text}.")
 
     for position, after in side.depth_after.items():
         before = side.depth_before.get(position, {})
@@ -755,6 +770,7 @@ def _ai_context(
     odds: Optional[PlayoffOdds],
     verdict: str,
     risks: List[str],
+    intel: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """The pre-computed facts handed to the model. Nothing it must derive."""
     return {
@@ -791,6 +807,10 @@ def _ai_context(
         "playoff_odds": odds.model_dump() if odds else "not simulated",
         "engine_verdict": verdict,
         "data_flags": risks,
+        # Real, sourced facts about the players involved: depth-chart role,
+        # injury designation and recent tagged headlines. The model may cite
+        # these; it may not add to them.
+        "player_news": intel or {},
         "note": (
             "Projections are weekly expected points. 'Value over replacement' is "
             "points above a freely available starter at that position in this "
@@ -894,3 +914,133 @@ async def trade_market(
         },
         "teams": teams,
     }
+
+
+@router.post("/league/{league_id}/counters", response_model=CounterResponse)
+async def explore_counters(
+    league_id: int,
+    body: CounterRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_database),
+):
+    """Counter-offers worth sending back, ranked, with the reason for each.
+
+    Deliberately its own endpoint rather than a field on the evaluation. The
+    point is that the user triggers it and explores, so it runs on demand and
+    it runs whatever the verdict was: a trade worth accepting may still be
+    worth improving, and a trade worth rejecting is the one most likely to have
+    a version you would take.
+
+    Returns an empty list with a plain-language `summary` when nothing beats
+    accepting as written. That is an answer, not a failure.
+    """
+    context = await _load_context(league_id, current_user, db)
+    mine, theirs = context.team(body.team_a_id), context.team(body.team_b_id)
+    my_roster, their_roster = context.roster(mine.id), context.roster(theirs.id)
+
+    # Validate up front so a typo is a 400 rather than a silently different trade.
+    _players_on(my_roster, body.team_a_sends, mine.name)
+    _players_on(their_roster, body.team_b_sends, theirs.name)
+
+    base_you = trade_engine.evaluate_side(
+        team_id=mine.id, team_name=mine.name, roster=my_roster,
+        outgoing_ids=body.team_a_sends,
+        incoming=_players_on(their_roster, body.team_b_sends, theirs.name),
+        slots=context.slots, levels=context.levels,
+    )
+    base_them = trade_engine.evaluate_side(
+        team_id=theirs.id, team_name=theirs.name, roster=their_roster,
+        outgoing_ids=body.team_b_sends,
+        incoming=_players_on(my_roster, body.team_a_sends, mine.name),
+        slots=context.slots, levels=context.levels,
+    )
+    base_fairness = trade_engine.fairness_score(base_you, base_them)
+    verdict, headline = trade_engine.verdict_label(
+        base_you.lineup_delta, None, base_fairness
+    )
+
+    counters = trade_engine.counter_offers(
+        my_team_id=mine.id,
+        their_team_id=theirs.id,
+        my_roster=my_roster,
+        their_roster=their_roster,
+        original_give_ids=body.team_a_sends,
+        original_receive_ids=body.team_b_sends,
+        slots=context.slots,
+        levels=context.levels,
+        limit=body.limit,
+    )
+
+    if counters:
+        # `counters[0]` leads on plausibility, not on gain, so the sentence
+        # describes the one a manager would actually send. Its band is named
+        # explicitly: when even the best option is a long shot, saying "the
+        # most realistic" about it would be the wrong impression.
+        best = counters[0]
+        plausible = sum(
+            1 for c in counters if c.likelihood in ("easy_ask", "fair_ask")
+        )
+        count = f"{len(counters)} counter{'s' if len(counters) > 1 else ''}"
+        if plausible:
+            summary = (
+                f"{count} beat accepting as written, {plausible} of which "
+                f"leave their lineup better off too. The best of those is "
+                f"worth {best.gain_vs_original:+.1f} points a week more to you "
+                f"than the offer on the table."
+            )
+        else:
+            summary = (
+                f"{count} beat accepting as written, but every one of them "
+                f"leaves the other team worse off than the deal they proposed, "
+                f"so expect to negotiate. The strongest is worth "
+                f"{best.gain_vs_original:+.1f} points a week more to you."
+            )
+    else:
+        summary = (
+            "Nothing built from these two rosters beats simply accepting or "
+            "declining. Every alternative either leaves your starting lineup "
+            "worse or asks them for more than the deal they proposed."
+        )
+
+    ai_summary = None
+    if body.include_ai and counters and llm_service.is_available():
+        result = await llm_service.trade_verdict(
+            context={
+                "task": (
+                    "Advise on which counter-offer to send. The counters and "
+                    "every number are already computed; pick among them and say "
+                    "why in the manager's own terms."
+                ),
+                "league": {
+                    "name": context.league.name,
+                    "scoring": context.league.scoring_type,
+                    "teams": len(context.teams),
+                },
+                "offer_on_the_table": {
+                    "you_send": [trade_feed._brief(p) for p in
+                                 _players_on(my_roster, body.team_a_sends, mine.name)],
+                    "you_receive": [trade_feed._brief(p) for p in
+                                    _players_on(their_roster, body.team_b_sends, theirs.name)],
+                    "your_weekly_lineup_change": base_you.lineup_delta,
+                    "engine_verdict": verdict,
+                },
+                "counters": [c.to_dict() for c in counters],
+                "note": (
+                    "'gain_vs_original' is weekly points above simply accepting. "
+                    "'cost_to_them' is how much worse the counter is than the "
+                    "deal they themselves proposed, so it measures how big an "
+                    "ask it is. Do not invent players or numbers."
+                ),
+            }
+        )
+        ai_summary = result.get("summary")
+
+    return CounterResponse(
+        league_id=league_id,
+        original_verdict=verdict,
+        original_lineup_delta=base_you.lineup_delta,
+        original_headline=headline,
+        counters=[c.to_dict() for c in counters],
+        summary=summary,
+        ai_summary=ai_summary,
+    )

@@ -4,8 +4,8 @@ import { CheckCircleIcon } from '@heroicons/react/24/solid';
 
 import { EspnConnectForm } from '@/components/connect/EspnConnectForm';
 import { SleeperConnectForm } from '@/components/connect/SleeperConnectForm';
-import { YahooConnectForm } from '@/components/connect/YahooConnectForm';
 import { PageContainer, PageHeader } from '@/components/layout/Page';
+import { Badge } from '@/components/ui/Badge';
 import { Card, CardContent } from '@/components/ui/Card';
 import { cn } from '@/utils';
 
@@ -27,6 +27,8 @@ const PLATFORMS: {
   needs: string;
   mark: string;
   ring: string;
+  /** Selectable platforms only. See the Yahoo entry for why it is not. */
+  comingSoon?: boolean;
 }[] = [
   {
     key: 'espn',
@@ -45,12 +47,20 @@ const PLATFORMS: {
     ring: 'border-[#4f46e5] bg-[#4f46e5]/5',
   },
   {
+    // Not selectable on purpose. The OAuth flow and league discovery are
+    // written, but Yahoo issues Fantasy API credentials only to a developer
+    // app they have reviewed and approved, and that approval has not come
+    // through. Until it does, a connected Yahoo league would load with no
+    // roster, no matchups and no waiver budget, which reads as a broken app
+    // rather than an unfinished integration. Offering it and failing is worse
+    // than saying plainly that it is not ready.
     key: 'yahoo',
     name: 'Yahoo',
     monogram: 'Y!',
-    needs: 'Sign in securely with Yahoo to choose your league',
+    needs: 'Waiting on Yahoo to approve our API access',
     mark: 'bg-[#6001d2] text-white',
     ring: 'border-[#6001d2] bg-[#6001d2]/5',
+    comingSoon: true,
   },
 ];
 
@@ -59,8 +69,8 @@ export const ConnectLeaguePage: React.FC = () => {
   // Nothing links to /leagues/sleeper/connect any more, but the route is kept
   // so an old bookmark still works, and it lands on Sleeper as it used to.
   const [platform, setPlatform] = useState<Platform>(() => {
-    const selected = new URLSearchParams(window.location.search).get('platform');
-    if (selected === 'yahoo') return 'yahoo';
+    // ?platform=yahoo used to select Yahoo. It now falls through to ESPN
+    // rather than landing on a card that cannot be used.
     return pathname.includes('sleeper') ? 'sleeper' : 'espn';
   });
 
@@ -68,24 +78,28 @@ export const ConnectLeaguePage: React.FC = () => {
     <PageContainer width="narrow">
       <PageHeader
         title="Connect a league"
-        subtitle="Works with ESPN, Sleeper, and Yahoo. Connect as many as you like."
+        subtitle="Works with ESPN and Sleeper. Connect as many as you like."
       />
 
       <fieldset className="mb-6">
         <legend className="mb-2 text-sm font-medium text-fg">Where is your league?</legend>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {PLATFORMS.map((option) => {
-            const active = platform === option.key;
+            const active = platform === option.key && !option.comingSoon;
             return (
               <button
                 key={option.key}
                 type="button"
                 aria-pressed={active}
-                onClick={() => setPlatform(option.key)}
+                disabled={option.comingSoon}
+                title={option.comingSoon ? 'Not available yet' : undefined}
+                onClick={() => !option.comingSoon && setPlatform(option.key)}
                 className={cn(
                   'relative flex items-center gap-3 rounded-card border-2 p-4 text-left transition-colors',
                   'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  active
+                  option.comingSoon
+                    ? 'cursor-not-allowed border-border bg-surface-sunken opacity-60'
+                    : active
                     ? option.ring
                     : 'border-border bg-surface-raised hover:border-border-strong hover:bg-surface-sunken'
                 )}
@@ -100,7 +114,14 @@ export const ConnectLeaguePage: React.FC = () => {
                   {option.monogram}
                 </span>
                 <span className="min-w-0">
-                  <span className="block font-semibold text-fg">{option.name}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="font-semibold text-fg">{option.name}</span>
+                    {option.comingSoon && (
+                      <Badge variant="default" size="sm">
+                        Coming soon
+                      </Badge>
+                    )}
+                  </span>
                   <span className="block text-xs text-fg-muted">{option.needs}</span>
                 </span>
                 {active && (
@@ -116,13 +137,11 @@ export const ConnectLeaguePage: React.FC = () => {
         <CardContent className="p-4 sm:p-6">
           {/* Keyed so switching platforms resets the other form's state rather
               than leaving a half-filled field behind it. */}
-            {platform === 'espn' ? (
+            {platform === 'sleeper' ? (
+              <SleeperConnectForm key="sleeper" />
+            ) : (
               <EspnConnectForm key="espn" />
-            ) : platform === 'sleeper' ? (
-            <SleeperConnectForm key="sleeper" />
-          ) : (
-            <YahooConnectForm key="yahoo" />
-          )}
+            )}
         </CardContent>
       </Card>
 

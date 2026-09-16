@@ -627,3 +627,303 @@ def verdict_label(
     if lineup_delta <= -0.5:
         return "lean_reject", f"Costs your lineup {abs(lineup_delta):.1f} points a week."
     return "neutral", f"Close to a wash ({lineup_delta:+.1f} points a week, fairness {fairness:.0f}/100)."
+
+
+# ---------------------------------------------------------------------------
+# Counter-offers
+# ---------------------------------------------------------------------------
+
+# The bar for a counter being sendable at all is whether the other manager's
+# own starting lineup still improves. Anything that clears that is a trade a
+# rational manager can say yes to, however much better their opening ask was.
+_THEY_CLEARLY_GAIN = 1.0
+_THEY_BREAK_EVEN = -0.5
+
+
+@dataclass
+class CounterOffer:
+    """An alternative package, scored against the offer on the table."""
+
+    kind: str
+    give: List[Dict[str, Any]]
+    receive: List[Dict[str, Any]]
+    my_lineup_delta: float
+    their_lineup_delta: float
+    fairness: float
+    # The two numbers that make a counter a counter rather than a fresh idea.
+    gain_vs_original: float   # my weekly points above simply accepting
+    cost_to_them: float       # how much worse than the deal they proposed
+    likelihood: str
+    likelihood_reason: str
+    rationale: str
+
+    def to_dict(self) -> Dict[str, Any]:
+        def brief(player: Dict[str, Any]) -> Dict[str, Any]:
+            return {
+                "player_id": str(player.get("player_id")),
+                "full_name": player.get("full_name"),
+                "position": normalize_position(player.get("position_name")),
+                "pro_team": player.get("pro_team_abbr"),
+                "projected_points": round(player_points(player), 2),
+                "injury_status": player.get("injury_status"),
+            }
+
+        return {
+            "kind": self.kind,
+            "give": [brief(p) for p in self.give],
+            "receive": [brief(p) for p in self.receive],
+            "my_lineup_delta": self.my_lineup_delta,
+            "their_lineup_delta": self.their_lineup_delta,
+            "fairness": self.fairness,
+            "gain_vs_original": self.gain_vs_original,
+            "cost_to_them": self.cost_to_them,
+            "likelihood": self.likelihood,
+            "likelihood_reason": self.likelihood_reason,
+            "rationale": self.rationale,
+        }
+
+
+def _likelihood(cost_to_them: float, their_lineup_delta: float) -> Tuple[str, str]:
+    """How sendable a counter is, from their side of it.
+
+    Judged mainly on whether *their* starting lineup still improves, and only
+    then on how much worse the counter is than the offer they opened with.
+
+    Grading on the gap alone was wrong in the case that matters most. When
+    someone lowballs you, their own offer is worth a great deal to them, so
+    every fair counter is far "worse than what they proposed" and the whole
+    list came back labelled unlikely. A fair trade is not a long shot; it is
+    just not the steal they asked for.
+    """
+    if their_lineup_delta >= _THEY_CLEARLY_GAIN:
+        if cost_to_them <= 0:
+            return "easy_ask", "Better for them than the deal they proposed"
+        return "fair_ask", (
+            f"Their lineup still improves by {their_lineup_delta:.1f} a week"
+        )
+    if their_lineup_delta >= _THEY_BREAK_EVEN:
+        return "big_ask", "Close to neutral for them; expect a negotiation"
+    return "unlikely", (
+        f"Costs their lineup {abs(their_lineup_delta):.1f} a week"
+    )
+
+
+def counter_offers(
+    *,
+    my_team_id: int,
+    their_team_id: int,
+    my_roster: Sequence[Dict[str, Any]],
+    their_roster: Sequence[Dict[str, Any]],
+    original_give_ids: Sequence[Any],
+    original_receive_ids: Sequence[Any],
+    slots: LineupSlots,
+    levels: Dict[str, float],
+    limit: int = 6,
+    max_per_kind: int = 12,
+) -> List[CounterOffer]:
+    """Alternative packages worth proposing back, ranked by what they win you.
+
+    The thing that makes this different from `find_opportunities` is the
+    baseline. Someone has already made an offer, and in making it they revealed
+    two things: they want the player you were asked for, and they are willing to
+    part with the one they offered. So every candidate here is scored twice:
+
+    * `gain_vs_original` is your weekly lineup points above simply accepting.
+      A counter that does not beat accepting is not a counter.
+    * `cost_to_them` is how much worse the counter is *than the deal they
+      wrote themselves*. That is the real measure of how big an ask it is, and
+      it is why "ask for their best player" correctly sorts to the bottom
+      instead of the top.
+
+    Five shapes are enumerated, each a small edit to the offer on the table,
+    because a counter that keeps the negotiation recognisable is the one that
+    gets a reply:
+
+    | kind | edit |
+    | --- | --- |
+    | `ask_for_more` | their package, plus one more of their players |
+    | `different_target` | your package, for a different player of theirs |
+    | `give_less` | their package, for a cheaper player of yours |
+    | `different_piece` | their package, for a different player of yours |
+    | `swap_both` | a different player each way |
+
+    Returns [] when nothing beats accepting, which is itself an answer.
+    """
+    give_ids = {str(p) for p in original_give_ids}
+    receive_ids = {str(p) for p in original_receive_ids}
+
+    my_by_id = {str(p.get("player_id")): p for p in my_roster}
+    their_by_id = {str(p.get("player_id")): p for p in their_roster}
+
+    original_give = [my_by_id[i] for i in give_ids if i in my_by_id]
+    original_receive = [their_by_id[i] for i in receive_ids if i in their_by_id]
+    if not original_give or not original_receive:
+        return []
+
+    def score(give: List[Dict[str, Any]], receive: List[Dict[str, Any]]):
+        mine = evaluate_side(
+            team_id=my_team_id, team_name="you", roster=my_roster,
+            outgoing_ids=[p.get("player_id") for p in give],
+            incoming=receive, slots=slots, levels=levels,
+        )
+        theirs = evaluate_side(
+            team_id=their_team_id, team_name="them", roster=their_roster,
+            outgoing_ids=[p.get("player_id") for p in receive],
+            incoming=give, slots=slots, levels=levels,
+        )
+        return mine, theirs
+
+    base_mine, base_theirs = score(original_give, original_receive)
+    my_depth = position_depth(my_roster, slots, levels)
+    their_depth = position_depth(their_roster, slots, levels)
+
+    # Their spare parts and mine, best first. A counter should be built from
+    # what each side can actually afford to move.
+    their_others = [
+        p for p in _tradeable(their_roster, slots, levels, limit=max_per_kind * 2)
+        if str(p.get("player_id")) not in receive_ids
+    ][:max_per_kind]
+    my_others = [
+        p for p in _tradeable(my_roster, slots, levels, limit=max_per_kind * 2)
+        if str(p.get("player_id")) not in give_ids
+    ][:max_per_kind]
+
+    candidates: List[Tuple[str, List[Dict[str, Any]], List[Dict[str, Any]]]] = []
+
+    for extra in their_others:
+        candidates.append(("ask_for_more", original_give, original_receive + [extra]))
+    for swap in their_others:
+        candidates.append(("different_target", original_give, [swap]))
+    for cheaper in my_others:
+        if player_points(cheaper) < max(player_points(p) for p in original_give):
+            candidates.append(("give_less", [cheaper], original_receive))
+    for alt in my_others:
+        candidates.append(("different_piece", [alt], original_receive))
+    for alt in my_others[: max_per_kind // 2]:
+        for swap in their_others[: max_per_kind // 2]:
+            candidates.append(("swap_both", [alt], [swap]))
+
+    seen: set = set()
+    offers: List[CounterOffer] = []
+
+    for kind, give, receive in candidates:
+        key = (
+            kind,
+            tuple(sorted(str(p.get("player_id")) for p in give)),
+            tuple(sorted(str(p.get("player_id")) for p in receive)),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        # The offer as proposed is not a counter to itself.
+        if key[1] == tuple(sorted(give_ids)) and key[2] == tuple(sorted(receive_ids)):
+            continue
+
+        mine, theirs = score(list(give), list(receive))
+        gain = round(mine.lineup_delta - base_mine.lineup_delta, 2)
+        if gain <= 0.05:
+            continue  # no better than accepting, so not worth sending
+
+        cost = round(base_theirs.lineup_delta - theirs.lineup_delta, 2)
+        label, reason = _likelihood(cost, theirs.lineup_delta)
+        offers.append(
+            CounterOffer(
+                kind=kind,
+                give=list(give),
+                receive=list(receive),
+                my_lineup_delta=mine.lineup_delta,
+                their_lineup_delta=theirs.lineup_delta,
+                fairness=fairness_score(mine, theirs),
+                gain_vs_original=gain,
+                cost_to_them=cost,
+                likelihood=label,
+                likelihood_reason=reason,
+                rationale=_counter_rationale(
+                    kind, give, receive, original_give, original_receive,
+                    my_depth, their_depth, levels, gain,
+                ),
+            )
+        )
+
+    # Plausible first, then by what it wins you.
+    #
+    # Sorting by gain alone puts "ask for their best player too" at the top of
+    # every list, because it always wins the most points and nobody would ever
+    # accept it. The question the user is asking is which counter to *send*, so
+    # the best counter they might actually get is the useful answer, and the
+    # long shots sort below it to be explored rather than recommended.
+    order = {"easy_ask": 0, "fair_ask": 1, "big_ask": 2, "unlikely": 3}
+    offers.sort(key=lambda c: (order.get(c.likelihood, 9), -c.gain_vs_original))
+
+    # Keep the list varied: no more than two of any one shape, so the answer is
+    # a set of options rather than twelve versions of "ask for one more guy".
+    kept: List[CounterOffer] = []
+    per_kind: Dict[str, int] = {}
+    for offer in offers:
+        if per_kind.get(offer.kind, 0) >= 2:
+            continue
+        per_kind[offer.kind] = per_kind.get(offer.kind, 0) + 1
+        kept.append(offer)
+        if len(kept) >= limit:
+            break
+    return kept
+
+
+def _counter_rationale(
+    kind: str,
+    give: Sequence[Dict[str, Any]],
+    receive: Sequence[Dict[str, Any]],
+    original_give: Sequence[Dict[str, Any]],
+    original_receive: Sequence[Dict[str, Any]],
+    my_depth: Dict[str, Dict[str, Any]],
+    their_depth: Dict[str, Dict[str, Any]],
+    levels: Dict[str, float],
+    gain: float,
+) -> str:
+    """Why this counter, in a sentence, built from the numbers rather than prose.
+
+    Deliberately not the LLM's job. The reason a counter works is a fact about
+    the two rosters, and stating it from the depth table keeps it true.
+    """
+    names = lambda players: ", ".join(str(p.get("full_name")) for p in players)
+
+    if kind == "ask_for_more":
+        extra = [p for p in receive if p not in original_receive]
+        position = normalize_position(extra[0].get("position_name")) if extra else ""
+        surplus = their_depth.get(position, {}).get("surplus", 0)
+        tail = (
+            f" They are {surplus} deep at {position} beyond what they start."
+            if surplus > 0 else ""
+        )
+        return f"Same deal, but ask for {names(extra)} on top.{tail}"
+
+    if kind == "different_target":
+        position = normalize_position(receive[0].get("position_name"))
+        short = my_depth.get(position, {})
+        need = (
+            f" {position} is where you are thinnest"
+            f" ({short.get('startable', 0)} startable for {short.get('required', 0)})."
+            if short.get("surplus", 0) < 0 else
+            f" {names(receive)} projects "
+            f"{player_points(receive[0]) - player_points(original_receive[0]):+.1f} "
+            f"against {names(original_receive)}."
+        )
+        return f"Same price, ask for {names(receive)} instead.{need}"
+
+    if kind == "give_less":
+        saved = max(player_points(p) for p in original_give) - player_points(give[0])
+        return (
+            f"Keep {names(receive)} but send {names(give)} instead, "
+            f"{saved:.1f} points a week cheaper for you."
+        )
+
+    if kind == "different_piece":
+        position = normalize_position(give[0].get("position_name"))
+        surplus = my_depth.get(position, {}).get("surplus", 0)
+        tail = f" You can spare a {position}." if surplus > 0 else ""
+        return f"Offer {names(give)} in place of {names(original_give)}.{tail}"
+
+    return (
+        f"Swap both sides: {names(give)} for {names(receive)}, "
+        f"worth {gain:+.1f} a week more to you than the offer as written."
+    )

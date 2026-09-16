@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { TradeAnalyzerPage } from './TradeAnalyzerPage';
 import { renderWithProviders, screen } from '@/test/render';
 import {
+  CounterResult,
   LeagueTrade,
   MarketTeam,
   TradeEvaluation,
@@ -35,6 +36,7 @@ const state = vi.hoisted(() => ({
   },
   connect: { mutate: vi.fn(), isLoading: false },
   disconnect: { mutate: vi.fn(), isLoading: false },
+  counters: { mutateAsync: vi.fn(), isLoading: false },
 }));
 
 vi.mock('@/hooks/useTrades', () => ({
@@ -44,6 +46,7 @@ vi.mock('@/hooks/useTrades', () => ({
   useEvaluateTrade: () => state.evaluate,
   useConnectSleeperToken: () => state.connect,
   useDisconnectSleeperToken: () => state.disconnect,
+  useCounterOffers: () => state.counters,
 }));
 vi.mock('@/hooks/useLeagues', () => ({
   useLeague: () => ({ data: { id: 1, name: 'Cen10' } }),
@@ -197,6 +200,69 @@ const evaluation = (over: Partial<TradeEvaluation> = {}): TradeEvaluation => ({
   counter_suggestion: null,
   players_you_send: [],
   players_you_get: [],
+  intel: {},
+  ...over,
+});
+
+const counterResult = (over: Partial<CounterResult> = {}): CounterResult => ({
+  league_id: 1,
+  original_verdict: 'neutral',
+  original_lineup_delta: 0,
+  original_headline: 'Close to a wash.',
+  summary: '2 counters beat accepting as written.',
+  ai_summary: 'Ask for the tight end instead; it is where your lineup is thin.',
+  counters: [
+    {
+      kind: 'different_target',
+      give: [
+        {
+          player_id: '4199', full_name: 'Aaron Jones', position: 'RB',
+          pro_team: 'MIN', projected_points: 14.2, injury_status: null,
+        },
+      ],
+      receive: [
+        {
+          player_id: '7777', full_name: 'Some Tight End', position: 'TE',
+          pro_team: 'DEN', projected_points: 12.9, injury_status: null,
+        },
+      ],
+      my_lineup_delta: 3.1,
+      their_lineup_delta: 0.4,
+      fairness: 84,
+      gain_vs_original: 3.1,
+      cost_to_them: 0.6,
+      likelihood: 'fair_ask',
+      likelihood_reason: 'Slightly worse for them than their own offer',
+      rationale: 'Same price, ask for Some Tight End instead. TE is where you are thinnest.',
+    },
+    {
+      kind: 'ask_for_more',
+      give: [
+        {
+          player_id: '4199', full_name: 'Aaron Jones', position: 'RB',
+          pro_team: 'MIN', projected_points: 14.2, injury_status: null,
+        },
+      ],
+      receive: [
+        {
+          player_id: '6806', full_name: 'J.K. Dobbins', position: 'RB',
+          pro_team: 'DEN', projected_points: 15.6, injury_status: null,
+        },
+        {
+          player_id: '8888', full_name: 'Spare Receiver', position: 'WR',
+          pro_team: 'LAR', projected_points: 9.4, injury_status: null,
+        },
+      ],
+      my_lineup_delta: 1.2,
+      their_lineup_delta: -2.2,
+      fairness: 61,
+      gain_vs_original: 1.2,
+      cost_to_them: 5.9,
+      likelihood: 'unlikely',
+      likelihood_reason: 'Much worse for them than their own offer',
+      rationale: 'Same deal, but ask for Spare Receiver on top.',
+    },
+  ],
   ...over,
 });
 
@@ -213,6 +279,7 @@ beforeEach(() => {
   };
   state.connect = { mutate: vi.fn(), isLoading: false };
   state.disconnect = { mutate: vi.fn(), isLoading: false };
+  state.counters = { mutateAsync: vi.fn().mockResolvedValue(counterResult()), isLoading: false };
 });
 
 describe('Offers tab', () => {
@@ -433,5 +500,181 @@ describe('Trade finder', () => {
     await user.click(screen.getByRole('tab', { name: /Find Trades/ }));
 
     expect(screen.getByText(/No mutual upgrades right now/)).toBeInTheDocument();
+  });
+});
+
+describe('Counter-offers', () => {
+  const analyzeOffer = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByRole('button', { name: /Analyze this offer/ }));
+    await screen.findByText('Lean accept');
+  };
+
+  it('offers to explore counters without being asked for a verdict first', async () => {
+    const user = userEvent.setup();
+    show();
+    await analyzeOffer(user);
+
+    // Available whatever the verdict was, which is the point: a trade worth
+    // accepting may still be worth improving.
+    expect(screen.getByRole('button', { name: 'Explore counters' })).toBeInTheDocument();
+  });
+
+  it('runs on demand and lists the counters with their reasons', async () => {
+    const user = userEvent.setup();
+    show();
+    await analyzeOffer(user);
+    await user.click(screen.getByRole('button', { name: 'Explore counters' }));
+
+    expect(state.counters.mutateAsync).toHaveBeenCalledWith({
+      team_a_id: 1,
+      team_b_id: 2,
+      team_a_sends: ['4199'],
+      team_b_sends: ['6806'],
+    });
+
+    expect(await screen.findByText(/2 counters beat accepting/)).toBeInTheDocument();
+    expect(screen.getByText(/ask for Some Tight End instead/)).toBeInTheDocument();
+    expect(screen.getByText(/ask for Spare Receiver on top/)).toBeInTheDocument();
+  });
+
+  it('labels how big an ask each counter is', async () => {
+    const user = userEvent.setup();
+    show();
+    await analyzeOffer(user);
+    await user.click(screen.getByRole('button', { name: 'Explore counters' }));
+
+    // Graded against the offer they themselves made, not against nothing.
+    expect(await screen.findByText('Fair ask')).toBeInTheDocument();
+    expect(screen.getByText('Long shot')).toBeInTheDocument();
+    expect(screen.getByText('+3.1/wk vs accepting')).toBeInTheDocument();
+  });
+
+  it('loads a counter back into the machine to score it', async () => {
+    const user = userEvent.setup();
+    show();
+    await analyzeOffer(user);
+    await user.click(screen.getByRole('button', { name: 'Explore counters' }));
+    await screen.findByText(/2 counters beat accepting/);
+
+    state.evaluate.mutateAsync = vi.fn().mockResolvedValue(evaluation());
+    await user.click(screen.getAllByRole('button', { name: 'Analyze this' })[0]);
+
+    expect(state.evaluate.mutateAsync).toHaveBeenCalledWith({
+      team_a_id: 1,
+      team_b_id: 2,
+      team_a_sends: ['4199'],
+      team_b_sends: ['7777'],
+    });
+  });
+
+  it('says plainly when nothing beats accepting', async () => {
+    const user = userEvent.setup();
+    state.counters.mutateAsync = vi.fn().mockResolvedValue(
+      counterResult({
+        counters: [],
+        ai_summary: null,
+        summary: 'Nothing built from these two rosters beats simply accepting or declining.',
+      })
+    );
+    show();
+    await analyzeOffer(user);
+    await user.click(screen.getByRole('button', { name: 'Explore counters' }));
+
+    expect(await screen.findByText(/Nothing built from these two rosters/)).toBeInTheDocument();
+  });
+});
+
+describe('Player news', () => {
+  const withIntel = () =>
+    evaluation({
+      players_you_get: [
+        {
+          player_id: '6806', full_name: 'J.K. Dobbins', position: 'RB',
+          pro_team: 'DEN', projected_points: 15.6, injury_status: null,
+        },
+      ],
+      players_you_send: [
+        {
+          player_id: '4199', full_name: 'Aaron Jones', position: 'RB',
+          pro_team: 'MIN', projected_points: 14.2, injury_status: null,
+        },
+      ],
+      intel: {
+        '6806': {
+          full_name: 'J.K. Dobbins',
+          role: 'Starting RB',
+          injury: null,
+          age: 27,
+          years_exp: 6,
+          nfl_team: 'DEN',
+          headlines: [
+            {
+              headline: 'Dobbins expects a full workload Sunday',
+              description: null,
+              published: new Date(Date.now() - 3_600_000).toISOString(),
+              category: 'News',
+              url: 'https://example.com/dobbins',
+            },
+          ],
+        },
+        '4199': {
+          full_name: 'Aaron Jones',
+          role: 'RB2 on the depth chart',
+          injury: {
+            status: 'Questionable',
+            body_part: 'Hamstring',
+            notes: null,
+            practice: 'Limited Participation in Practice',
+          },
+          age: 31,
+          years_exp: 9,
+          nfl_team: 'MIN',
+          headlines: [],
+        },
+      },
+    });
+
+  it('shows depth-chart role, which a projection cannot express', async () => {
+    const user = userEvent.setup();
+    state.evaluate.mutateAsync = vi.fn().mockResolvedValue(withIntel());
+    show();
+    await user.click(screen.getByRole('button', { name: /Analyze this offer/ }));
+
+    expect(await screen.findByText('Starting RB')).toBeInTheDocument();
+    expect(screen.getByText('RB2 on the depth chart')).toBeInTheDocument();
+  });
+
+  it('shows the injury designation and practice status', async () => {
+    const user = userEvent.setup();
+    state.evaluate.mutateAsync = vi.fn().mockResolvedValue(withIntel());
+    show();
+    await user.click(screen.getByRole('button', { name: /Analyze this offer/ }));
+
+    expect(await screen.findByText(/Questionable · Hamstring/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Practice: Limited Participation in Practice/)
+    ).toBeInTheDocument();
+  });
+
+  it('links recent headlines out to the source', async () => {
+    const user = userEvent.setup();
+    state.evaluate.mutateAsync = vi.fn().mockResolvedValue(withIntel());
+    show();
+    await user.click(screen.getByRole('button', { name: /Analyze this offer/ }));
+
+    const link = await screen.findByRole('link', {
+      name: /Dobbins expects a full workload/,
+    });
+    expect(link).toHaveAttribute('href', 'https://example.com/dobbins');
+    expect(screen.getByText('1h ago')).toBeInTheDocument();
+  });
+
+  it('stays out of the way when there is nothing to report', async () => {
+    const user = userEvent.setup();
+    show(); // default evaluation has intel: {}
+    await user.click(screen.getByRole('button', { name: /Analyze this offer/ }));
+    await screen.findByText('Lean accept');
+
+    expect(screen.queryByText('Latest on these players')).not.toBeInTheDocument();
   });
 });

@@ -675,8 +675,29 @@ def sleeper_all_players() -> Dict[str, Any]:
             "age": meta["age"],
             "injury_status": meta["injury_status"],
             "search_rank": meta["search_rank"],
+            # Depth-chart and injury detail, which `player_intel` reads to say
+            # whether an incoming player actually starts for his NFL team.
+            # Deterministic: the top-ranked player at each position is the
+            # starter, and one player in ten carries a real designation.
+            "depth_chart_position": meta["position"],
+            "depth_chart_order": 1 + (meta["_pos_rank"] - 1) % 3,
+            "years_exp": (meta["search_rank"] % 12),
+            **_mock_injury_detail(pid, meta),
         }
     return out
+
+
+def _mock_injury_detail(pid: str, meta: Dict[str, Any]) -> Dict[str, Any]:
+    """A designation for a deterministic slice of the pool, so the intel path
+    has something to render in the demo rather than an always-empty panel."""
+    if meta["_pos_rank"] % 10 != 3:
+        return {}
+    return {
+        "injury_status": "Questionable",
+        "injury_body_part": "Hamstring",
+        "injury_notes": "Limited in Wednesday's session.",
+        "practice_participation": "Limited Participation in Practice",
+    }
 
 
 def sleeper_projections(season: int) -> Dict[str, Any]:

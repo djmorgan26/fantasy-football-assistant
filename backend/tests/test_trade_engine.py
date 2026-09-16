@@ -361,3 +361,176 @@ class TestVerdict:
     def test_a_bad_trade_is_rejected(self):
         verdict, _ = te.verdict_label(lineup_delta=-6.0, odds_delta=-9.0, fairness=20)
         assert verdict == "reject"
+
+
+class TestCounterOffers:
+    """Counters are scored against the offer on the table, not against nothing.
+
+    That baseline is the whole idea: proposing a trade reveals what the other
+    manager wants and what they will part with, so "how much worse is this than
+    the deal they wrote" is the real measure of how big an ask a counter is.
+    """
+
+    SLOTS = te.LineupSlots({"RB": 2, "WR": 2, "TE": 1}, flex=0)
+    LEVELS = {"RB": 10.0, "WR": 10.0, "TE": 6.0, "QB": 0.0, "K": 0.0, "DEF": 0.0}
+
+    def _rosters(self):
+        mine = [
+            player("My RB1", "RB", 18), player("My RB2", "RB", 16),
+            player("My RB3", "RB", 14),                  # surplus, startable
+            player("My WR1", "WR", 15), player("My WR2", "WR", 12),
+            player("My TE1", "TE", 3),                   # hole
+        ]
+        theirs = [
+            player("Their RB1", "RB", 17), player("Their RB2", "RB", 11),
+            player("Their WR1", "WR", 16), player("Their WR2", "WR", 13),
+            player("Their TE1", "TE", 14), player("Their TE2", "TE", 12),
+            player("Their TE3", "TE", 9),
+        ]
+        return mine, theirs
+
+    def _counters(self, give, receive, **kw):
+        mine, theirs = self._rosters()
+        return te.counter_offers(
+            my_team_id=1, their_team_id=2,
+            my_roster=mine, their_roster=theirs,
+            original_give_ids=give, original_receive_ids=receive,
+            slots=self.SLOTS, levels=self.LEVELS, **kw
+        )
+
+    def test_finds_a_better_package_than_accepting(self):
+        """They ask for a startable RB and offer a TE I cannot start."""
+        counters = self._counters(["my_rb1"], ["their_te3"])
+        assert counters, "expected something better than accepting"
+        for c in counters:
+            assert c.gain_vs_original > 0
+
+    def test_every_counter_beats_simply_accepting(self):
+        """A counter that does not beat accepting is not worth sending."""
+        counters = self._counters(["my_rb3"], ["their_te1"])
+        for c in counters:
+            assert c.gain_vs_original > 0, c.rationale
+
+    def test_a_counter_that_guts_their_lineup_is_a_long_shot(self):
+        counters = self._counters(["my_rb3"], ["their_te3"])
+        for c in counters:
+            if c.their_lineup_delta < -0.5:
+                assert c.likelihood == "unlikely"
+                assert "Costs their lineup" in c.likelihood_reason
+
+    def test_cost_to_them_is_measured_against_their_own_offer(self):
+        """Reported as context: how much worse than the deal they wrote."""
+        counters = self._counters(["my_rb3"], ["their_te1"])
+        assert counters
+        for c in counters:
+            assert isinstance(c.cost_to_them, float)
+
+    def test_likelihood_tracks_whether_their_lineup_still_improves(self):
+        """A fair counter to a lowball is not a long shot.
+
+        Grading on the gap to their own offer alone labelled every counter to
+        a lowball "unlikely", because their opening ask was worth a fortune to
+        them. What decides whether a counter is sendable is whether they still
+        come out ahead.
+        """
+        for c in self._counters(["my_rb1"], ["their_te3"]):
+            if c.their_lineup_delta >= 1.0:
+                assert c.likelihood in ("easy_ask", "fair_ask"), (
+                    c.likelihood, c.their_lineup_delta
+                )
+            elif c.their_lineup_delta < -0.5:
+                assert c.likelihood == "unlikely"
+
+    def test_the_original_offer_is_not_returned_as_a_counter(self):
+        counters = self._counters(["my_rb3"], ["their_te1"])
+        for c in counters:
+            same = (
+                {p["full_name"] for p in c.give} == {"My RB3"}
+                and {p["full_name"] for p in c.receive} == {"Their TE1"}
+            )
+            assert not same
+
+    def test_results_are_varied_rather_than_one_idea_repeated(self):
+        counters = self._counters(["my_rb1"], ["their_te3"], limit=6)
+        kinds = [c.kind for c in counters]
+        for kind in set(kinds):
+            assert kinds.count(kind) <= 2, f"too many {kind}"
+
+    def test_every_counter_carries_a_reason(self):
+        for c in self._counters(["my_rb1"], ["their_te3"]):
+            assert c.rationale and len(c.rationale) > 10
+            assert c.likelihood_reason
+
+    def test_respects_the_limit(self):
+        assert len(self._counters(["my_rb1"], ["their_te3"], limit=3)) <= 3
+
+    def test_no_counters_when_the_offer_is_already_a_fleece(self):
+        """Nothing to improve on: they offered their best for my worst.
+
+        An empty list is the honest answer here, not a padded one.
+        """
+        mine = [player("Scrub", "RB", 2), player("Keep", "WR", 14)]
+        theirs = [player("Star", "RB", 25), player("Other", "WR", 4)]
+        counters = te.counter_offers(
+            my_team_id=1, their_team_id=2, my_roster=mine, their_roster=theirs,
+            original_give_ids=["scrub"], original_receive_ids=["star"],
+            slots=te.LineupSlots({"RB": 1, "WR": 1}, flex=0),
+            levels={"RB": 5.0, "WR": 5.0},
+        )
+        assert counters == []
+
+    def test_unknown_players_yield_nothing_rather_than_guessing(self):
+        assert self._counters(["nope"], ["their_te1"]) == []
+        assert self._counters(["my_rb1"], ["nope"]) == []
+
+    def test_a_wash_still_produces_options_to_explore(self):
+        """The real case: both players sit below replacement.
+
+        Neither cracks the lineup, so the trade is a wash and the engine says
+        so. The user should still be offered somewhere to go, which is exactly
+        the situation this feature exists for.
+        """
+        mine = [
+            player("Starter RB", "RB", 20), player("Starter RB2", "RB", 18),
+            player("Bench RB", "RB", 8),            # below replacement
+            player("WR1", "WR", 16), player("WR2", "WR", 15),
+            player("TE1", "TE", 4),                 # hole
+        ]
+        theirs = [
+            player("Their RB", "RB", 9),            # also below replacement
+            player("Their TE1", "TE", 13),
+            player("Their TE2", "TE", 11),
+            player("Their WR1", "WR", 17), player("Their WR2", "WR", 14),
+        ]
+        counters = te.counter_offers(
+            my_team_id=1, their_team_id=2, my_roster=mine, their_roster=theirs,
+            original_give_ids=["bench_rb"], original_receive_ids=["their_rb"],
+            slots=self.SLOTS, levels=self.LEVELS,
+        )
+        assert counters, "a wash is exactly when a counter is worth exploring"
+        # The obvious move is to ask for a tight end, where the hole is.
+        assert any(
+            any(p["position_name"] == "TE" for p in c.receive) for c in counters
+        )
+
+    def test_plausible_counters_outrank_greedy_ones(self):
+        """"Ask for their best player too" always wins the most points.
+
+        It is also never accepted, so ranking by gain alone puts an unusable
+        suggestion at the top of every list. The first counter should be one
+        that might actually be taken.
+        """
+        counters = self._counters(["my_rb1"], ["their_te3"], limit=6)
+        assert counters
+        order = {"easy_ask": 0, "fair_ask": 1, "big_ask": 2, "unlikely": 3}
+        ranks = [order[c.likelihood] for c in counters]
+        assert ranks == sorted(ranks), [
+            (c.likelihood, c.gain_vs_original) for c in counters
+        ]
+        # Within one band, the better counter still comes first.
+        for band in set(ranks):
+            gains = [
+                c.gain_vs_original for c in counters
+                if order[c.likelihood] == band
+            ]
+            assert gains == sorted(gains, reverse=True)

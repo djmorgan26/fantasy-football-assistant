@@ -11,6 +11,7 @@ import {
 import { useLeague } from '@/hooks/useLeagues';
 import {
   useConnectSleeperToken,
+  useCounterOffers,
   useDisconnectSleeperToken,
   useEvaluateTrade,
   useTradeFinder,
@@ -33,11 +34,20 @@ import {
   Tabs,
 } from '@/components/ui';
 import type { SelectOption, TabItem } from '@/components/ui';
+import { CounterOffers } from '@/components/trades/CounterOffers';
 import { OfferCard } from '@/components/trades/OfferCard';
+import { PlayerNews } from '@/components/trades/PlayerNews';
 import { PlayerPicker } from '@/components/trades/PlayerPicker';
 import { TradeVerdictPanel } from '@/components/trades/TradeVerdictPanel';
 import { PageContainer, PageHeader } from '@/components/layout/Page';
-import { LeagueTrade, MarketTeam, TradeEvaluation, TradeIdea } from '@/types';
+import {
+  CounterOffer,
+  CounterResult,
+  LeagueTrade,
+  MarketTeam,
+  TradeEvaluation,
+  TradeIdea,
+} from '@/types';
 
 type TabKey = 'offers' | 'machine' | 'finder';
 
@@ -52,11 +62,13 @@ export const TradeAnalyzerPage: React.FC = () => {
   const [aSends, setASends] = useState<string[]>([]);
   const [bSends, setBSends] = useState<string[]>([]);
   const [evaluation, setEvaluation] = useState<TradeEvaluation | null>(null);
+  const [counters, setCounters] = useState<CounterResult | null>(null);
 
   const offers = useTradeOffers(id);
   const market = useTradeMarket(id);
   const finder = useTradeFinder(id, tab === 'finder');
   const evaluate = useEvaluateTrade(id);
+  const counterOffers = useCounterOffers(id);
 
   // "Your side" defaults to the team you actually manage. Derived rather than
   // synced in an effect, so there is no render where it is briefly wrong.
@@ -80,6 +92,7 @@ export const TradeAnalyzerPage: React.FC = () => {
     playerId: string
   ) => {
     setEvaluation(null);
+    setCounters(null);
     setList(
       list.includes(playerId) ? list.filter((p) => p !== playerId) : [...list, playerId]
     );
@@ -95,6 +108,7 @@ export const TradeAnalyzerPage: React.FC = () => {
     sendsB = bSends
   ) => {
     if (a === null || b === null || sendsA.length === 0 || sendsB.length === 0) return;
+    setCounters(null);
     try {
       const result = await evaluate.mutateAsync({
         team_a_id: a,
@@ -106,6 +120,41 @@ export const TradeAnalyzerPage: React.FC = () => {
     } catch {
       // surfaced by the mutation's toast
     }
+  };
+
+  /**
+   * Work out counters to whatever is currently in the machine. Triggered by
+   * the user, and available whatever the verdict was: a trade worth accepting
+   * may still be worth improving, and a trade worth rejecting is the one most
+   * likely to have a version worth taking.
+   */
+  const exploreCounters = async () => {
+    if (teamAId === null || teamBId === null) return;
+    if (aSends.length === 0 || bSends.length === 0) return;
+    try {
+      setCounters(
+        await counterOffers.mutateAsync({
+          team_a_id: teamAId,
+          team_b_id: teamBId,
+          team_a_sends: aSends,
+          team_b_sends: bSends,
+        })
+      );
+    } catch {
+      // surfaced by the mutation's toast
+    }
+  };
+
+  /** Load a counter into the machine as the live trade, then score it. */
+  const analyzeCounter = (counter: CounterOffer) => {
+    if (teamAId === null || teamBId === null) return;
+    const give = counter.give.map((p) => p.player_id);
+    const get = counter.receive.map((p) => p.player_id);
+    setASends(give);
+    setBSends(get);
+    setEvaluation(null);
+    setCounters(null);
+    void runEvaluation(teamAId, teamBId, give, get);
   };
 
   /** Load a pending offer into the machine and score it in one go. */
@@ -123,6 +172,7 @@ export const TradeAnalyzerPage: React.FC = () => {
     setASends(give);
     setBSends(get);
     setEvaluation(null);
+    setCounters(null);
     setTab('machine');
     void runEvaluation(myTeamId, other.team_id, give, get);
   };
@@ -139,6 +189,7 @@ export const TradeAnalyzerPage: React.FC = () => {
     setASends(give);
     setBSends(get);
     setEvaluation(null);
+    setCounters(null);
     setTab('machine');
     void runEvaluation(myTeamId, idea.partner_team_id, give, get);
   };
@@ -269,6 +320,7 @@ export const TradeAnalyzerPage: React.FC = () => {
                     setASends([]);
                     setBSends([]);
                     setEvaluation(null);
+                    setCounters(null);
                   }}
                 >
                   Clear
@@ -290,7 +342,23 @@ export const TradeAnalyzerPage: React.FC = () => {
                 </CardContent>
               </Card>
             ) : evaluation ? (
-              <TradeVerdictPanel evaluation={evaluation} />
+              <div className="space-y-4">
+                <TradeVerdictPanel evaluation={evaluation} />
+                <PlayerNews
+                  title="Latest on these players"
+                  players={[
+                    ...evaluation.players_you_get,
+                    ...evaluation.players_you_send,
+                  ]}
+                  intel={evaluation.intel}
+                />
+                <CounterOffers
+                  result={counters}
+                  isLoading={counterOffers.isLoading}
+                  onExplore={() => void exploreCounters()}
+                  onAnalyze={analyzeCounter}
+                />
+              </div>
             ) : evaluate.isError ? (
               <Card>
                 <EmptyState
