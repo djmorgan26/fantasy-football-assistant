@@ -20,14 +20,14 @@ from app.core.auth import get_current_active_user
 from app.db.database import get_database
 from app.models.team import Team
 from app.models.user import User
-from app.services import league_context, news_service
+from app.services import league_context, live_slate, news_service
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/gameday", tags=["gameday"])
 
 # Statuses that mean a player will not take the field, so his points are gone
 # rather than pending.
-UNAVAILABLE = {"OUT", "INJURY_RESERVE", "IR", "SUSPENSION"}
+UNAVAILABLE = live_slate.UNAVAILABLE
 
 
 def _player_view(player: dict, *, game_state: Optional[str]) -> dict:
@@ -46,15 +46,7 @@ def _player_view(player: dict, *, game_state: Optional[str]) -> dict:
     }
 
 
-def _index_games(games: List[dict]) -> Dict[str, dict]:
-    """Map each pro team abbreviation to the game it is playing in."""
-    by_team: Dict[str, dict] = {}
-    for game in games:
-        for side in ("home", "away"):
-            abbr = (game.get(side) or {}).get("abbr")
-            if abbr:
-                by_team[abbr.upper()] = game
-    return by_team
+_index_games = live_slate.index_by_pro_team
 
 
 def _starters(roster: List[dict]) -> List[dict]:
@@ -104,20 +96,9 @@ def _why_watch(mine: List[dict], theirs: List[dict]) -> str:
 
 
 def _leverage(game: dict, mine: List[dict], theirs: List[dict]) -> float:
-    """How much this game decides the matchup.
-
-    A game where both sides have players swings the margin twice as fast as one
-    where only you do, so it is weighted accordingly. Points still to come
-    matter more than points already banked, and a live game outranks one that
-    has not kicked off.
-    """
+    """How much this game decides *this* matchup."""
     at_stake = sum(p["projected"] for p in mine) + sum(p["projected"] for p in theirs)
-    if not at_stake:
-        return 0.0
-
-    both_sides = 2.0 if (mine and theirs) else 1.0
-    state_weight = {"in": 3.0, "pre": 2.0, "post": 1.0}.get(game.get("state"), 1.0)
-    return round(at_stake * both_sides * state_weight, 2)
+    return live_slate.leverage(game, at_stake, contested=bool(mine and theirs))
 
 
 @router.get("/{league_id}")

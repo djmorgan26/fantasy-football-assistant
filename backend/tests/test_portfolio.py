@@ -210,3 +210,249 @@ class TestPortfolio:
             sum(w["points"] for w in body["weeks"]), abs=0.2
         )
         assert body["totals"]["winning"] == sum(1 for w in body["weeks"] if w["margin"] > 0)
+
+
+class TestCrossLeagueSlate:
+    """Game Day, widened to every league at once.
+
+    The single-league view already answers "who do I have on the field"; the
+    point of this one is that on a Sunday you do not want to pick a league
+    first. A player you start in one league and face in another is one row on
+    one card, not two rows on two screens.
+    """
+
+    def holding(self, league_id=1, league="ESPN League", team="Mine",
+                starting=True, projected=12.0, points=8.0, slot="WR"):
+        return {
+            "league_id": league_id, "league": league, "team": team,
+            "starting": starting, "slot": slot,
+            "projected": projected, "points": points,
+        }
+
+    def entry(self, name="Josh Allen", team="BUF", position="QB",
+              for_rows=None, against_rows=None, injury=None):
+        return {
+            "name": name, "position": position, "team": team, "player_id": 1,
+            "injury_status": injury,
+            "for": [] if for_rows is None else for_rows,
+            "against": [] if against_rows is None else against_rows,
+        }
+
+    def game(self, game_id="g1", state="in", home="MIA", away="BUF"):
+        return {
+            "id": game_id, "state": state, "detail": "Q4 2:41",
+            "home": {"abbr": home, "name": home, "score": "17"},
+            "away": {"abbr": away, "name": away, "score": "24"},
+        }
+
+    def slate(self, entries, games):
+        from app.api.portfolio import _slate
+        return _slate({str(i): e for i, e in enumerate(entries)}, games)
+
+    def test_a_game_nobody_of_yours_is_in_gets_no_card(self):
+        # The whole reason a generic scoreboard is useless on a Sunday.
+        out = self.slate(
+            [self.entry(team="BUF", for_rows=[self.holding()])],
+            [self.game(away="BUF"), self.game("g2", home="DAL", away="PHI")],
+        )
+        assert [g["id"] for g in out] == ["g1"]
+
+    def test_a_player_benched_everywhere_is_not_a_reason_to_watch(self):
+        out = self.slate(
+            [self.entry(for_rows=[self.holding(starting=False)])],
+            [self.game()],
+        )
+        assert out == []
+
+    def test_one_player_carries_every_league_he_is_in_it_for(self):
+        out = self.slate(
+            [self.entry(for_rows=[
+                self.holding(league_id=1, league="ESPN League"),
+                self.holding(league_id=2, league="Sleeper League"),
+            ])],
+            [self.game()],
+        )
+        leagues = [h["league"] for h in out[0]["players"][0]["for"]]
+        assert leagues == ["ESPN League", "Sleeper League"]
+
+    def test_rooting_for_and_against_the_same_man_is_one_row_not_two(self):
+        out = self.slate(
+            [self.entry(
+                for_rows=[self.holding(league_id=1, league="ESPN League")],
+                against_rows=[self.holding(league_id=2, league="Sleeper League",
+                                           team="Pain Train")],
+            )],
+            [self.game()],
+        )
+        players = out[0]["players"]
+        assert len(players) == 1
+        assert players[0]["conflict"] is True
+        assert out[0]["conflicts"] == 1
+
+    def test_the_headline_number_is_the_biggest_stake_any_league_has(self):
+        # Scoring settings differ per league, so there is no one true number.
+        out = self.slate(
+            [self.entry(for_rows=[
+                self.holding(league_id=1, projected=12.0, points=8.0),
+                self.holding(league_id=2, projected=18.0, points=14.0),
+            ])],
+            [self.game()],
+        )
+        player = out[0]["players"][0]
+        assert player["projected"] == 18.0
+        assert player["points"] == 14.0
+
+    def test_conflicts_sort_above_everyone_else(self):
+        out = self.slate(
+            [
+                self.entry(name="Big Plain", for_rows=[self.holding(projected=30.0)]),
+                self.entry(name="Small Conflict",
+                           for_rows=[self.holding(projected=4.0)],
+                           against_rows=[self.holding(league_id=2, projected=4.0)]),
+            ],
+            [self.game()],
+        )
+        assert [p["name"] for p in out[0]["players"]] == ["Small Conflict", "Big Plain"]
+
+    def test_a_contested_game_outranks_one_only_you_have_players_in(self):
+        contested = self.slate(
+            [self.entry(team="BUF", for_rows=[self.holding(projected=10.0)],
+                        against_rows=[self.holding(league_id=2, projected=10.0)])],
+            [self.game(away="BUF")],
+        )
+        mine_only = self.slate(
+            [self.entry(team="BUF", for_rows=[self.holding(projected=20.0)])],
+            [self.game(away="BUF")],
+        )
+        assert contested[0]["leverage"] > mine_only[0]["leverage"]
+
+    def test_a_live_game_outranks_one_that_has_not_kicked_off(self):
+        live = self.slate([self.entry(for_rows=[self.holding()])], [self.game(state="in")])
+        pre = self.slate([self.entry(for_rows=[self.holding()])], [self.game(state="pre")])
+        assert live[0]["leverage"] > pre[0]["leverage"]
+
+    def test_games_come_back_ranked(self):
+        out = self.slate(
+            [
+                self.entry(name="A", team="BUF", for_rows=[self.holding(projected=4.0)]),
+                self.entry(name="B", team="DAL", for_rows=[self.holding(projected=40.0)]),
+            ],
+            [self.game("g1", away="BUF"), self.game("g2", home="DAL", away="PHI")],
+        )
+        assert [g["id"] for g in out] == ["g2", "g1"]
+        assert [g["leverage"] for g in out] == sorted(
+            (g["leverage"] for g in out), reverse=True
+        )
+
+    def test_each_card_says_why_it_is_worth_watching(self):
+        out = self.slate(
+            [self.entry(for_rows=[self.holding()],
+                        against_rows=[self.holding(league_id=2)])],
+            [self.game()],
+        )
+        why = out[0]["why"]
+        assert "1 of yours" in why and "cutting both ways" in why
+
+
+class TestLiveTotals:
+    """The four numbers that say how your whole Sunday is going."""
+
+    def totals(self, slate):
+        from app.api.portfolio import _live_totals
+        return _live_totals(slate)
+
+    def card(self, state="in", players=None):
+        return {"id": "g1", "state": state, "players": players or []}
+
+    def player(self, for_rows=None, against_rows=None, injury=None):
+        return {
+            "name": "A Player", "injury_status": injury,
+            "for": for_rows or [], "against": against_rows or [],
+            "conflict": bool(for_rows and against_rows),
+        }
+
+    def holding(self, projected=10.0):
+        return {"league_id": 1, "league": "L", "team": "T", "slot": "WR",
+                "points": 0.0, "projected": projected}
+
+    def test_counts_your_players_on_the_field_right_now(self):
+        out = self.totals([self.card("in", [
+            self.player(for_rows=[self.holding()]),
+            self.player(for_rows=[self.holding()]),
+        ])])
+        assert out["playing_now"] == 2
+        assert out["games"] == 1
+
+    def test_counts_your_players_who_have_not_kicked_off(self):
+        out = self.totals([self.card("pre", [self.player(for_rows=[self.holding()])])])
+        assert out["yet_to_play"] == 1
+        assert out["playing_now"] == 0
+
+    def test_a_player_ruled_out_is_not_still_to_come(self):
+        out = self.totals([
+            self.card("pre", [self.player(for_rows=[self.holding()], injury="OUT")])
+        ])
+        assert out["yet_to_play"] == 0
+        assert out["points_in_play"] == 0
+
+    def test_points_still_in_play_count_every_league_he_starts_in(self):
+        # He is one player, but two lineups are waiting on him.
+        out = self.totals([self.card("in", [
+            self.player(for_rows=[self.holding(projected=12.0),
+                                  self.holding(projected=8.0)])
+        ])])
+        assert out["points_in_play"] == 20.0
+
+    def test_points_already_banked_are_not_in_play(self):
+        out = self.totals([self.card("post", [self.player(for_rows=[self.holding()])])])
+        assert out["points_in_play"] == 0
+        assert out["playing_now"] == 0
+
+    def test_the_other_side_is_counted_separately(self):
+        out = self.totals([self.card("in", [
+            self.player(against_rows=[self.holding()])
+        ])])
+        assert out["theirs_playing_now"] == 1
+        assert out["playing_now"] == 0
+
+
+class TestPortfolioEndpoint:
+    @pytest.fixture
+    async def portfolio_of(self, client, auth_headers, espn_league, sleeper_league, mock_mode):
+        for league in (espn_league, sleeper_league):
+            team = league["teams"][0]
+            await client.put(f"/api/teams/{team['id']}/claim", headers=auth_headers)
+        resp = await client.get("/api/portfolio", headers=auth_headers)
+        assert resp.status_code == 200, resp.text
+        return resp.json()
+
+    async def test_carries_the_live_slate(self, portfolio_of):
+        assert "games" in portfolio_of
+        assert "live" in portfolio_of
+        assert portfolio_of["slate_size"] > 0
+
+    async def test_every_game_listed_has_somebody_of_yours_in_it(self, portfolio_of):
+        for game in portfolio_of["games"]:
+            assert game["players"]
+            assert game["yours"] or game["theirs"]
+
+    async def test_games_are_ranked_by_leverage(self, portfolio_of):
+        leverage = [g["leverage"] for g in portfolio_of["games"]]
+        assert leverage == sorted(leverage, reverse=True)
+
+    async def test_a_player_is_attached_to_his_own_team_s_game(self, portfolio_of):
+        for game in portfolio_of["games"]:
+            sides = {game["home"]["abbr"], game["away"]["abbr"]}
+            for player in game["players"]:
+                assert player["team"] in sides
+
+    async def test_nobody_appears_in_two_games(self, portfolio_of):
+        seen = [p["name"] for g in portfolio_of["games"] for p in g["players"]]
+        assert len(seen) == len(set(seen))
+
+    async def test_the_live_count_agrees_with_the_cards(self, portfolio_of):
+        live = sum(1 for g in portfolio_of["games"] if g["state"] == "in")
+        assert portfolio_of["live"]["games"] == live
+
+    async def test_requires_auth(self, client):
+        assert (await client.get("/api/portfolio")).status_code == 401

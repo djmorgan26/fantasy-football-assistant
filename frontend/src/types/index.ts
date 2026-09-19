@@ -724,6 +724,65 @@ export interface LeagueWeek {
   alerts: { player: string; slot: string; status: string }[];
 }
 
+/** One league's stake in a player on the field right now. */
+export interface SlateHolding {
+  league_id: number;
+  league: string;
+  team: string;
+  slot: string | null;
+  points: number;
+  projected: number;
+}
+
+/**
+ * A player on the live slate, with every league he is in it for.
+ *
+ * The same human can be your starter in one league and your opponent's in
+ * another, so he is one row carrying both sides rather than two rows.
+ */
+export interface SlatePlayer {
+  name: string;
+  player_id: number | string | null;
+  position: string | null;
+  team: string | null;
+  injury_status?: string | null;
+  game_state: GameState;
+  /** What he is worth in the league with the biggest stake in him. */
+  points: number;
+  projected: number;
+  for: SlateHolding[];
+  against: SlateHolding[];
+  /** Started by you somewhere and faced by you somewhere else. */
+  conflict: boolean;
+}
+
+/** One NFL game, told across every league you are in. */
+export interface SlateGame {
+  id: string;
+  state: Exclude<GameState, null>;
+  detail: string;
+  home: ScoreboardSide;
+  away: ScoreboardSide;
+  players: SlatePlayer[];
+  /** How many of these players you start somewhere. */
+  yours: number;
+  /** How many you are up against somewhere. */
+  theirs: number;
+  conflicts: number;
+  why: string;
+  leverage: number;
+}
+
+/** How your whole Sunday is going, in the numbers that matter. */
+export interface LiveTotals {
+  /** NFL games in progress that you have somebody in. */
+  games: number;
+  playing_now: number;
+  yet_to_play: number;
+  theirs_playing_now: number;
+  points_in_play: number;
+}
+
 export interface Portfolio {
   leagues: number;
   teams: number;
@@ -733,6 +792,11 @@ export interface Portfolio {
   conflicts: PlayerConflict[];
   exposure: PlayerExposure[];
   totals: { points: number; projected: number; winning: number; alerts: number };
+  /** Every NFL game with somebody of yours in it, hardest-hitting first. */
+  games: SlateGame[];
+  live: LiveTotals;
+  /** Games on the full NFL slate, so "no slate yet" reads differently from "nobody playing". */
+  slate_size: number;
 }
 
 // ---------------------------------------------------------------- action plan

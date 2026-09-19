@@ -1,14 +1,26 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import userEvent from '@testing-library/user-event';
 
 import { AcrossLeaguesPage } from './AcrossLeaguesPage';
+import { CrossLeagueGameCard } from '@/components/gameday/CrossLeagueGameCard';
 import { renderWithProviders, screen, within } from '@/test/render';
-import { LeagueWeek, PlayerConflict, PlayerExposure, Portfolio } from '@/types';
+import {
+  LeagueWeek,
+  PlayerConflict,
+  PlayerExposure,
+  Portfolio,
+  SlateGame,
+  SlatePlayer,
+} from '@/types';
 
 const state = vi.hoisted(() => ({
   data: undefined as Portfolio | undefined,
   isLoading: false,
   isError: false,
   error: undefined as { detail?: string } | undefined,
+  isFetching: false,
+  dataUpdatedAt: 0,
+  refetch: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('@/hooks/usePortfolio', () => ({ usePortfolio: () => state }));
@@ -65,6 +77,46 @@ const exposure = (over: Partial<PlayerExposure> = {}): PlayerExposure => ({
   ...over,
 });
 
+const holding = (over: Partial<SlatePlayer['for'][number]> = {}) => ({
+  league_id: 1,
+  league: 'ESPN League',
+  team: 'Game of Throws',
+  slot: 'QB',
+  points: 18.4,
+  projected: 22.5,
+  ...over,
+});
+
+const slatePlayer = (over: Partial<SlatePlayer> = {}): SlatePlayer => ({
+  name: 'Josh Allen',
+  player_id: 1,
+  position: 'QB',
+  team: 'BUF',
+  injury_status: null,
+  game_state: 'in',
+  points: 18.4,
+  projected: 22.5,
+  for: [holding()],
+  against: [],
+  conflict: false,
+  ...over,
+});
+
+const slateGame = (over: Partial<SlateGame> = {}): SlateGame => ({
+  id: 'g1',
+  state: 'in',
+  detail: 'Q4 2:41',
+  home: { abbr: 'MIA', name: 'Dolphins', score: '17' },
+  away: { abbr: 'BUF', name: 'Bills', score: '24' },
+  players: [slatePlayer()],
+  yours: 1,
+  theirs: 0,
+  conflicts: 0,
+  why: '1 of yours',
+  leverage: 100,
+  ...over,
+});
+
 const portfolio = (over: Partial<Portfolio> = {}): Portfolio => ({
   leagues: 2,
   teams: 2,
@@ -73,6 +125,15 @@ const portfolio = (over: Partial<Portfolio> = {}): Portfolio => ({
   conflicts: [conflict()],
   exposure: [exposure()],
   totals: { points: 240.8, projected: 300, winning: 2, alerts: 0 },
+  games: [],
+  live: {
+    games: 0,
+    playing_now: 0,
+    yet_to_play: 0,
+    theirs_playing_now: 0,
+    points_in_play: 0,
+  },
+  slate_size: 0,
   ...over,
 });
 
@@ -90,6 +151,9 @@ beforeEach(() => {
   state.isLoading = false;
   state.isError = false;
   state.error = undefined;
+  state.isFetching = false;
+  state.dataUpdatedAt = Date.now();
+  state.refetch = vi.fn(() => Promise.resolve());
 });
 
 describe('AcrossLeaguesPage', () => {
@@ -203,5 +267,221 @@ describe('AcrossLeaguesPage', () => {
   it('reports a failure rather than rendering an empty page', () => {
     show(undefined, { isError: true, error: { detail: 'Upstream is down' } });
     expect(screen.getByText('Upstream is down')).toBeInTheDocument();
+  });
+});
+
+describe('AcrossLeaguesPage — what is happening right now', () => {
+  const live = (over: Partial<Portfolio['live']> = {}): Portfolio['live'] => ({
+    games: 1,
+    playing_now: 1,
+    yet_to_play: 2,
+    theirs_playing_now: 1,
+    points_in_play: 44.5,
+    ...over,
+  });
+
+  it('shows the live games without making you pick a league first', () => {
+    // The whole point: one screen for the whole Sunday.
+    show(portfolio({ conflicts: [], games: [slateGame()], live: live(), slate_size: 16 }));
+
+    expect(screen.getByText('Right now')).toBeInTheDocument();
+    expect(screen.getByText('Watch now')).toBeInTheDocument();
+    expect(screen.getByText(/Josh Allen/)).toBeInTheDocument();
+    expect(screen.getByText(/Live · Q4 2:41/)).toBeInTheDocument();
+  });
+
+  it('groups the slate the way an afternoon runs', () => {
+    show(portfolio({
+      conflicts: [],
+      games: [
+        slateGame({ id: 'a', state: 'in' }),
+        slateGame({ id: 'b', state: 'pre', detail: 'Sun 4:05 PM ET' }),
+        slateGame({ id: 'c', state: 'post', detail: 'Final' }),
+      ],
+      live: live(),
+      slate_size: 16,
+    }));
+
+    expect(screen.getByText('Watch now')).toBeInTheDocument();
+    expect(screen.getByText('Still to come')).toBeInTheDocument();
+    expect(screen.getByText('Finished')).toBeInTheDocument();
+  });
+
+  it('opens only the first group, so the live games are not below nine kickoff times', async () => {
+    show(portfolio({
+      conflicts: [],
+      games: [
+        slateGame({ id: 'a', state: 'in' }),
+        slateGame({
+          id: 'b',
+          state: 'pre',
+          detail: 'Sun 4:05 PM ET',
+          players: [slatePlayer({ name: 'Bijan Robinson' })],
+        }),
+      ],
+      live: live(),
+      slate_size: 16,
+    }));
+
+    expect(screen.getByText(/Josh Allen/)).toBeInTheDocument();
+    expect(screen.queryByText(/Bijan Robinson/)).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: /Still to come/ }));
+    expect(screen.getByText(/Bijan Robinson/)).toBeInTheDocument();
+  });
+
+  it('opens what is still to come when nothing has kicked off', async () => {
+    show(portfolio({
+      conflicts: [],
+      games: [slateGame({ state: 'pre', detail: 'Sun 4:05 PM ET' })],
+      live: live({ games: 0, playing_now: 0 }),
+      slate_size: 16,
+    }));
+
+    expect(screen.getByText(/Josh Allen/)).toBeInTheDocument();
+  });
+
+  it('leads the header with the field, not the conflicts, once games are on', () => {
+    show(portfolio({ games: [slateGame()], live: live({ playing_now: 3 }), slate_size: 16 }));
+    expect(screen.getByText(/3 of your players are on the field right now/)).toBeInTheDocument();
+  });
+
+  it('counts your players on the field and the points still coming', () => {
+    show(portfolio({ conflicts: [], games: [slateGame()], live: live(), slate_size: 16 }));
+    expect(screen.getByText('Playing now')).toBeInTheDocument();
+    expect(screen.getByText('Still in play')).toBeInTheDocument();
+    expect(screen.getByText('44.5')).toBeInTheDocument();
+  });
+
+  it('explains an empty slate', () => {
+    show(portfolio({ conflicts: [], games: [], slate_size: 0 }));
+    expect(screen.getByText(/slate isn't up yet/i)).toBeInTheDocument();
+  });
+
+  it('distinguishes an empty slate from nobody of yours playing in it', () => {
+    show(portfolio({ conflicts: [], games: [], slate_size: 16 }));
+    expect(screen.getByText(/None of your starters, in any league/i)).toBeInTheDocument();
+  });
+
+  it('says how old the numbers on screen are', () => {
+    show(portfolio());
+    expect(screen.getByText(/Updated just now/)).toBeInTheDocument();
+  });
+
+  it('counts the live games beside the timestamp', () => {
+    show(portfolio({ games: [slateGame()], live: live({ games: 2 }), slate_size: 16 }));
+    expect(screen.getByText('2 games live')).toBeInTheDocument();
+  });
+
+  it('refetches when you ask it to', async () => {
+    show(portfolio());
+    await userEvent.click(screen.getByRole('button', { name: /refresh/i }));
+    expect(state.refetch).toHaveBeenCalled();
+  });
+
+  it('keeps the page up while a refresh runs rather than blanking it', () => {
+    const { container } = show(portfolio(), { isFetching: true });
+
+    expect(screen.getByText('Your week, everywhere')).toBeInTheDocument();
+    expect(screen.getByText('Updating…')).toBeInTheDocument();
+    expect(container.querySelectorAll('.animate-pulse').length).toBe(0);
+  });
+});
+
+describe('CrossLeagueGameCard', () => {
+  it('names every league a player is in the game for', () => {
+    // On one screen for four leagues, "who is he playing for" is the question.
+    renderWithProviders(
+      <CrossLeagueGameCard
+        game={slateGame({
+          players: [slatePlayer({
+            for: [
+              holding({ league_id: 1, league: 'ESPN League' }),
+              holding({ league_id: 2, league: 'Sleeper League' }),
+            ],
+          })],
+        })}
+      />
+    );
+
+    expect(screen.getByText('ESPN League')).toBeInTheDocument();
+    expect(screen.getByText('Sleeper League')).toBeInTheDocument();
+  });
+
+  it('marks a player who is on both sides of your Sunday', () => {
+    renderWithProviders(
+      <CrossLeagueGameCard
+        game={slateGame({
+          conflicts: 1,
+          players: [slatePlayer({
+            conflict: true,
+            for: [holding({ league_id: 1, league: 'ESPN League' })],
+            against: [holding({ league_id: 2, league: 'Sleeper League', team: 'Pain Train' })],
+          })],
+        })}
+      />
+    );
+
+    expect(screen.getByText('Both ways')).toBeInTheDocument();
+  });
+
+  it('is one row per player, not one per league', () => {
+    renderWithProviders(
+      <CrossLeagueGameCard
+        game={slateGame({
+          players: [slatePlayer({
+            conflict: true,
+            for: [holding({ league_id: 1, league: 'ESPN League' })],
+            against: [holding({ league_id: 2, league: 'Sleeper League' })],
+          })],
+        })}
+      />
+    );
+
+    expect(screen.getAllByTestId('slate-player')).toHaveLength(1);
+  });
+
+  it("links a league chip to that league's game day", () => {
+    renderWithProviders(<CrossLeagueGameCard game={slateGame()} />);
+    expect(screen.getByRole('link', { name: /ESPN League/ })).toHaveAttribute(
+      'href',
+      '/leagues/1/gameday'
+    );
+  });
+
+  it('shows points against projection while a game is running', () => {
+    renderWithProviders(<CrossLeagueGameCard game={slateGame()} />);
+    expect(screen.getByText('18.4')).toBeInTheDocument();
+    expect(screen.getByText('/22.5')).toBeInTheDocument();
+  });
+
+  it('drops the projection once a game is final', () => {
+    renderWithProviders(
+      <CrossLeagueGameCard
+        game={slateGame({
+          state: 'post',
+          detail: 'Final',
+          players: [slatePlayer({ game_state: 'post' })],
+        })}
+      />
+    );
+    expect(screen.queryByText('/22.5')).toBeNull();
+  });
+
+  it('strikes through a player who has been ruled out', () => {
+    renderWithProviders(
+      <CrossLeagueGameCard
+        game={slateGame({
+          state: 'pre',
+          players: [slatePlayer({ injury_status: 'OUT', game_state: 'pre' })],
+        })}
+      />
+    );
+    expect(screen.getByText(/Josh Allen/).className).toContain('line-through');
+  });
+
+  it('carries the reason the game matters', () => {
+    renderWithProviders(<CrossLeagueGameCard game={slateGame({ why: '2 of yours · 1 cutting both ways' })} />);
+    expect(screen.getByText('2 of yours · 1 cutting both ways')).toBeInTheDocument();
   });
 });

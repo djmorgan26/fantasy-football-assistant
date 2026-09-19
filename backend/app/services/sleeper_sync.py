@@ -8,6 +8,7 @@ frozen at whatever they were the moment it was connected.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import structlog
@@ -124,6 +125,8 @@ async def refresh_league(
         team.ties = settings.get("ties", 0)
         team.points_for = points_for
         team.points_against = points_against
+
+    league.last_synced = datetime.now(timezone.utc)
 
     if commit:
         await db.commit()

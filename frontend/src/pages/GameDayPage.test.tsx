@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import userEvent from '@testing-library/user-event';
 
 import { GameDayPage } from './GameDayPage';
 import { GameCard } from '@/components/gameday/GameCard';
@@ -19,6 +20,9 @@ const state = vi.hoisted(() => ({
   isLoading: false,
   isError: false,
   error: undefined as { detail?: string } | undefined,
+  isFetching: false,
+  dataUpdatedAt: 0,
+  refetch: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('@/hooks/useGameday', () => ({ useGameday: () => state }));
@@ -86,6 +90,9 @@ beforeEach(() => {
   state.isLoading = false;
   state.isError = false;
   state.error = undefined;
+  state.isFetching = false;
+  state.dataUpdatedAt = Date.now();
+  state.refetch = vi.fn(() => Promise.resolve());
 });
 
 describe('GameDayPage', () => {
@@ -169,6 +176,27 @@ describe('GameDayPage', () => {
   it('shows placeholders while loading', () => {
     const { container } = show(undefined, { isLoading: true });
     expect(container.querySelectorAll('.animate-pulse').length).toBeGreaterThan(0);
+  });
+
+  it('says how old the numbers on screen are', () => {
+    // A scoreboard with no timestamp leaves you wondering if it is stuck.
+    show(dayOf());
+    expect(screen.getByText(/Updated just now/)).toBeInTheDocument();
+  });
+
+  it('refetches when you ask it to', async () => {
+    show(dayOf());
+    await userEvent.click(screen.getByRole('button', { name: /refresh/i }));
+    expect(state.refetch).toHaveBeenCalled();
+  });
+
+  it('keeps the scores up while a refresh runs rather than blanking them', () => {
+    // A poll every thirty seconds that flashes skeletons is unreadable.
+    const { container } = show(dayOf(), { isFetching: true });
+
+    expect(screen.getByText('120.4')).toBeInTheDocument();
+    expect(screen.getByText('Updating…')).toBeInTheDocument();
+    expect(container.querySelectorAll('.animate-pulse').length).toBe(0);
   });
 });
 

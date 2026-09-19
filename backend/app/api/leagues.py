@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, select
-from sqlalchemy.sql import func
 from typing import List, Optional
 from datetime import datetime, timezone
 from app.db.database import get_database
@@ -277,8 +276,6 @@ async def sync_league(
             from app.services.sleeper_sync import refresh_league
 
             teams_synced, week = await refresh_league(league, db)
-            league.last_synced = datetime.now(timezone.utc)
-            await db.commit()
             await db.refresh(league)
             return LeagueConnectionResponse(
                 success=True,
@@ -316,85 +313,12 @@ async def sync_league(
                 success=True, message=f"Synced {len(teams_data)} Yahoo teams", league=LeagueResponse.from_orm(league), teams=teams_data,
             )
 
-        espn_service = ESPNService()
-        
-        # Get stored credentials if available
-        cookies = None
-        if league.espn_s2_encrypted or league.espn_swid_encrypted:
-            # Create temporary cookies object from league credentials
-            cookies = ESPNCookies(
-                espn_s2=ESPNCredentialManager.decrypt_espn_s2(league.espn_s2_encrypted) if league.espn_s2_encrypted else None,
-                swid=ESPNCredentialManager.decrypt_espn_swid(league.espn_swid_encrypted) if league.espn_swid_encrypted else None
-            )
-        
-        # Fetch fresh league data
-        league_info = await espn_service.get_league_info(
-            str(league.espn_league_id),
-            cookies
-        )
-        
-        # Update league with fresh data
-        league.name = league_info["name"]
-        # ESPN keeps the same league id across seasons, so a sync has to roll the
-        # stored season forward or every downstream fetch stays on last year.
-        league.season_year = league_info["season"]
-        league.size = league_info["size"]
-        league.current_week = league_info["current_week"]
-        league.scoring_type = league_info["scoring_type"]
-        league.roster_settings = league_info["roster_settings"]
-        league.scoring_settings = league_info["scoring_settings"]
-        league.last_synced = func.now()
-        
-        # Get fresh team data
-        teams_data = await espn_service.get_teams(
-            str(league.espn_league_id),
-            cookies
-        )
-        
-        # Update teams
-        for team_data in teams_data:
-            result = await db.execute(
-                select(Team).where(
-                    Team.league_id == league.id,
-                    Team.espn_team_id == team_data["id"]
-                )
-            )
-            existing_team = result.scalar_one_or_none()
-            
-            if existing_team:
-                # Update existing team
-                team = existing_team
-                team.name = team_data["name"]
-                team.location = team_data["location"]
-                team.nickname = team_data["nickname"]
-                team.abbreviation = team_data["abbreviation"]
-                team.logo_url = team_data["logo_url"]
-                team.wins = team_data["wins"]
-                team.losses = team_data["losses"]
-                team.ties = team_data["ties"]
-                team.points_for = team_data["points_for"]
-                team.points_against = team_data["points_against"]
-            else:
-                # Create new team
-                team = Team(
-                    espn_team_id=team_data["id"],
-                    league_id=league.id,
-                    name=team_data["name"],
-                    location=team_data["location"],
-                    nickname=team_data["nickname"],
-                    abbreviation=team_data["abbreviation"],
-                    logo_url=team_data["logo_url"],
-                    wins=team_data["wins"],
-                    losses=team_data["losses"],
-                    ties=team_data["ties"],
-                    points_for=team_data["points_for"],
-                    points_against=team_data["points_against"]
-                )
-                db.add(team)
-        
+        from app.services.espn_sync import refresh_league as refresh_espn_league
+
+        teams_data, _week = await refresh_espn_league(league, db, commit=False)
         await db.commit()
         await db.refresh(league)
-        
+
         return LeagueConnectionResponse(
             success=True,
             message="League data synced successfully",

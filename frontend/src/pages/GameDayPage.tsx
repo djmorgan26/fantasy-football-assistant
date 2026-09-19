@@ -3,8 +3,11 @@ import { useParams } from 'react-router-dom';
 import { BoltIcon, SignalIcon } from '@heroicons/react/24/outline';
 
 import { PageContainer, PageHeader } from '@/components/layout/Page';
+import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LiveStatus } from '@/components/ui/LiveStatus';
+import { PullToRefresh } from '@/components/ui/PullToRefresh';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ToolHeader } from '@/components/ui/ToolHeader';
 import { GameCard } from '@/components/gameday/GameCard';
@@ -87,14 +90,20 @@ export const GameDayPage: React.FC = () => {
   const id = parseInt(leagueId || '0', 10);
 
   const { data: league } = useLeague(id);
-  const { data, isLoading, isError, error } = useGameday(id);
+  const { data, isLoading, isError, error, refetch, isFetching, dataUpdatedAt } =
+    useGameday(id);
 
   const live = data?.games.filter((g) => g.state === 'in') ?? [];
   const upcoming = data?.games.filter((g) => g.state === 'pre') ?? [];
   const finished = data?.games.filter((g) => g.state === 'post') ?? [];
 
-  return (
-    <PageContainer>
+  // Only the very first load blanks the page. A poll or a pull updates the
+  // numbers in place, because throwing a scoreboard back to its skeletons
+  // every thirty seconds is unreadable.
+  const firstLoad = isLoading && !data;
+
+  const body = (
+    <>
       <PageHeader
         backTo={`/leagues/${id}`}
         backLabel="Back to League"
@@ -104,7 +113,18 @@ export const GameDayPage: React.FC = () => {
         }`}
       />
 
-      {isLoading ? (
+      {!firstLoad && (
+        <LiveStatus
+          className="mb-4"
+          updatedAt={dataUpdatedAt}
+          refreshing={isFetching}
+          live={live.length > 0}
+          liveLabel={`${live.length} ${live.length === 1 ? 'game' : 'games'} live`}
+          onRefresh={() => void refetch()}
+        />
+      )}
+
+      {firstLoad ? (
         <div className="space-y-4">
           <Skeleton className="h-40 w-full rounded-card" />
           <Skeleton className="h-52 w-full rounded-card" />
@@ -117,6 +137,7 @@ export const GameDayPage: React.FC = () => {
             description={
               error?.detail || 'Claim your team in this league and game day will fill in.'
             }
+            action={<Button onClick={() => void refetch()}>Try again</Button>}
           />
         </Card>
       ) : (
@@ -178,11 +199,17 @@ export const GameDayPage: React.FC = () => {
           )}
 
           <p className="mt-6 text-center text-xs text-fg-subtle">
-            Games nobody in this matchup is playing in are hidden. Refreshes every couple of
-            minutes.
+            Games nobody in this matchup is playing in are hidden. Pull down to refresh;
+            scores update on their own every {live.length ? '30 seconds' : 'couple of minutes'}.
           </p>
         </>
       )}
-    </PageContainer>
+    </>
+  );
+
+  return (
+    <PullToRefresh onRefresh={() => refetch()} refreshing={isFetching}>
+      <PageContainer>{body}</PageContainer>
+    </PullToRefresh>
   );
 };

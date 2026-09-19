@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowsRightLeftIcon,
+  BoltIcon,
+  ChevronDownIcon,
   ExclamationTriangleIcon,
   RectangleStackIcon,
   Square3Stack3DIcon,
@@ -11,21 +13,26 @@ import { PageContainer, PageHeader } from '@/components/layout/Page';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LiveStatus } from '@/components/ui/LiveStatus';
 import { PlatformBadge } from '@/components/ui/PlatformBadge';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
+import { PullToRefresh } from '@/components/ui/PullToRefresh';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ToolHeader } from '@/components/ui/ToolHeader';
+import { CrossLeagueGameCard } from '@/components/gameday/CrossLeagueGameCard';
 import { usePortfolio } from '@/hooks/usePortfolio';
-import { PlayerConflict, PlayerExposure, LeagueWeek } from '@/types';
+import { PlayerConflict, PlayerExposure, LeagueWeek, Portfolio, SlateGame } from '@/types';
 import { cn } from '@/utils';
 
 /**
  * Everything you own, across every league.
  *
- * The headline is the conflict: the same player on your roster in one league
- * and on your opponent's in another. Every point he scores helps you and hurts
- * you at once, and most people do not notice until they are watching a game
- * with no idea who to root for.
+ * Two questions live here. The first is the conflict: the same player on your
+ * roster in one league and on your opponent's in another, where every point he
+ * scores helps you and hurts you at once. The second is the one people
+ * actually open the app to ask on a Sunday — *what is happening right now?* —
+ * which used to mean picking a league and opening its Game Day, one at a time.
+ * Both are answered on this one screen.
  */
 const STATUS_TONE: Record<LeagueWeek['status'], string> = {
   comfortable: 'text-brand',
@@ -155,19 +162,135 @@ const ExposureRow: React.FC<{ player: PlayerExposure }> = ({ player }) => (
   </li>
 );
 
-export const AcrossLeaguesPage: React.FC = () => {
-  const { data, isLoading, isError, error } = usePortfolio();
+/**
+ * One section of the slate, with the games inside it.
+ *
+ * Only the first group is open. Across four leagues the full slate runs to a
+ * dozen cards, and a page you have to scroll past nine kickoff times to read
+ * is not a page about what is happening right now.
+ */
+const SlateGroup: React.FC<{ label: string; games: SlateGame[]; open: boolean }> = ({
+  label,
+  games,
+  open,
+}) => {
+  const [expanded, setExpanded] = useState(open);
 
   return (
-    <PageContainer>
+    <section>
+      <button
+        type="button"
+        onClick={() => setExpanded((was) => !was)}
+        aria-expanded={expanded}
+        className="mb-3 flex w-full items-center gap-2 rounded-lg py-1 text-left font-display text-base font-bold text-fg transition-colors hover:text-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <ChevronDownIcon
+          aria-hidden
+          className={cn(
+            'h-4 w-4 text-fg-subtle transition-transform',
+            !expanded && '-rotate-90'
+          )}
+        />
+        {label}
+        <span className="text-sm font-medium text-fg-subtle tabular">{games.length}</span>
+      </button>
+
+      {expanded && (
+        <div className="space-y-3">
+          {games.map((game) => (
+            <CrossLeagueGameCard key={game.id} game={game} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+};
+
+/**
+ * Game Day, for every league at once.
+ *
+ * Grouped the way an afternoon actually runs — what is on now, what is coming,
+ * what is settled — because the first group is the only one anybody looks at
+ * while a game is being played.
+ */
+const RightNow: React.FC<{ data: Portfolio }> = ({ data }) => {
+  const groups = (
+    [
+      ['Watch now', data.games.filter((g) => g.state === 'in')],
+      ['Still to come', data.games.filter((g) => g.state === 'pre')],
+      ['Finished', data.games.filter((g) => g.state === 'post')],
+    ] as const
+  ).filter(([, games]) => games.length > 0);
+
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <BoltIcon className="h-5 w-5 text-accent" />
+          Right now
+        </CardTitle>
+        <p className="mt-1 text-sm text-fg-muted">
+          Every NFL game with somebody of yours in it, from any league. The ones that
+          decide the most come first.
+        </p>
+      </CardHeader>
+      <CardContent>
+        {data.games.length === 0 ? (
+          <EmptyState
+            icon={BoltIcon}
+            title="Nobody is playing"
+            description={
+              data.slate_size === 0
+                ? "The NFL slate isn't up yet. Check back closer to kickoff."
+                : 'None of your starters, in any league, are in a game on the slate.'
+            }
+          />
+        ) : (
+          <div className="space-y-6">
+            {groups.map(([label, games], i) => (
+              <SlateGroup key={label} label={label} games={games} open={i === 0} />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+export const AcrossLeaguesPage: React.FC = () => {
+  const { data, isLoading, isError, error, refetch, isFetching, dataUpdatedAt } =
+    usePortfolio();
+
+  const live = data?.live;
+  const liveGames = live?.games ?? 0;
+
+  // The first load shows skeletons; every load after that keeps the page on
+  // screen and says "Updating…" instead, so a poll never blanks a scoreboard
+  // somebody is reading.
+  const firstLoad = isLoading && !data;
+
+  const body = (
+    <>
       <PageHeader
         title="Across Leagues"
-        subtitle="Every team you run, and the players pulling in two directions at once"
+        subtitle="Every team you run, the games on right now, and the players pulling in two directions at once"
       />
 
-      {isLoading ? (
+      {!firstLoad && (
+        <LiveStatus
+          className="mb-4"
+          updatedAt={dataUpdatedAt}
+          refreshing={isFetching}
+          live={liveGames > 0}
+          liveLabel={`${liveGames} ${liveGames === 1 ? 'game' : 'games'} live`}
+          onRefresh={() => void refetch()}
+        />
+      )}
+
+      {firstLoad ? (
         <div className="space-y-4">
           <Skeleton className="h-32 w-full rounded-card" />
+          <Skeleton className="h-52 w-full rounded-card" />
           <Skeleton className="h-52 w-full rounded-card" />
         </div>
       ) : isError || !data ? (
@@ -177,6 +300,7 @@ export const AcrossLeaguesPage: React.FC = () => {
             variant="error"
             title="Couldn't pull your leagues together"
             description={error?.detail || 'Try again in a moment.'}
+            action={<Button onClick={() => void refetch()}>Try again</Button>}
           />
         </Card>
       ) : data.teams === 0 ? (
@@ -204,7 +328,11 @@ export const AcrossLeaguesPage: React.FC = () => {
             title="Across Leagues"
             context={`${data.teams} ${data.teams === 1 ? 'team' : 'teams'}`}
             subtitle={
-              data.conflicts.length > 0
+              liveGames > 0
+                ? `${live?.playing_now ?? 0} of your players ${
+                    (live?.playing_now ?? 0) === 1 ? 'is' : 'are'
+                  } on the field right now`
+                : data.conflicts.length > 0
                 ? `${data.conflicts.length} ${
                     data.conflicts.length === 1 ? 'player is' : 'players are'
                   } on both sides of your week`
@@ -215,10 +343,10 @@ export const AcrossLeaguesPage: React.FC = () => {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {(
               [
-                ['Teams', String(data.teams)],
-                ['Winning', `${data.totals.winning}/${data.teams}`],
+                ['Playing now', String(live?.playing_now ?? 0)],
+                ['Yet to play', String(live?.yet_to_play ?? 0)],
                 ['Points', data.totals.points.toFixed(1)],
-                ['Lineup alerts', String(data.totals.alerts)],
+                ['Still in play', (live?.points_in_play ?? 0).toFixed(1)],
               ] as const
             ).map(([label, value]) => (
               <div key={label} className="rounded-lg bg-surface-sunken p-3 text-center">
@@ -228,8 +356,11 @@ export const AcrossLeaguesPage: React.FC = () => {
             ))}
           </div>
 
-          {/* The headline. Conflicts come first because they are the thing
-              nobody notices on their own. */}
+          {/* What is happening right now comes first: it is the reason to have
+              this screen open on a Sunday at all. */}
+          <RightNow data={data} />
+
+          {/* Conflicts next — they are the thing nobody notices on their own. */}
           {data.conflicts.length > 0 && (
             <Card className="mt-6">
               <CardHeader>
@@ -302,8 +433,18 @@ export const AcrossLeaguesPage: React.FC = () => {
               </CardContent>
             </Card>
           </div>
+
+          <p className="mt-6 text-center text-xs text-fg-subtle">
+            Pull down to refresh. Scores update on their own every {liveGames > 0 ? '30 seconds' : 'couple of minutes'}.
+          </p>
         </>
       )}
-    </PageContainer>
+    </>
+  );
+
+  return (
+    <PullToRefresh onRefresh={() => refetch()} refreshing={isFetching}>
+      <PageContainer>{body}</PageContainer>
+    </PullToRefresh>
   );
 };

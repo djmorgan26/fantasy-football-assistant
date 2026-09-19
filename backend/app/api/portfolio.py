@@ -7,9 +7,12 @@ the person you are playing in another. Every touchdown he scores helps you and
 hurts you at the same time, and most people do not notice until they are
 watching a game with no idea who to root for.
 
-That conflict is the headline here. Underneath it sit the two other things a
+That conflict is the headline here. Underneath it sit the other things a
 single-league view cannot answer — how exposed you are to one player across all
-your teams, and which of your weeks are actually in trouble.
+your teams, which of your weeks are actually in trouble, and which NFL games on
+right now have anybody of yours in them. The last of those is Game Day widened
+to every league at once: one screen that answers "what is happening to me right
+now" without picking a league first.
 
 Players are matched across leagues **by normalized name**, not by id: ESPN and
 Sleeper number the same human differently, so an id-based join would find
@@ -29,13 +32,13 @@ from app.db.database import get_database
 from app.models.league import League
 from app.models.team import Team
 from app.models.user import User
-from app.services import league_context, news_service
+from app.services import freshness, league_context, live_slate, news_service
 from app.services.league_access import visible_to
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
-UNAVAILABLE = {"OUT", "INJURY_RESERVE", "IR", "SUSPENSION"}
+UNAVAILABLE = live_slate.UNAVAILABLE
 DOUBTFUL = {"DOUBTFUL", "QUESTIONABLE"}
 
 
@@ -68,30 +71,183 @@ def _entry(league: League, team: Team, player: dict) -> dict:
     }
 
 
-async def _league_slice(
+def _holding(entry: dict) -> dict:
+    """One league's stake in a player, as the cross-league game card shows it."""
+    return {
+        "league_id": entry["league_id"],
+        "league": entry["league"],
+        "team": entry["team"],
+        "slot": entry["slot"],
+        "points": entry["points"],
+        "projected": entry["projected"],
+    }
+
+
+def _slate_player(entry: dict, game_state: Optional[str]) -> dict:
+    """A player on the live slate, with every league he is in it for.
+
+    The same human can be your starter in one league and your opponent's in
+    another, so he is one row carrying both sides rather than two rows. What he
+    is worth differs per league — scoring settings differ — so the headline is
+    the league with the biggest stake in him, points and projection together
+    from that one league rather than the largest of each taken separately, and
+    the per-league detail sits underneath.
+    """
+    for_rows = [_holding(e) for e in entry["for"] if e["starting"]]
+    against_rows = [_holding(e) for e in entry["against"] if e["starting"]]
+    stakes = for_rows + against_rows
+    headline = max(stakes, key=lambda row: row["projected"], default=None)
+
+    return {
+        "name": entry["name"],
+        "player_id": entry["player_id"],
+        "position": entry["position"],
+        "team": entry["team"],
+        "injury_status": entry.get("injury_status"),
+        "game_state": game_state,
+        "points": headline["points"] if headline else 0.0,
+        "projected": headline["projected"] if headline else 0.0,
+        "for": for_rows,
+        "against": against_rows,
+        # Rooting for and against the same man at the same time.
+        "conflict": bool(for_rows and against_rows),
+    }
+
+
+def _why_watch(players: List[dict]) -> str:
+    """One line on why this game is worth your attention, across all leagues."""
+    yours = sum(1 for p in players if p["for"])
+    theirs = sum(1 for p in players if p["against"])
+    split = sum(1 for p in players if p["conflict"])
+
+    parts = []
+    if yours:
+        parts.append(f"{yours} of yours")
+    if theirs:
+        parts.append(f"{theirs} you are facing")
+    if split:
+        parts.append(f"{split} cutting both ways")
+    return " · ".join(parts)
+
+
+def _slate(index: Dict[str, Dict[str, Any]], games: List[dict]) -> List[dict]:
+    """Every NFL game with somebody of yours in it, hardest-hitting first.
+
+    A game nobody in any of your leagues is playing in is not a card; it is the
+    reason a generic scoreboard is useless on a Sunday.
+    """
+    by_team = live_slate.index_by_pro_team(games)
+    by_game: Dict[str, List[dict]] = {}
+
+    for entry in index.values():
+        game = by_team.get((entry.get("team") or "").upper())
+        if not game:
+            continue  # bye, free agent, or a team not on today's slate
+        player = _slate_player(entry, game.get("state"))
+        if not player["for"] and not player["against"]:
+            continue  # on a bench everywhere, so doing nothing to anybody
+        by_game.setdefault(game["id"], []).append(player)
+
+    out = []
+    for game in games:
+        players = by_game.get(game["id"])
+        if not players:
+            continue
+        # Conflicts first — they are the ones nobody notices on their own —
+        # then by what is at stake.
+        players.sort(key=lambda p: (not p["conflict"], -p["projected"]))
+        contested = any(p["for"] for p in players) and any(p["against"] for p in players)
+        # Every lineup he is in is a separate claim on the afternoon, so a
+        # player started in three of your leagues weighs three times as much
+        # here as one started in a single league.
+        at_stake = sum(
+            holding["projected"]
+            for player in players
+            for holding in player["for"] + player["against"]
+        )
+        out.append({
+            **game,
+            "players": players,
+            "yours": sum(1 for p in players if p["for"]),
+            "theirs": sum(1 for p in players if p["against"]),
+            "conflicts": sum(1 for p in players if p["conflict"]),
+            "why": _why_watch(players),
+            "leverage": live_slate.leverage(game, at_stake, contested=contested),
+        })
+
+    out.sort(key=lambda g: -g["leverage"])
+    return out
+
+
+def _live_totals(slate: List[dict]) -> Dict[str, Any]:
+    """The state of your whole Sunday, in the four numbers that matter."""
+    mine_live = mine_pre = theirs_live = 0
+    points_in_play = 0.0
+
+    for game in slate:
+        for player in game["players"]:
+            running = game.get("state") == "in"
+            pending = (
+                game.get("state") == "pre"
+                and player["injury_status"] not in UNAVAILABLE
+            )
+            if player["for"]:
+                mine_live += 1 if running else 0
+                mine_pre += 1 if pending else 0
+                if running or pending:
+                    # Every league he starts in is a separate pile of points
+                    # still coming your way.
+                    points_in_play += sum(r["projected"] for r in player["for"])
+            if player["against"] and running:
+                theirs_live += 1
+
+    return {
+        "games": sum(1 for g in slate if g.get("state") == "in"),
+        "playing_now": mine_live,
+        "yet_to_play": mine_pre,
+        "theirs_playing_now": theirs_live,
+        "points_in_play": round(points_in_play, 1),
+    }
+
+
+async def _league_setup(
     league: League, user: User, db: AsyncSession
 ) -> Optional[Dict[str, Any]]:
-    """One league's worth of context: my team, my opponent, and both rosters."""
+    """The database half of a league: which team is mine, and who else is here.
+
+    Split from the network half deliberately. One AsyncSession cannot be used
+    from two coroutines at once, so everything that touches the database runs
+    one league at a time, and only the platform calls fan out.
+    """
     team = await league_context.my_team(league, user, db)
     if not team:
         return None
 
-    week = league.current_week or 1
-    opponent = await league_context.opponent_this_week(league, team, week, db)
+    return {
+        "league": league,
+        "team": team,
+        # Loaded here so the opponent lookup below needs no session of its own.
+        "teams": await league_context.all_teams(league, db),
+        "week": league.current_week or 1,
+    }
+
+
+async def _league_live(setup: Dict[str, Any]) -> Dict[str, Any]:
+    """The network half: who I play this week, and both rosters.
+
+    Touches no database, so these can all run at once.
+    """
+    league, team = setup["league"], setup["team"]
+    opponent = await league_context.opponent_this_week(
+        league, team, setup["week"], teams=setup["teams"]
+    )
 
     mine, theirs = await asyncio.gather(
         league_context.roster_for(league, team),
         league_context.roster_for(league, opponent) if opponent else _empty(),
     )
 
-    return {
-        "league": league,
-        "team": team,
-        "opponent": opponent,
-        "week": week,
-        "mine": mine,
-        "theirs": theirs,
-    }
+    return {**setup, "opponent": opponent, "mine": mine, "theirs": theirs}
 
 
 async def _empty() -> List[dict]:
@@ -112,17 +268,25 @@ async def portfolio(
         )
     ).scalars().all()
 
-    slices = await asyncio.gather(
-        *(_league_slice(league, current_user, db) for league in leagues)
-    )
+    # Everything database-backed happens here, one league at a time: bringing
+    # anything that has aged out up to date, then reading who is who. Sharing
+    # the request's session across concurrent coroutines fails the whole
+    # request rather than merely going slow.
+    setups = []
+    for league in leagues:
+        await freshness.ensure_fresh(league, db)
+        setups.append(await _league_setup(league, current_user, db))
 
     # Leagues with no claimed team cannot contribute, and the UI should say why
     # rather than silently showing fewer leagues than the user has.
     unclaimed = [
         {"league_id": league.id, "name": league.name}
-        for league, data in zip(leagues, slices) if data is None
+        for league, setup in zip(leagues, setups) if setup is None
     ]
-    active = [s for s in slices if s]
+
+    # The platform calls, on the other hand, are the slow part and touch no
+    # database, so every league's rosters load at once.
+    active = list(await asyncio.gather(*(_league_live(s) for s in setups if s)))
 
     # ---- per-league week summary -------------------------------------------
     weeks = []
@@ -182,6 +346,7 @@ async def portfolio(
             "position": player.get("position_name"),
             "team": player.get("pro_team_abbr"),
             "player_id": player.get("player_id"),
+            "injury_status": player.get("injury_status"),
             "for": [],
             "against": [],
         })
@@ -229,6 +394,13 @@ async def portfolio(
     # The most concentrated first — that is where a bust hurts most.
     exposure.sort(key=lambda e: (-e["starting_in"], -e["projected"]))
 
+    # ---- the live slate, across every league --------------------------------
+    # The scoreboard is one shared fetch (cached for a minute), so widening
+    # Game Day to every league at once costs nothing the rosters above have not
+    # already paid for.
+    scoreboard = await news_service.fetch_scoreboard()
+    slate = _slate(index, scoreboard)
+
     return {
         "leagues": len(leagues),
         "teams": len(active),
@@ -242,4 +414,9 @@ async def portfolio(
             "winning": sum(1 for w in weeks if w["margin"] > 0),
             "alerts": sum(len(w["alerts"]) for w in weeks),
         },
+        "games": slate,
+        "live": _live_totals(slate),
+        # Games nobody of yours is in are filtered out above; this is how many
+        # there were, so the UI can tell "no slate yet" from "nobody playing".
+        "slate_size": len(scoreboard),
     }

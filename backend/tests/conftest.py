@@ -99,7 +99,7 @@ def reset_service_caches():
     leaves a cooldown that would silently skip the next test's fetch.
     """
     from app.services.draft_service import draft_service
-    from app.services import news_service
+    from app.services import freshness, news_service
     from app.services.sleeper_service import clear_request_cache
     from app.services.google_oauth import clear_certs_cache
 
@@ -122,6 +122,12 @@ def reset_service_caches():
         index._by_name = {}
         index._fetched_at = 0.0
         index._last_attempt_at = 0.0
+
+        # Auto-refresh keeps a per-league lock and a back-off stamp. League ids
+        # restart at 1 with every test's fresh schema, so a failure recorded in
+        # one test would otherwise suppress the next test's refresh entirely.
+        freshness._locks.clear()
+        freshness._failed_at.clear()
 
     clear()
     yield

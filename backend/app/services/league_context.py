@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.league import League, PlatformType
 from app.models.team import Team
 from app.models.user import User
+from app.services import freshness
 from app.services.espn_service import ESPNCookies, ESPNService
 from app.services.sleeper_service import SleeperService
 from app.utils.encryption import ESPNCredentialManager
@@ -28,11 +29,18 @@ from app.services.league_access import claimed_team_id, visible_to
 logger = structlog.get_logger()
 
 
-async def load_league(league_id: int, user: User, db: AsyncSession) -> League:
+async def load_league(
+    league_id: int, user: User, db: AsyncSession, *, refresh: bool = True
+) -> League:
     """The league, if this user owns it or belongs to it. 404 otherwise, never 403.
 
     A 403 would confirm the league exists, which is more than someone guessing
     ids should learn.
+
+    Loading also brings the league up to date when its stored records, team
+    names and current week have aged out — see `services.freshness`. Nobody
+    should have to press "Sync Data" to stop being shown last month's
+    standings. Pass `refresh=False` where that cost is not worth paying.
     """
     result = await db.execute(
         select(League).where(League.id == league_id, visible_to(user.id))
@@ -43,6 +51,8 @@ async def load_league(league_id: int, user: User, db: AsyncSession) -> League:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="League not found or access denied",
         )
+    if refresh:
+        await freshness.ensure_fresh(league, db)
     return league
 
 
@@ -120,14 +130,36 @@ async def roster_for(league: League, team: Team, week: Optional[int] = None) -> 
 
 
 async def opponent_this_week(
-    league: League, team: Team, week: int, db: AsyncSession
+    league: League,
+    team: Team,
+    week: int,
+    db: Optional[AsyncSession] = None,
+    *,
+    teams: Optional[List[Team]] = None,
 ) -> Optional[Team]:
     """Who this team plays this week.
 
     The weekly narrative only describes games already played, so it is no use
     before kickoff. The platform's own matchup feed carries the current week's
-    pairing, keyed by platform team id, which the database resolves to a team.
+    pairing, keyed by platform team id, which is then resolved to a team.
+
+    Pass `teams` — the league's teams, already loaded — to resolve that id in
+    memory and skip the database entirely. Callers that run several leagues
+    concurrently need this: one AsyncSession cannot be used from two coroutines
+    at once, and doing so fails the whole request rather than just going slow.
     """
+    async def resolve(attribute: str, value) -> Optional[Team]:
+        if teams is not None:
+            return next((t for t in teams if getattr(t, attribute) == value), None)
+        if db is None:
+            return None
+        return (await db.execute(
+            select(Team).where(
+                Team.league_id == league.id,
+                getattr(Team, attribute) == value,
+            )
+        )).scalar_one_or_none()
+
     try:
         if league.platform == PlatformType.SLEEPER and league.sleeper_league_id:
             # Sleeper does not express a matchup as home/away. It returns one
@@ -147,19 +179,14 @@ async def opponent_this_week(
             )
             if not other:
                 return None
-            return (await db.execute(
-                select(Team).where(
-                    Team.league_id == league.id,
-                    Team.sleeper_roster_id == other["roster_id"],
-                )
-            )).scalar_one_or_none()
+            return await resolve("sleeper_roster_id", other["roster_id"])
 
         if league.espn_league_id and team.espn_team_id is not None:
             games = await ESPNService().get_matchups(
                 str(league.espn_league_id), week=week, cookies=espn_cookies(league)
             )
             mine, home_key, away_key = team.espn_team_id, "home_team_id", "away_team_id"
-            column = Team.espn_team_id
+            attribute = "espn_team_id"
         else:
             return None
     except Exception as e:
@@ -173,10 +200,7 @@ async def opponent_this_week(
         other = away if mine == home else home if mine == away else None
         if other is None:
             continue
-        row = (await db.execute(
-            select(Team).where(Team.league_id == league.id, column == other)
-        )).scalar_one_or_none()
-        return row
+        return await resolve(attribute, other)
     return None
 
 
