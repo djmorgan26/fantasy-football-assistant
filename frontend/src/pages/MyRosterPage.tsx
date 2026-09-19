@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Progress } from '@/components/ui/Progress';
-import { Skeleton } from '@/components/ui/Skeleton';
+import { Skeleton, SkeletonList } from '@/components/ui/Skeleton';
 import { PageContainer, PageHeader } from '@/components/layout/Page';
 import { PlayerAvatar } from '@/components/ui/PlayerAvatar';
 import { ToolHeader } from '@/components/ui/ToolHeader';
@@ -236,8 +236,8 @@ export const MyRosterPage: React.FC = () => {
   const { leagueId } = useParams<{ leagueId: string }>();
   const numericLeagueId = parseInt(leagueId || '0', 10);
   const { data: league } = useLeague(numericLeagueId);
-  const { data: teams } = useLeagueTeams(numericLeagueId);
-  const { data: currentUser } = useCurrentUser();
+  const { data: teams, isLoading: teamsLoading } = useLeagueTeams(numericLeagueId);
+  const { data: currentUser, isLoading: userLoading } = useCurrentUser();
 
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const week = selectedWeek ?? league?.current_week ?? 1;
@@ -307,6 +307,28 @@ export const MyRosterPage: React.FC = () => {
     league?.espn_league_id && userTeam?.espn_team_id
       ? `https://fantasy.espn.com/football/team?leagueId=${league.espn_league_id}&teamId=${userTeam.espn_team_id}&seasonId=${league.season_year}`
       : null;
+
+  // Which team is mine is the answer this whole page is built on, and it takes
+  // two requests to work out. Until both land there is no honest thing to say:
+  // rendering the "no team" state in the meantime told every visitor they had
+  // not claimed a team, a second before showing them their roster.
+  if (teamsLoading || userLoading) {
+    return (
+      <PageContainer>
+        <div className="mb-6 space-y-3">
+          <Skeleton className="h-9 w-2/3" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+        <Skeleton className="mb-6 h-28 w-full rounded-card" />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <SkeletonList rows={6} />
+          </div>
+          <SkeletonList rows={3} height="h-24" />
+        </div>
+      </PageContainer>
+    );
+  }
 
   if (!userTeam) {
     return (

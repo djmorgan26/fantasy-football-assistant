@@ -19,7 +19,7 @@ import { cn } from '@/utils';
  * and in the bottom tab bar on phones, so there is no menu button here.
  */
 export const Header: React.FC = () => {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -43,7 +43,16 @@ export const Header: React.FC = () => {
         <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <ThemeToggle />
 
-          {isAuthenticated ? (
+          {isLoading ? (
+            /* The session check is a round trip. Offering "Sign In" in the
+               meantime tells someone who is already signed in that they are
+               not, so this holds the space instead and commits to nothing. */
+            <div
+              className="h-10 w-24 animate-pulse rounded-lg bg-surface-sunken"
+              role="status"
+              aria-label="Checking your session"
+            />
+          ) : isAuthenticated ? (
             <Menu as="div" className="relative">
               <Menu.Button className="flex min-h-[2.5rem] items-center gap-2 rounded-lg px-2 py-1.5 text-fg-muted transition-colors hover:bg-surface-sunken hover:text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <UserCircleIcon className="h-6 w-6" />

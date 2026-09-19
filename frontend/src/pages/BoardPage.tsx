@@ -10,7 +10,7 @@ import { PageContainer, PageHeader } from '@/components/layout/Page';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { SkeletonCard } from '@/components/ui/Skeleton';
+import { SkeletonCard, SkeletonList } from '@/components/ui/Skeleton';
 import { Tabs } from '@/components/ui/Tabs';
 import { ToolHeader } from '@/components/ui/ToolHeader';
 import { PostCard } from '@/components/board/PostCard';
@@ -38,7 +38,7 @@ export const BoardPage: React.FC = () => {
 
   const { data: posts, isLoading } = useBoardPosts(id, sort);
   const { data: stats } = useBoardStats(id);
-  const { data: samples } = useVoiceSamples(id);
+  const { data: samples, isLoading: samplesLoading } = useVoiceSamples(id);
 
   const createPost = useCreatePost(id);
   const react = useReact(id);
@@ -178,7 +178,11 @@ export const BoardPage: React.FC = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {!samples || samples.length === 0 ? (
+              {/* "Nothing yet" is a claim about the league, so it waits until
+                  we know it is true rather than being the default view. */}
+              {samplesLoading ? (
+                <SkeletonList rows={3} height="h-20" />
+              ) : !samples || samples.length === 0 ? (
                 <p className="text-sm text-fg-muted">
                   Nothing yet. Once a post clears{' '}
                   <span className="font-semibold text-fg tabular">+4</span>, it becomes one of

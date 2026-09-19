@@ -8,6 +8,7 @@ import { Select } from './Select';
 import { Tabs } from './Tabs';
 import { ToolHeader } from './ToolHeader';
 import { EmptyState } from './EmptyState';
+import { SkeletonList } from './Skeleton';
 import { BeakerIcon } from '@heroicons/react/24/outline';
 
 /**
@@ -217,5 +218,24 @@ describe('EmptyState', () => {
   it('works with only a title', () => {
     render(<EmptyState icon={BeakerIcon} title="No teams found" />);
     expect(screen.getByText('No teams found')).toBeInTheDocument();
+  });
+});
+
+describe('SkeletonList', () => {
+  it('stands in for a known number of rows', () => {
+    const { container } = render(<SkeletonList rows={4} />);
+    expect(container.querySelectorAll('.animate-pulse')).toHaveLength(4);
+  });
+
+  it('takes the height of whatever it is standing in for', () => {
+    // A placeholder the wrong size is worse than none: the page settles at one
+    // height and then jumps to another when the data lands.
+    const { container } = render(<SkeletonList rows={1} height="h-24" />);
+    expect(container.querySelector('.animate-pulse')!.className).toContain('h-24');
+  });
+
+  it('announces itself to a screen reader', () => {
+    render(<SkeletonList rows={2} />);
+    expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
   });
 });

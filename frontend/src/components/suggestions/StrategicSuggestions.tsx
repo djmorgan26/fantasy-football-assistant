@@ -3,7 +3,7 @@ import { StrategicSuggestion, SuggestionFilters } from '@/types';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { SkeletonList } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Select } from '@/components/ui/Select';
 import {
@@ -21,6 +21,13 @@ import api from '@/services/api';
 interface StrategicSuggestionsProps {
   leagueId: number;
   userTeamId?: number;
+  /**
+   * Whether the caller is still working out which team is mine. Without this
+   * an absent `userTeamId` is ambiguous — it means either "still loading" or
+   * "you have not claimed a team", and this used to assume the second and
+   * flash a red error on every visit.
+   */
+  resolvingTeam?: boolean;
   className?: string;
 }
 
@@ -126,6 +133,7 @@ const SuggestionCard: React.FC<{ suggestion: StrategicSuggestion }> = ({ suggest
 export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
   leagueId,
   userTeamId,
+  resolvingTeam = false,
   className
 }) => {
   const [filters, setFilters] = useState<SuggestionFilters>({});
@@ -134,10 +142,9 @@ export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   const fetchSuggestions = useCallback(async () => {
-    if (!userTeamId) {
-      setError('No team selected');
-      return;
-    }
+    // Nothing to ask about yet. Whether that is because the lookup is still in
+    // flight or because there is no team to ask about is the caller's to say.
+    if (!userTeamId) return;
 
     setIsLoading(true);
     setError(null);
@@ -157,6 +164,10 @@ export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
   useEffect(() => {
     fetchSuggestions();
   }, [fetchSuggestions]);
+
+  // Waiting on the team lookup reads as loading, not as an error and not as
+  // an empty list of suggestions.
+  const pending = isLoading || resolvingTeam || (!userTeamId && !error);
 
   const filteredSuggestions = suggestions.filter(suggestion => {
     if (filters.type && suggestion.type !== filters.type) return false;
@@ -237,10 +248,14 @@ export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
               </Button>
             }
           />
-        ) : isLoading ? (
-          <div className="flex justify-center py-8">
-            <LoadingSpinner size="lg" />
-          </div>
+        ) : !resolvingTeam && !userTeamId ? (
+          <EmptyState
+            icon={LightBulbIcon}
+            title="Claim your team first"
+            description="These are recommendations for your roster, so we need to know which one it is."
+          />
+        ) : pending ? (
+          <SkeletonList rows={3} height="h-28" />
         ) : filteredSuggestions.length > 0 ? (
           <div className="space-y-4">
             {filteredSuggestions.map((suggestion) => (
@@ -262,15 +277,15 @@ export const StrategicSuggestions: React.FC<StrategicSuggestionsProps> = ({
         )}
 
         {/* Refresh Button */}
-        {!error && (
+        {!error && userTeamId && (
           <div className="flex justify-center pt-4 border-t border-border">
             <Button
               variant="secondary"
               size="sm"
               onClick={fetchSuggestions}
-              disabled={isLoading}
+              disabled={pending || !userTeamId}
             >
-              {isLoading ? 'Analyzing...' : 'Refresh Suggestions'}
+              {pending ? 'Analyzing...' : 'Refresh Suggestions'}
             </Button>
           </div>
         )}

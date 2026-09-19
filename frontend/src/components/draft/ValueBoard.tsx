@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { Skeleton, SkeletonList } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useLeagueValueBoard } from '@/hooks/useDraft';
 import { ValueBoardPlayer } from '@/types';
@@ -34,8 +34,14 @@ export const ValueBoard: React.FC<ValueBoardProps> = ({ leagueId }) => {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center py-16">
-        <LoadingSpinner size="lg" />
+      <div className="space-y-4">
+        {/* The filter rail and the rows it filters, at the size they land, so
+            the board does not jump down the page when it arrives. */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <Skeleton className="h-9 w-full rounded-full sm:w-80" />
+          <Skeleton className="h-9 w-full rounded-lg sm:w-64" />
+        </div>
+        <SkeletonList rows={8} height="h-14" />
       </div>
     );
   }

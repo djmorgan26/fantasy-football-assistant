@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { MyRosterPage } from './MyRosterPage';
@@ -100,11 +100,29 @@ vi.mock('@/hooks/useLeagues', () => ({ useLeague: () => ({ data: league }) }));
 vi.mock('@/hooks/useAssistant', () => ({
   useWeeklyPrimer: () => ({ data: undefined, isLoading: false, isError: true }),
 }));
-vi.mock('@/hooks/useAuth', () => ({ useCurrentUser: () => ({ data: { id: 1 } }) }));
+// Which team is mine takes two requests, and the page has to hold its tongue
+// until both land, so both are switchable here.
+const lookup = vi.hoisted(() => ({ teamsLoading: false, userLoading: false, teams: true }));
+
+vi.mock('@/hooks/useAuth', () => ({
+  useCurrentUser: () => ({
+    data: lookup.userLoading ? undefined : { id: 1 },
+    isLoading: lookup.userLoading,
+  }),
+}));
 vi.mock('@/hooks/useTeams', () => ({
-  useLeagueTeams: () => ({ data: [myTeam] }),
+  useLeagueTeams: () => ({
+    data: lookup.teamsLoading || !lookup.teams ? undefined : [myTeam],
+    isLoading: lookup.teamsLoading,
+  }),
   useTeamRoster: () => ({ data: { team_id: 9, week: 1, roster }, isLoading: false }),
 }));
+
+beforeEach(() => {
+  lookup.teamsLoading = false;
+  lookup.userLoading = false;
+  lookup.teams = true;
+});
 const currentMatchupCalls: number[] = [];
 vi.mock('@/hooks/useMatchups', () => ({
   useCurrentMatchup: (_leagueId: number, teamId: number) => {
@@ -185,5 +203,28 @@ describe('MyRosterPage', () => {
       'href',
       'https://fantasy.espn.com/football/team?leagueId=1725275280&teamId=9&seasonId=2026'
     );
+  });
+
+  it('does not claim you have no team while it is still finding out', () => {
+    // Two requests decide which team is mine. Rendering the "no team" state in
+    // the meantime told every visitor they had not claimed one, a second
+    // before showing them their roster.
+    lookup.teamsLoading = true;
+    const { container } = renderPage();
+
+    expect(screen.queryByText('No Team Selected')).toBeNull();
+    expect(container.querySelectorAll('.animate-pulse').length).toBeGreaterThan(0);
+  });
+
+  it('waits on the user lookup too, not just the teams', () => {
+    lookup.userLoading = true;
+    renderPage();
+    expect(screen.queryByText('No Team Selected')).toBeNull();
+  });
+
+  it('still says so once it knows there is no team', () => {
+    lookup.teams = false;
+    renderPage();
+    expect(screen.getByText('No Team Selected')).toBeInTheDocument();
   });
 });

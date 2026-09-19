@@ -31,6 +31,21 @@ import {
 import { PageContainer, PageHeader } from '@/components/layout/Page';
 import { formatDate } from '@/utils';
 
+/**
+ * A placeholder for one of this page's two-column card grids.
+ *
+ * These sections used to collapse to a small centred spinner and then shove
+ * the rest of the page down when the cards arrived. Standing in at roughly the
+ * right size keeps the layout still.
+ */
+const GridPlaceholder: React.FC<{ cards?: number }> = ({ cards = 4 }) => (
+  <div className="grid grid-cols-1 gap-4 md:grid-cols-2" role="status" aria-label="Loading">
+    {Array.from({ length: cards }).map((_, i) => (
+      <Skeleton key={i} className="h-24 w-full rounded-lg" />
+    ))}
+  </div>
+);
+
 export const LeagueDetailPage: React.FC = () => {
   const { leagueId } = useParams<{ leagueId: string }>();
   const navigate = useNavigate();
@@ -228,9 +243,7 @@ export const LeagueDetailPage: React.FC = () => {
             </CardHeader>
             <CardContent>
               {matchupsLoading ? (
-                <div className="flex justify-center py-8">
-                  <LoadingSpinner size="sm" />
-                </div>
+                <GridPlaceholder cards={4} />
               ) : matchups && matchups.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {matchups.map((matchup) => (
@@ -261,9 +274,7 @@ export const LeagueDetailPage: React.FC = () => {
             </CardHeader>
             <CardContent>
               {budgetsLoading ? (
-                <div className="flex justify-center py-8">
-                  <LoadingSpinner size="sm" />
-                </div>
+                <GridPlaceholder cards={4} />
               ) : waiverBudgets && waiverBudgets.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {waiverBudgets.map((budget) => (
@@ -295,9 +306,7 @@ export const LeagueDetailPage: React.FC = () => {
             </CardHeader>
             <CardContent>
               {teamsLoading ? (
-                <div className="flex justify-center py-8">
-                  <LoadingSpinner size="sm" />
-                </div>
+                <GridPlaceholder cards={6} />
               ) : teamsError ? (
                 <EmptyState
                   icon={UsersIcon}

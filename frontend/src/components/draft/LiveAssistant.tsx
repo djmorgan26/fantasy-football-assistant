@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { SkeletonCard, SkeletonList } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useDraftAssist, useDraftAdvice } from '@/hooks/useDraft';
 import { DraftAdvice, DraftPickRecommendation } from '@/types';
@@ -32,8 +32,9 @@ export const LiveAssistant: React.FC<LiveAssistantProps> = ({ leagueId }) => {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center py-16">
-        <LoadingSpinner size="lg" />
+      <div className="space-y-5">
+        <SkeletonCard />
+        <SkeletonList rows={5} height="h-14" />
       </div>
     );
   }

@@ -17,6 +17,7 @@ vi.mock('@/hooks/useLeagues', () => ({
 const state = vi.hoisted(() => ({
   posts: [] as BoardPost[],
   samples: [] as VoiceSample[],
+  samplesLoading: false,
   stats: { posts: 0, comments: 0, reactions: 0, voice_samples: 0, top_reaction: null },
   createPost: vi.fn(),
   react: vi.fn(),
@@ -27,7 +28,7 @@ const state = vi.hoisted(() => ({
 vi.mock('@/hooks/useBoard', () => ({
   useBoardPosts: () => ({ data: state.posts, isLoading: false }),
   useBoardStats: () => ({ data: state.stats }),
-  useVoiceSamples: () => ({ data: state.samples }),
+  useVoiceSamples: () => ({ data: state.samples, isLoading: state.samplesLoading }),
   useCreatePost: () => ({ mutate: state.createPost, isLoading: false }),
   useReact: () => ({ mutate: state.react, isLoading: false }),
   useComment: () => ({ mutate: vi.fn(), isLoading: false }),
@@ -69,6 +70,7 @@ const post = (over: Partial<BoardPost> = {}): BoardPost => ({
 beforeEach(() => {
   state.posts = [];
   state.samples = [];
+  state.samplesLoading = false;
   state.stats = { posts: 0, comments: 0, reactions: 0, voice_samples: 0, top_reaction: null };
   state.createPost = vi.fn();
   state.react = vi.fn();
@@ -173,5 +175,18 @@ describe('BoardPage', () => {
     expect(screen.getByText('Savage')).toBeInTheDocument();
     expect(screen.getByText('Cold take')).toBeInTheDocument();
     expect(screen.getByText('-2')).toBeInTheDocument();
+  });
+
+  it('does not claim the AI has learned nothing while that is still loading', () => {
+    // "Nothing yet" is a statement about the league, so it waits until it is
+    // known to be true rather than being what shows by default.
+    state.samplesLoading = true;
+    renderWithProviders(<BoardPage />);
+    expect(screen.queryByText(/Nothing yet/)).toBeNull();
+  });
+
+  it('says so once it knows there are no samples', () => {
+    renderWithProviders(<BoardPage />);
+    expect(screen.getByText(/Nothing yet/)).toBeInTheDocument();
   });
 });

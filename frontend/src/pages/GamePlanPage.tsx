@@ -187,8 +187,8 @@ export const GamePlanPage: React.FC = () => {
 
   // The strategic suggestions used to sit on the league overview, which meant
   // the two halves of "what should I do this week" lived on different pages.
-  const { data: teams } = useLeagueTeams(id);
-  const { data: currentUser } = useCurrentUser();
+  const { data: teams, isLoading: teamsLoading } = useLeagueTeams(id);
+  const { data: currentUser, isLoading: userLoading } = useCurrentUser();
   const userTeam = teams?.find((team) => team.owner_user_id === currentUser?.id);
 
   return (
@@ -283,7 +283,12 @@ export const GamePlanPage: React.FC = () => {
         </>
       )}
 
-      <StrategicSuggestions className="mt-6" leagueId={id} userTeamId={userTeam?.id} />
+      <StrategicSuggestions
+        className="mt-6"
+        leagueId={id}
+        userTeamId={userTeam?.id}
+        resolvingTeam={teamsLoading || userLoading}
+      />
     </PageContainer>
   );
 };

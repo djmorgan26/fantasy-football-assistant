@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useLeague } from '@/hooks/useLeagues';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { Skeleton, SkeletonList } from '@/components/ui/Skeleton';
 import { Tabs } from '@/components/ui/Tabs';
 import { ValueBoard } from '@/components/draft/ValueBoard';
 import { LiveAssistant } from '@/components/draft/LiveAssistant';
@@ -19,7 +19,12 @@ export const DraftRoomPage: React.FC = () => {
   if (isLoading) {
     return (
       <PageContainer>
-        <LoadingSpinner size="lg" className="mt-12" />
+        <div className="mb-6 space-y-3">
+          <Skeleton className="h-9 w-1/2" />
+          <Skeleton className="h-4 w-2/3" />
+        </div>
+        <Skeleton className="mb-4 h-10 w-64 rounded-lg" />
+        <SkeletonList rows={6} height="h-14" />
       </PageContainer>
     );
   }

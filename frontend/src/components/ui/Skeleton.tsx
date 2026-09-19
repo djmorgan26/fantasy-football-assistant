@@ -36,6 +36,25 @@ export const SkeletonCard: React.FC<{ className?: string }> = ({ className }) =>
   </div>
 );
 
+/**
+ * A stack of equal placeholder rows, for a list whose shape is already known:
+ * a roster, search results, a board of players. Matching the real row height
+ * is the point — a spinner of unknown size collapses the page and then shoves
+ * it back down when the data lands.
+ */
+export const SkeletonList: React.FC<{
+  rows?: number;
+  /** Tailwind height of one row. Match whatever it is standing in for. */
+  height?: string;
+  className?: string;
+}> = ({ rows = 5, height = 'h-16', className }) => (
+  <div className={cn('space-y-3', className)} role="status" aria-label="Loading">
+    {Array.from({ length: rows }).map((_, i) => (
+      <Skeleton key={i} className={cn('w-full rounded-lg', height)} />
+    ))}
+  </div>
+);
+
 /** A grid of skeleton cards for list/loading states. */
 export const SkeletonGrid: React.FC<{ count?: number; className?: string }> = ({
   count = 6,

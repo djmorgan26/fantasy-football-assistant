@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { SkeletonList } from '@/components/ui/Skeleton';
 import { PageContainer, PageHeader } from '@/components/layout/Page';
 import { getPositionColor } from '@/utils';
 import {
@@ -144,15 +145,23 @@ export const PlayerSearchPage: React.FC = () => {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="flex justify-center py-8">
-              <LoadingSpinner size="lg" />
-            </div>
+            // Result-shaped, so the list does not shift under the cursor the
+            // moment it arrives.
+            <SkeletonList rows={5} height="h-24" />
           ) : error ? (
             <EmptyState
               icon={UserIcon}
               variant="error"
               title="Search Error"
               description="Failed to search players. Please try again."
+            />
+          ) : !shouldSearch ? (
+            /* Nothing has been asked for yet. "No Players Found" reads as a
+               failed search, which is not what an untouched form is. */
+            <EmptyState
+              icon={MagnifyingGlassIcon}
+              title="Search for a player"
+              description="Filter by position, or type a name, then press Search."
             />
           ) : players.length === 0 ? (
             <EmptyState

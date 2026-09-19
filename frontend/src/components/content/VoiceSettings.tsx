@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { SkeletonCard } from '@/components/ui/Skeleton';
 import { useContentProfile, useUpdateContentProfile } from '@/hooks/useContent';
 import { HumorExample, ManagerPersona } from '@/types';
 import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
@@ -41,8 +41,9 @@ export const VoiceSettings: React.FC<VoiceSettingsProps> = ({ leagueId }) => {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center py-12">
-        <LoadingSpinner size="md" />
+      <div className="space-y-5">
+        <SkeletonCard />
+        <SkeletonCard />
       </div>
     );
   }
